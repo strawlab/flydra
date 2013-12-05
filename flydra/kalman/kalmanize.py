@@ -221,7 +221,7 @@ class KalmanSaver:
             ML_estimates_2d_idxs_type(),
             "camns and idxs")
 
-        self.obj_id = -1
+        self.obj_id = 0
 
         self.h5textlog = self.h5file.createTable(
             self.h5file.root,'textlog',TextLogDescription,'text log')
@@ -707,8 +707,8 @@ def kalmanize(src_filename,
                         (p1, p2, p3, p4,
                          ray0, ray1, ray2, ray3, ray4, ray5) = do_3d_operations_on_2d_point(
                             helper, x_undistorted,y_undistorted,
-                            pmat_inv, pmat_meters_inv,
-                            camera_center, camera_center_meters,
+                            pmat_inv,
+                            camera_center,
                             x_distorted,y_distorted,
                             rise, run)
                         line_found = not numpy.isnan(p1)

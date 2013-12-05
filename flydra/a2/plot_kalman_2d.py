@@ -13,13 +13,14 @@ import datetime
 import sys, os
 from optparse import OptionParser
 import matplotlib
+import matplotlib.cm as cm
+import matplotlib.collections as collections
 import pylab
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
-import matplotlib.cm as cm
-import flydra.a2.xml_stimulus as xml_stimulus
-import matplotlib.collections as collections
 import flydra.kalman.flydra_kalman_utils
+import flydra.a2.xml_stimulus as xml_stimulus
+import flydra.a2.core_analysis as core_analysis
 
 KalmanEstimatesVelOnly =flydra.kalman.flydra_kalman_utils.KalmanEstimatesVelOnly
 
@@ -217,6 +218,7 @@ current list of 2D points
                 frame_start = None,
                 frame_stop = None,
                 show_nth_frame = None,
+                obj_only=None,
                 reconstructor_filename=None,
                 options=None,
                 ):
@@ -322,11 +324,10 @@ current list of 2D points
         unique_cam_ids.sort()
         print '%d cameras with data'%(len(unique_cam_ids),)
 
-        if 1:
-            # plot all cameras, not just those with data
-            all_cam_ids = cam_id2camns.keys()
-            all_cam_ids.sort()
-            unique_cam_ids = all_cam_ids
+        # plot all cameras, not just those with data
+        all_cam_ids = cam_id2camns.keys()
+        all_cam_ids.sort()
+        unique_cam_ids = all_cam_ids
 
         if len(unique_cam_ids)==1:
             n_rows=1
@@ -357,7 +358,7 @@ current list of 2D points
             if img_table is not None:
                 bg_arr_h5 = getattr(img_table,cam_id)
                 bg_arr = bg_arr_h5.read()
-                ax.imshow( bg_arr, origin='lower',cmap=cm.pink )
+                ax.imshow( bg_arr.squeeze(), origin='lower',cmap=cm.pink )
                 ax.set_autoscale_on(True)
                 ax.autoscale_view()
                 pylab.draw()
@@ -436,8 +437,8 @@ current list of 2D points
         if options.autozoom:
             for cam_id in self.subplot_by_cam_id.keys():
                 ax = self.subplot_by_cam_id[cam_id]
-                ax.set_xlim( (ax.this_minx-10, ax.this_maxx+10))
-                ax.set_ylim( (ax.this_miny-10, ax.this_maxy+10))
+                ax.set_xlim( (ax.this_minx-10, ax.this_maxx+10) )
+                ax.set_ylim( (ax.this_miny-10, ax.this_maxy+10) )
 
         if options.save_fig:
             for cam_id in self.subplot_by_cam_id.keys():
@@ -488,6 +489,10 @@ current list of 2D points
         kobs_2d = kresults.root.ML_estimates_2d_idxs
         xys_by_obj_id = {}
         for obj_id,kframe,obs_2d_idx in zip(obj_ids,kframes,obs_2d_idxs):
+            if obj_only is not None:
+                if obj_id not in obj_only:
+                    continue
+
             obs_2d_idx_find = int(obs_2d_idx) # XXX grr, why can't pytables do this?
             obj_id_save = int(obj_id) # convert from possible numpy scalar
             xys_by_cam_id = xys_by_obj_id.setdefault( obj_id_save, {})
@@ -602,10 +607,16 @@ def main():
     parser.add_option("--autozoom", action='store_true',
                       default=False)
 
+    parser.add_option("--obj-only", type="string")
+
+
     (options, args) = parser.parse_args()
 
     if options.filename is not None:
         args.append(options.filename)
+
+    if options.obj_only is not None:
+        options.obj_only = core_analysis.parse_seq(options.obj_only)
 
     if len(args)>1:
         print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
@@ -630,6 +641,7 @@ def main():
                    frame_start = options.start,
                    frame_stop = options.stop,
                    show_nth_frame = options.show_nth_frame,
+                   obj_only=options.obj_only,
                    reconstructor_filename=options.reconstructor_path,
                    options=options,
                    )

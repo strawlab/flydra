@@ -20,7 +20,9 @@ def get_cam_id_from_ufmf_fname(ufmf_fname):
 
     # cam_id in fname (2008 flydra approach) -----------------
     a = os.path.split( ufmf_fname )[-1]
-    b = os.path.splitext(a)[0]
+    b,mode = os.path.splitext(a)
+    mode = mode[1:]
+    assert mode in ['ufmf','fmf']
     matchobj = ufmf_fname_regex.search(b)
     if matchobj is not None:
         date, datetime_str, cam_id= matchobj.groups()
@@ -35,6 +37,11 @@ def get_cam_id_from_ufmf_fname(ufmf_fname):
             approx_start = time.mktime(struct_time)
         except RuntimeError:
             pass
+        except ValueError:
+            datetime_str2 = filepart
+            struct_time = time.strptime(datetime_str2,'%Y%m%d_%H%M%S.'+mode)
+            # if the above succeeded, it was a timestamp. thus we have 2013-08 version.
+            cam_id =  maybe_camid
         else:
             # if the parent directory is datetime, this is likely the camid
             if os.path.splitext(filepart)[0] == datetime_str:
@@ -63,6 +70,7 @@ def iterate_frames(h5_filename,
     last_ufmf_ts = np.inf
     ufmfs = {}
     cam_ids = []
+    global_data = {'width_heights': {}}
     for movie_idx,ufmf_fname in enumerate(ufmf_fnames):
         if movie_cam_ids is not None:
             cam_id = movie_cam_ids[movie_idx]
@@ -76,6 +84,8 @@ def iterate_frames(h5_filename,
             ufmf = ufmf_mod.FlyMovieEmulator(ufmf_fname,
                                              white_background=white_background,
                                              **kwargs)
+
+        global_data['width_heights'][cam_id] = ( ufmf.get_width(), ufmf.get_height() )
         tss = ufmf.get_all_timestamps()
         ufmf.seek(0)
         ufmfs[ufmf_fname] = (ufmf, cam_id, tss)
@@ -239,4 +249,5 @@ def iterate_frames(h5_filename,
                 if is_real_ufmf:
                     per_frame_dict[ufmf_fname].update(more)
             per_frame_dict['tracker_data']=this_h5_data
+            per_frame_dict['global_data']=global_data # on every iteration, pass our global data
             yield (per_frame_dict,frame)

@@ -99,11 +99,10 @@ def convert(infilename,
         drift_estimates = result_utils.drift_estimates( h52d )
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h52d)
 
-        hostnames = drift_estimates['hostnames']
         gain = {}; offset = {};
         print 'hostname time_gain time_offset'
         print '-------- --------- -----------'
-        for i,hostname in enumerate(hostnames):
+        for i,hostname in enumerate(drift_estimates.get('hostnames',[])):
             tgain, toffset = result_utils.model_remote_to_local(
                 drift_estimates['remote_timestamp'][hostname][::10],
                 drift_estimates['local_timestamp'][hostname][::10])
@@ -182,10 +181,13 @@ def convert(infilename,
     #also save the experiment data if present
     try:
         table_experiment = h5file_raw.root.experiment_info
+        uuid=None
         try:
-            extra_vars['experiment_uuid'] = table_experiment.read(field='uuid')
-        except KeyError:
+            uuid = table_experiment.read(field='uuid')
+        except (KeyError,tables.exceptions.HDF5ExtError):
             pass
+        else:
+            extra_vars['experiment_uuid'] = uuid
     except tables.exceptions.NoSuchNodeError:
         pass
 

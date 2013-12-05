@@ -143,6 +143,7 @@ class TimestampEchoReceiver(threading.Thread):
 
         timestamp_echo_gatherer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         port = flydra.common_variables.timestamp_echo_gatherer_port
+        rospy.loginfo('MainBrain TimestampEchoReceiver binding %s' % ( (self.main_brain.hostname, port), ))
         timestamp_echo_gatherer.bind((self.main_brain.hostname, port))
 
         last_clock_diff_measurements = collections.defaultdict(list)
@@ -1109,9 +1110,9 @@ class MainBrain(object):
 
     #See commits explaining socket starvation on why these are not all enabled
     ROS_CONTROL_API = dict(
-#        start_collecting_background=(std_srvs.srv.Empty),
-#        stop_collecting_background=(std_srvs.srv.Empty),
-#        take_background=(std_srvs.srv.Empty),
+        start_collecting_background=(std_srvs.srv.Empty),
+        stop_collecting_background=(std_srvs.srv.Empty),
+        take_background=(std_srvs.srv.Empty),
 #        clear_background=(std_srvs.srv.Empty),
         start_saving_data=(std_srvs.srv.Empty),
         stop_saving_data=(std_srvs.srv.Empty),
@@ -1125,6 +1126,7 @@ class MainBrain(object):
         register_new_camera=(ros_flydra.srv.MainBrainRegisterNewCamera),
         get_and_clear_commands=(ros_flydra.srv.MainBrainGetAndClearCommands),
         set_image=(ros_flydra.srv.MainBrainSetImage),
+        receive_missing_data=(ros_flydra.srv.MainBrainReceiveMissingData),
         close_xcamera=(ros_flydra.srv.MainBrainCloseCamera),
     )
 
@@ -1347,6 +1349,8 @@ class MainBrain(object):
                     self.cam_info[cam_id]['image'] = coord_and_image
 
         def receive_missing_data(self, cam_id, framenumber_offset, missing_data ):
+            rospy.loginfo('received requested stale data for frame %d' % framenumber_offset)
+
             if len(missing_data)==0:
                 # no missing data
                 return
@@ -1652,6 +1656,10 @@ class MainBrain(object):
         lb = left.data, bottom.data
         image = ros_flydra.cv2_bridge.imgmsg_to_numpy(image)
         self.remote_api.set_image(cam_id, (lb,image))
+
+    def receive_missing_data(self, cam_id, framenumber_offset, missing_data_json_buf):
+        missing_data = json.loads( missing_data_json_buf )
+        self.remote_api.receive_missing_data(cam_id, framenumber_offset, missing_data)
 
     def close_xcamera(self,cam_id):
         cam_id = cam_id.data

@@ -271,6 +271,7 @@ def make_montage( h5_filename,
         camn2cam_id = camn2cam_id,
         )):
         tracker_data = frame_dict['tracker_data']
+        global_data = frame_dict['global_data']
 
         if data3d is not None:
             this_frame_3d_data = data3d[data3d['frame']==frame]
@@ -319,8 +320,8 @@ def make_montage( h5_filename,
                     cam_id = ufmf_tools.get_cam_id_from_ufmf_fname(ufmf_fname)
                 camn = None
                 if cam_id not in blank_images:
-                    # XXX should get known image size of .ufmf
-                    image = np.empty((480,640),dtype=np.uint8); image.fill(255)
+                    im_w, im_h = global_data['width_heights'][cam_id]
+                    image = np.empty((im_h,im_w),dtype=np.uint8); image.fill(255)
                     blank_images[cam_id] = image
                 image = blank_images[cam_id]
             save_fname = 'tmp_frame%07d_%s.png'%(frame,cam_id)

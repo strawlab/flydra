@@ -41,6 +41,15 @@ def get_h5_start_stop(filename,careful=True):
 
     return h5_start, h5_stop
 
+def get_uuid(filename):
+    with tables.openFile(filename,mode='r') as h5file_raw:
+        table_experiment = h5file_raw.root.experiment_info
+        result = table_experiment.read(field='uuid')
+    uuids = np.unique(result)
+    assert len(uuids)==1
+    uuid = uuids[0]
+    return uuid
+
 def find_ufmfs(filename,ufmf_dir=None,careful=True):
 
     ufmf_template = 'small_%(date_time)s_%(cam_id)s.ufmf$'
