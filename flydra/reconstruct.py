@@ -525,7 +525,7 @@ class SingleCameraCalibration:
 
     @classmethod
     def from_pymvg(cls, pymvg_cam):
-        pmat = pymvg_cam.get_pmat()
+        pmat = pymvg_cam.get_M()
         camdict = pymvg_cam.to_dict()
         if np.sum(abs(np.array(camdict['D']))) != 0:
             rect = np.array(pymvg_cam.to_dict()['R'])
@@ -568,13 +568,14 @@ class SingleCameraCalibration:
                 self.helper == other.helper)
 
     def convert_to_pymvg(self):
-        import pymvg.pymvg as pymvg
+        import pymvg
+        import pymvg.core
 
         if not self.helper.simple:
             raise ValueError('this camera cannot be converted to PyMVG')
 
         K, R = self.get_KR()
-        if not pymvg.is_rotation_matrix(R):
+        if not pymvg.core.is_rotation_matrix(R):
             # RQ may return left-handed rotation matrix. Make right-handed.
             R2 = -R
             K2 = -K
@@ -620,7 +621,7 @@ class SingleCameraCalibration:
              'K':KK,
              'R':rect,
              'translation':t,
-             'rotation':rot,
+             'Q':rot,
              'D':distortion,
              'name':self.cam_id,
              }
@@ -1210,7 +1211,7 @@ class Reconstructor:
         return result
 
     def convert_to_pymvg(self):
-        import pymvg.pymvg as pymvg
+        import pymvg
 
         orig_sccs = [self.get_SingleCameraCalibration(cam_id)
                      for cam_id in self.cam_ids]
