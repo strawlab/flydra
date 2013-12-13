@@ -52,4 +52,5 @@ def dist2(x,mu,sigma_inv,least_dimensions_fixup=True):
         x = numpy.asarray(x[:ndim])
         mu = numpy.asarray(mu[:ndim])
         sigma_inv = numpy.asarray(sigma_inv[:ndim,:ndim])
-    return numpy.dot( (x-mu).T, numpy.dot( sigma_inv, (x-mu) ) )
+    sub = x-mu
+    return numpy.dot( sub.T, numpy.dot( sigma_inv, sub ) )
