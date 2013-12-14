@@ -252,7 +252,7 @@ def convert(infilename,
         allqualrows = None
     recarray = numpy.rec.array(allrows)
 
-    smoothed_source = 'ML_estimates'
+    smoothed_source = 'kalman_estimates'
 
     flydra.analysis.flydra_analysis_convert_to_mat.do_it(
         rows=recarray,

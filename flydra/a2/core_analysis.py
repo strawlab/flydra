@@ -336,7 +336,7 @@ def kalman_smooth(orig_rows,
     return frames, xsmooth, Psmooth, obj_id_array, idx
 
 def observations2smoothed(obj_id,
-                          orig_rows,
+                          kalman_rows=None,
                           obj_id_fill_value='orig',
                           frames_per_second=None,
                           dynamic_model_name=None,
@@ -349,13 +349,13 @@ def observations2smoothed(obj_id,
     KalmanEstimates = ksii.get_description()
     field_names = tables.Description(KalmanEstimates().columns)._v_names
 
-    if not len(orig_rows):
+    if not len(kalman_rows):
         raise NotEnoughDataToSmoothError('observations2smoothed() called with '
                                          'no input data')
 
-    #print "orig_rows['frame'][-1]",orig_rows['frame'][-1]
+    #print "kalman_rows['frame'][-1]",kalman_rows['frame'][-1]
 
-    frames, xsmooth, Psmooth, obj_id_array, fanout_idx = kalman_smooth(orig_rows,
+    frames, xsmooth, Psmooth, obj_id_array, fanout_idx = kalman_smooth(kalman_rows,
                                                                        frames_per_second=frames_per_second,
                                                                        dynamic_model_name=dynamic_model_name)
     ss = xsmooth.shape[1]
@@ -710,7 +710,9 @@ class PreSmoothedDataCache(object):
     def __init__(self):
         self.open_cache_h5files = {}
 
-    def query_results(self,obj_id,data_file,orig_rows,
+    def query_results(self,obj_id,data_file,
+                      ML_rows=None,
+                      kalman_rows=None,
                       frames_per_second=None,
                       dynamic_model_name=None,
                       return_smoothed_directions=False,
@@ -920,21 +922,22 @@ class PreSmoothedDataCache(object):
         else:
             # pre-existing table NOT found
             h5table = None
-            have_body_axis_information = 'hz_line0' in orig_rows.dtype.fields
+            have_body_axis_information = 'hz_line0' in ML_rows.dtype.fields
             rows, fanout_idx = observations2smoothed(
-                obj_id,orig_rows,
+                obj_id,
+                kalman_rows=kalman_rows,
                 frames_per_second=frames_per_second,
                 dynamic_model_name=dynamic_model_name,
                 allocate_space_for_direction=have_body_axis_information,
                 )
 
             if have_body_axis_information:
-                orig_hzlines = numpy.array([orig_rows['hz_line0'],
-                                            orig_rows['hz_line1'],
-                                            orig_rows['hz_line2'],
-                                            orig_rows['hz_line3'],
-                                            orig_rows['hz_line4'],
-                                            orig_rows['hz_line5']]).T
+                orig_hzlines = numpy.array([ML_rows['hz_line0'],
+                                            ML_rows['hz_line1'],
+                                            ML_rows['hz_line2'],
+                                            ML_rows['hz_line3'],
+                                            ML_rows['hz_line4'],
+                                            ML_rows['hz_line5']]).T
                 hzlines = np.nan*np.ones( (len(rows),6) )
                 for i,orig_hzline in zip(fanout_idx,orig_hzlines):
                     hzlines[i,:] = orig_hzline
@@ -945,7 +948,7 @@ class PreSmoothedDataCache(object):
 
                 if min_ori_quality_required is not None:
                     quality_array = compute_ori_quality(
-                        data_file, orig_rows['frame'],
+                        data_file, ML_rows['frame'],
                         obj_id, smooth_len=ori_quality_smooth_len)
                     good_cond = quality_array >= min_ori_quality_required
                     bad_cond = ~good_cond
@@ -1487,13 +1490,13 @@ class CachingAnalyzer:
         if is_mat_file:
             # We ignore use_kalman_smoothing -- always smoothed
             if 0:
-                rows = matfile2rows(data_file,obj_id)
+                kalman_rows = matfile2rows(data_file,obj_id)
             elif 0:
-                rows = LazyRecArrayMimic(data_file,obj_id)
+                kalman_rows = LazyRecArrayMimic(data_file,obj_id)
             elif 0:
-                rows = LazyRecArrayMimic2(data_file,obj_id)
+                kalman_rows = LazyRecArrayMimic2(data_file,obj_id)
             elif 1:
-                rows = self._get_recarray(data_file,obj_id)
+                kalman_rows = self._get_recarray(data_file,obj_id)
         else:
             result_h5_file = data_file
             preloaded_dict = self.loaded_h5_cache.get(result_h5_file,None)
@@ -1501,7 +1504,7 @@ class CachingAnalyzer:
                 preloaded_dict = self._load_dict(result_h5_file)
             kresults = preloaded_dict['kresults']
 
-            if not use_kalman_smoothing:
+            if 1:
                 # XXX this is slow! Should precompute indexes on file load.
                 obj_ids = preloaded_dict['obj_ids']
                 if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
@@ -1513,8 +1516,9 @@ class CachingAnalyzer:
                     for oi in obj_id:
                         idxs.append( numpy.nonzero(obj_ids == oi)[0] )
                     idxs = numpy.concatenate( idxs )
-                rows = kresults.root.kalman_estimates.readCoordinates(idxs)
-            else:
+                kalman_rows = kresults.root.kalman_estimates.readCoordinates(idxs)
+
+            if use_kalman_smoothing:
                 obs_obj_ids = preloaded_dict['obs_obj_ids']
 
                 if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
@@ -1549,14 +1553,14 @@ class CachingAnalyzer:
                 # Kalman observations are already always in meters, no
                 # scale factor needed
                 try:
-                    orig_rows = kresults.root.ML_estimates.readCoordinates(
+                    ML_rows = kresults.root.ML_estimates.readCoordinates(
                         obs_idxs)
                 except tables.exceptions.NoSuchNodeError, err:
-                    orig_rows = kresults.root.kalman_observations.readCoordinates(
+                    ML_rows = kresults.root.kalman_observations.readCoordinates(
                         obs_idxs)
 
 
-                if len(orig_rows)==0:
+                if len(ML_rows)==0:
                     raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
 
                 if 1 :
@@ -1568,16 +1572,16 @@ class CachingAnalyzer:
                                   'triangulate a position')
 
                     # filter out observations in which are nan (only 1 camera contributed)
-                    cond = ~numpy.isnan(orig_rows['x'])
-                    orig_rows = orig_rows[cond]
+                    cond = ~numpy.isnan(ML_rows['x'])
+                    ML_rows = ML_rows[cond]
 
                     if 0:
-                        all_obj_ids = list(numpy.unique(orig_rows['obj_id']))
+                        all_obj_ids = list(numpy.unique(ML_rows['obj_id']))
                         all_obj_ids.sort()
                         for obj_id in all_obj_ids:
-                            cond = orig_rows['obj_id']==obj_id
+                            cond = ML_rows['obj_id']==obj_id
                             print obj_id
-                            print orig_rows[cond]
+                            print ML_rows[cond]
                             print
 
                 elif 0:
@@ -1588,10 +1592,10 @@ class CachingAnalyzer:
                     # replace observations with only one camera by
                     # Extended Kalman Filter estimates
 
-                    cond = numpy.isnan(orig_rows['x'])
+                    cond = numpy.isnan(ML_rows['x'])
                     take_idx = numpy.nonzero( cond )[0]
-                    take_frames = orig_rows['frame']
-                    take_obj_ids = orig_rows['obj_id']
+                    take_frames = ML_rows['frame']
+                    take_obj_ids = ML_rows['obj_id']
 
                     kest_table = kresults.root.kalman_estimates[:]
                     for frame,obj_id,idx in zip(
@@ -1605,8 +1609,8 @@ class CachingAnalyzer:
 
                         if 0:
                             print "frame, obj_id",frame, obj_id
-                            print 'orig_rows[idx]'
-                            print orig_rows[idx]
+                            print 'ML_rows[idx]'
+                            print ML_rows[idx]
                             print "kest_rows[kest_row_idxs]"
                             print kest_rows[kest_row_idxs]
                             print
@@ -1615,9 +1619,9 @@ class CachingAnalyzer:
                             continue
                         assert len( kest_row_idxs )==1
                         kest_row_idx = kest_row_idxs[0]
-                        orig_rows[idx]['x'] = kest_rows[kest_row_idx]['x']
-                        orig_rows[idx]['y'] = kest_rows[kest_row_idx]['y']
-                        orig_rows[idx]['z'] = kest_rows[kest_row_idx]['z']
+                        ML_rows[idx]['x'] = kest_rows[kest_row_idx]['x']
+                        ML_rows[idx]['y'] = kest_rows[kest_row_idx]['y']
+                        ML_rows[idx]['z'] = kest_rows[kest_row_idx]['z']
                 else:
                     warnings.warn('abondoning all observations where only 1 '
                                   'camera data present, and estimating past '
@@ -1626,12 +1630,14 @@ class CachingAnalyzer:
                     # another idea would be to implement crazy
                     # EKF-based smoothing...
 
-                if len(orig_rows)<=1:
+                if len(ML_rows)<=1:
                     raise NotEnoughDataToSmoothError(
                         'not enough data from obj_id %d was found'%obj_id)
 
-                rows = self._smooth_cache.query_results(
-                    obj_id,data_file,orig_rows,
+                kalman_rows = self._smooth_cache.query_results(
+                    obj_id,data_file,
+                    ML_rows=ML_rows,
+                    kalman_rows=kalman_rows,
                     frames_per_second=frames_per_second,
                     dynamic_model_name=dynamic_model_name,
                     return_smoothed_directions=return_smoothed_directions,
@@ -1643,7 +1649,7 @@ class CachingAnalyzer:
                     elevation_up_bias_degrees=elevation_up_bias_degrees,
                     )
 
-        if not len(rows):
+        if not len(kalman_rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
 
         if self.hack_postmultiply is not None:
@@ -1680,8 +1686,8 @@ class CachingAnalyzer:
         if walking_start_stops is None:
             walking_start_stops = []
 
-        rows = self._filter_rows_on_flystate(rows,flystate,walking_start_stops)
-        return rows
+        kalman_rows = self._filter_rows_on_flystate(kalman_rows,flystate,walking_start_stops)
+        return kalman_rows
 
     def _filter_rows_on_flystate(self,rows,flystate,walking_start_stops):
         ############################
