@@ -271,13 +271,31 @@ def _initial_file_load(filename):
 def kalman_smooth(orig_rows,
                   dynamic_model_name=None,
                   frames_per_second=None):
-    frames = orig_rows['frame']
-    df = frames[1:]-frames[:-1]
-    assert np.all( df==1 )
+    obs_frames = orig_rows['frame']
+    if len(obs_frames)<2:
+        raise ValueError('orig_rows must have 2 or more rows of data')
 
-    x = orig_rows['x']
-    y = orig_rows['y']
-    z = orig_rows['z']
+    if np.max(obs_frames) <= np.iinfo(np.int64).max: # OK to cast to int64 from uint64
+        obs_frames = np.asarray( obs_frames, dtype=np.int64 )
+
+    fstart = obs_frames.min()
+    fend = obs_frames.max()
+    assert fstart < fend, 'fstart not less than fend: fstart=%s, fend=%d'%(fstart,fend)
+    frames = numpy.arange(fstart,fend+1, dtype=np.int64)
+    if frames.dtype != obs_frames.dtype:
+        warnings.warn('searchsorted is probably very slow because of different dtypes')
+    idx = frames.searchsorted(obs_frames)
+
+    x = numpy.empty( frames.shape, dtype=numpy.float )
+    y = numpy.empty( frames.shape, dtype=numpy.float )
+    z = numpy.empty( frames.shape, dtype=numpy.float )
+    obj_id_array =  numpy.ma.masked_array( numpy.empty( frames.shape, dtype=numpy.uint32 ),
+                                           mask=numpy.ones( frames.shape, dtype=numpy.bool_ ) )
+
+    x[idx] = orig_rows['x']
+    y[idx] = orig_rows['y']
+    z[idx] = orig_rows['z']
+    obj_id_array[idx] = orig_rows['obj_id']
 
     # assemble observations (in meters)
     obs = numpy.vstack(( x,y,z )).T
@@ -313,10 +331,9 @@ def kalman_smooth(orig_rows,
                                                  model['Q'],
                                                  model['R'],
                                                  init_x,
-                                                 P_k1)
-    obj_id_array = numpy.ma.masked_array(orig_rows['obj_id'])
-    fanout_idx = np.arange(len(frames))
-    return frames, xsmooth, Psmooth, obj_id_array, fanout_idx
+                                                 P_k1,
+                                                 valid_data_idx=idx)
+    return frames, xsmooth, Psmooth, obj_id_array, idx
 
 def observations2smoothed(obj_id,
                           orig_rows,
@@ -1484,7 +1501,7 @@ class CachingAnalyzer:
                 preloaded_dict = self._load_dict(result_h5_file)
             kresults = preloaded_dict['kresults']
 
-            if 1:
+            if not use_kalman_smoothing:
                 # XXX this is slow! Should precompute indexes on file load.
                 obj_ids = preloaded_dict['obj_ids']
                 if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
@@ -1497,9 +1514,121 @@ class CachingAnalyzer:
                         idxs.append( numpy.nonzero(obj_ids == oi)[0] )
                     idxs = numpy.concatenate( idxs )
                 rows = kresults.root.kalman_estimates.readCoordinates(idxs)
+            else:
+                obs_obj_ids = preloaded_dict['obs_obj_ids']
 
-            if use_kalman_smoothing:
-                orig_rows = rows
+                if isinstance(obj_id,int) or isinstance(obj_id,numpy.integer):
+                    # obj_id is an integer, normal case
+                    tmp_cond = obs_obj_ids == obj_id
+                    tmp_nz = numpy.nonzero(tmp_cond)
+                    del tmp_cond
+                    if len(tmp_nz):
+                        obs_idxs = tmp_nz[0]
+                    else:
+                        obs_idxs = []
+                    del tmp_nz
+                else:
+                    # may specify sequence of obj_id -- concatenate
+                    # data, treat as one object
+                    obs_idxs = []
+                    for oi in obj_id:
+                        tmp_idxes = numpy.nonzero(obs_obj_ids == oi)
+                        try:
+                            tmp_idx = tmp_idxes[0]
+                        except IndexError:
+                            raise ValueError('obj_id %s does not exist in '
+                                             'observations'%oi)
+                        obs_idxs.append( tmp_idx )
+                        del tmp_idxes, tmp_idx
+                        ## print 'oi',oi
+                        ## print 'oi',type(oi)
+                        ## print 'len(obs_idxs[-1])',len(obs_idxs[-1])
+                        ## print
+                    obs_idxs = numpy.concatenate( obs_idxs )
+
+                # Kalman observations are already always in meters, no
+                # scale factor needed
+                try:
+                    orig_rows = kresults.root.ML_estimates.readCoordinates(
+                        obs_idxs)
+                except tables.exceptions.NoSuchNodeError, err:
+                    orig_rows = kresults.root.kalman_observations.readCoordinates(
+                        obs_idxs)
+
+
+                if len(orig_rows)==0:
+                    raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
+
+                if 1 :
+                    warnings.warn('Due to Kalman smoothing, all '
+                                  'observations using only 1 camera '
+                                  'will be ignored.  This is because '
+                                  'the Kalman smoothing process '
+                                  'needs multiple camera data to '
+                                  'triangulate a position')
+
+                    # filter out observations in which are nan (only 1 camera contributed)
+                    cond = ~numpy.isnan(orig_rows['x'])
+                    orig_rows = orig_rows[cond]
+
+                    if 0:
+                        all_obj_ids = list(numpy.unique(orig_rows['obj_id']))
+                        all_obj_ids.sort()
+                        for obj_id in all_obj_ids:
+                            cond = orig_rows['obj_id']==obj_id
+                            print obj_id
+                            print orig_rows[cond]
+                            print
+
+                elif 0:
+                    warnings.warn('using EKF estimates of position as '
+                                  'observations to Kalman smoother where only '
+                                  '1 camera data present')
+
+                    # replace observations with only one camera by
+                    # Extended Kalman Filter estimates
+
+                    cond = numpy.isnan(orig_rows['x'])
+                    take_idx = numpy.nonzero( cond )[0]
+                    take_frames = orig_rows['frame']
+                    take_obj_ids = orig_rows['obj_id']
+
+                    kest_table = kresults.root.kalman_estimates[:]
+                    for frame,obj_id,idx in zip(
+                        take_frames,take_obj_ids,take_idx):
+
+                        kest_row_idxs = np.nonzero(
+                            kest_table['frame'] == frame)[0]
+                        kest_rows = kest_table[kest_row_idxs]
+                        kest_row_idxs = np.nonzero(
+                            kest_rows['obj_id'] == obj_id )[0]
+
+                        if 0:
+                            print "frame, obj_id",frame, obj_id
+                            print 'orig_rows[idx]'
+                            print orig_rows[idx]
+                            print "kest_rows[kest_row_idxs]"
+                            print kest_rows[kest_row_idxs]
+                            print
+                        if len( kest_row_idxs )==0:
+                            # no estimate for this frame (why?)
+                            continue
+                        assert len( kest_row_idxs )==1
+                        kest_row_idx = kest_row_idxs[0]
+                        orig_rows[idx]['x'] = kest_rows[kest_row_idx]['x']
+                        orig_rows[idx]['y'] = kest_rows[kest_row_idx]['y']
+                        orig_rows[idx]['z'] = kest_rows[kest_row_idx]['z']
+                else:
+                    warnings.warn('abondoning all observations where only 1 '
+                                  'camera data present, and estimating past '
+                                  'end of last observation')
+
+                    # another idea would be to implement crazy
+                    # EKF-based smoothing...
+
+                if len(orig_rows)<=1:
+                    raise NotEnoughDataToSmoothError(
+                        'not enough data from obj_id %d was found'%obj_id)
 
                 rows = self._smooth_cache.query_results(
                     obj_id,data_file,orig_rows,
