@@ -441,6 +441,9 @@ def kalmanize(src_filename,
         with openFileSafe(dest_filename, mode="w", title="tracked Flydra data file",
                           delete_on_error=True) as h5file:
 
+            if 'experiment_info' in results.root:
+                results.root.experiment_info._f_copy(h5file.root,recursive=True)
+
             if do_full_kalmanization:
                 parsed = read_textlog_header(results)
                 if 'trigger_CS3' not in parsed:
