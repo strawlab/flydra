@@ -102,11 +102,7 @@ def plot_timeseries(subplot=None,options = None):
                                   '(--disable-kalman-smoothing) is incompatable '
                                   'with setting dynamic model options (--dynamic-model)')
 
-    if hasattr(options,'hack_postmultiply'):
-        hack_postmultiply=options.hack_postmultiply
-    else:
-        hack_postmultiply=None
-    ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=hack_postmultiply)
+    ca = core_analysis.get_global_CachingAnalyzer()
 
     if kalman_filename is not None:
         m = hashlib.md5()

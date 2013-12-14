@@ -81,16 +81,6 @@ def test_rotate_vec():
         # cgkit 2.x check
         assert np.allclose( expected, q.rotateVec(v) )
 
-def check_hack_postmultiply(hack_postmultiply):
-    if hack_postmultiply is not None:
-        if isinstance( hack_postmultiply, basestring):
-            #filename
-            txt = file(hack_postmultiply,mode='r').read()
-            hack_postmultiply = eval(txt)
-        hack_postmultiply = numpy.asarray(hack_postmultiply)
-        assert hack_postmultiply.shape == (3,4)
-    return hack_postmultiply
-
 class ObjectIDDataError(Exception):
     pass
 
@@ -1406,15 +1396,6 @@ class CachingAnalyzer:
         if not len(rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
 
-        if self.hack_postmultiply is not None:
-            warnings.warn('Using postmultiplication hack')
-
-            input = numpy.array([rows['x'], rows['y'], rows['z'], numpy.ones_like(rows['x'])])
-            output = numpy.dot(self.hack_postmultiply,input)
-            rows['x']=output[0,:]
-            rows['y']=output[1,:]
-            rows['z']=output[2,:]
-
         rows = self._filter_rows_on_flystate(rows,flystate,walking_start_stops)
 
         if with_directions:
@@ -1651,36 +1632,6 @@ class CachingAnalyzer:
 
         if not len(kalman_rows):
             raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
-
-        if self.hack_postmultiply is not None:
-            warnings.warn('Using postmultiplication hack')
-
-            input = numpy.array([rows['x'], rows['y'], rows['z'], numpy.ones_like(rows['x'])])
-            output = numpy.dot(self.hack_postmultiply,input)
-            rows['x']=output[0,:]
-            rows['y']=output[1,:]
-            rows['z']=output[2,:]
-            rows['xvel']=numpy.nan
-            rows['yvel']=numpy.nan
-            rows['zvel']=numpy.nan
-
-
-            input = numpy.array([rows['rawdir_x'], rows['rawdir_y'], rows['rawdir_z'], numpy.ones_like(rows['rawdir_x'])])
-            output = numpy.dot(self.hack_postmultiply,input)
-            # renormalize vectors after hack
-            output = flydra.reconstruct.norm_vec(output.T).T
-            rows['rawdir_x']=output[0,:]
-            rows['rawdir_y']=output[1,:]
-            rows['rawdir_z']=output[2,:]
-
-            if return_smoothed_directions:
-                input = numpy.array([rows['dir_x'], rows['dir_y'], rows['dir_z'], numpy.ones_like(rows['dir_x'])])
-                output = numpy.dot(self.hack_postmultiply,input)
-                # renormalize vectors after hack
-                output = flydra.reconstruct.norm_vec(output.T).T
-                rows['dir_x']=output[0,:]
-                rows['dir_y']=output[1,:]
-                rows['dir_z']=output[2,:]
 
         assert flystate in ['both', 'walking', 'flying']
         if walking_start_stops is None:
@@ -1958,9 +1909,7 @@ class CachingAnalyzer:
     ###################################
 
     # for class CachingAnalyzer
-    def __init__(self,hack_postmultiply=None,is_global=False):
-        self.hack_postmultiply = check_hack_postmultiply(hack_postmultiply)
-
+    def __init__(self,is_global=False):
         if not is_global:
             warnings.warn("maybe you want to use the global CachingAnalyzer instance? (Call 'get_global_CachingAnalyzer()'.)", stacklevel=2)
 

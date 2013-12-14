@@ -121,7 +121,7 @@ def cylindrical_post(info=None):
     actors.append(a)
     return actors
 
-def cubic_arena(info=None,hack_postmultiply=None):
+def cubic_arena(info=None):
     tube_radius = info['tube_diameter']/2.0
 
     def make_2_vert_tube(a,b):
@@ -140,14 +140,6 @@ def cubic_arena(info=None,hack_postmultiply=None):
         return a
 
     v=info['verts4x4'] # arranged in 2 rectangles of 4 verts
-    if hack_postmultiply is not None:
-        warnings.warn('Using postmultiplication hack')
-        vnew=[]
-        for vi in v:
-            vi2 = numpy.array((vi[0], vi[1], vi[2], 1.0))
-            vi = numpy.dot( hack_postmultiply, vi2 )
-            vnew.append(vi)
-        v = vnew
 
     actors = []
 

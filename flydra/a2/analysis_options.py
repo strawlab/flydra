@@ -27,8 +27,6 @@ def add_common_options( parser ):
 
     parser.add_option("--obj-only", type="string")
 
-    parser.add_option("--hack-postmultiply", type="string")
-
     parser.add_option("--stim-xml",
                       type="string",
                       default=None,

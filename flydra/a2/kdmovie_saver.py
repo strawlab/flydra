@@ -102,7 +102,7 @@ def doit(filename,
     except IOError, err:
         print 'not a .mat file at %s, treating as .hdf5 file'%(os.path.join(data_path, data_filename))
 
-    ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=options.hack_postmultiply)
+    ca = core_analysis.get_global_CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
 
     if obj_only is not None:
@@ -112,7 +112,6 @@ def doit(filename,
         file_timestamp = data_file.filename[4:19]
         stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
                                                            timestamp_string=file_timestamp,
-                                                           hack_postmultiply=options.hack_postmultiply,
                                                            )
     try:
         fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
@@ -445,9 +444,6 @@ def main():
                       type="int",
                       default=None,
                       )
-
-    parser.add_option("--hack-postmultiply", type='string',
-                      help="multiply 3D coordinates by a 3x4 matrix")
 
     parser.add_option("--dynamic-model",
                       type="string",
