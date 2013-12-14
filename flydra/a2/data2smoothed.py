@@ -252,6 +252,8 @@ def convert(infilename,
         allqualrows = None
     recarray = numpy.rec.array(allrows)
 
+    smoothed_source = 'ML_estimates'
+
     flydra.analysis.flydra_analysis_convert_to_mat.do_it(
         rows=recarray,
         ignore_observations=True,
@@ -261,6 +263,7 @@ def convert(infilename,
         hdf5=hdf5,
         tzname=tzname,
         fps=fps,
+        smoothed_source=smoothed_source,
         )
     ca.close()
 
