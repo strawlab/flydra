@@ -1545,73 +1545,11 @@ class CachingAnalyzer:
                     raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
 
                 if 1 :
-                    warnings.warn('Due to Kalman smoothing, all '
-                                  'observations using only 1 camera '
-                                  'will be ignored.  This is because '
-                                  'the Kalman smoothing process '
-                                  'needs multiple camera data to '
-                                  'triangulate a position')
-
                     # filter out observations in which are nan (only 1 camera contributed)
                     cond = ~numpy.isnan(ML_rows['x'])
                     ML_rows = ML_rows[cond]
 
-                    if 0:
-                        all_obj_ids = list(numpy.unique(ML_rows['obj_id']))
-                        all_obj_ids.sort()
-                        for obj_id in all_obj_ids:
-                            cond = ML_rows['obj_id']==obj_id
-                            print obj_id
-                            print ML_rows[cond]
-                            print
-
-                elif 0:
-                    warnings.warn('using EKF estimates of position as '
-                                  'observations to Kalman smoother where only '
-                                  '1 camera data present')
-
-                    # replace observations with only one camera by
-                    # Extended Kalman Filter estimates
-
-                    cond = numpy.isnan(ML_rows['x'])
-                    take_idx = numpy.nonzero( cond )[0]
-                    take_frames = ML_rows['frame']
-                    take_obj_ids = ML_rows['obj_id']
-
-                    kest_table = kresults.root.kalman_estimates[:]
-                    for frame,obj_id,idx in zip(
-                        take_frames,take_obj_ids,take_idx):
-
-                        kest_row_idxs = np.nonzero(
-                            kest_table['frame'] == frame)[0]
-                        kest_rows = kest_table[kest_row_idxs]
-                        kest_row_idxs = np.nonzero(
-                            kest_rows['obj_id'] == obj_id )[0]
-
-                        if 0:
-                            print "frame, obj_id",frame, obj_id
-                            print 'ML_rows[idx]'
-                            print ML_rows[idx]
-                            print "kest_rows[kest_row_idxs]"
-                            print kest_rows[kest_row_idxs]
-                            print
-                        if len( kest_row_idxs )==0:
-                            # no estimate for this frame (why?)
-                            continue
-                        assert len( kest_row_idxs )==1
-                        kest_row_idx = kest_row_idxs[0]
-                        ML_rows[idx]['x'] = kest_rows[kest_row_idx]['x']
-                        ML_rows[idx]['y'] = kest_rows[kest_row_idx]['y']
-                        ML_rows[idx]['z'] = kest_rows[kest_row_idx]['z']
-                else:
-                    warnings.warn('abondoning all observations where only 1 '
-                                  'camera data present, and estimating past '
-                                  'end of last observation')
-
-                    # another idea would be to implement crazy
-                    # EKF-based smoothing...
-
-                if len(ML_rows)<=1:
+                if len(kalman_rows)<=1:
                     raise NotEnoughDataToSmoothError(
                         'not enough data from obj_id %d was found'%obj_id)
 
