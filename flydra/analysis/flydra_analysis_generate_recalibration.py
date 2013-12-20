@@ -13,8 +13,34 @@ from optparse import OptionParser
 
 from multicamselfcal.execute import MultiCamSelfCal
 
+import warnings
+
 import flydra.reconstruct
 import flydra.analysis.result_utils as result_utils
+
+def save_calibration_directory(IdMat=None,
+                               points=None,
+                               Res=None,
+                               calib_dir=None,
+                               cam_ids=None,
+                               square_pixels=True,
+                               num_cameras_fill=-1,
+                               #intrinsics_reconstructor=None,
+                               #intrinsics_yaml=None,
+                               ):
+    warnings.warn('DeprecationWarning: save_calibration_directory backward compatibility shim being used', DeprecationWarning, stacklevel=2)
+
+    mcsc = MultiCamSelfCal(calib_dir, use_nth_frame=5 )
+    mcsc.create_calibration_directory(
+                               cam_ids=cam_ids,
+                               IdMat=IdMat,
+                               points=points,
+                               Res=Res,
+                               #cam_calibrations=cam_calibrations,
+                               #cam_centers=cam_centers,
+                               #radial_distortion=undo_radial_distortion,
+                               square_pixels=square_pixels,
+                               num_cameras_fill=num_cameras_fill)
 
 def create_new_row(d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoints_by_cam_id):
     n_pts = 0
