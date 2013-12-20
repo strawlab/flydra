@@ -6,7 +6,7 @@ if 1:
 
 import os, sys, math
 sys.path.insert(0,os.curdir)
-from enthought.tvtk.api import tvtk
+import tvtk
 import numpy
 import numpy as np
 import tables as PT
