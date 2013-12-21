@@ -1,7 +1,5 @@
 import tables as PT
-import numpy
 import numpy as np
-import warnings
 import flydra.data_descriptions
 import flydra.kalman.dynamic_models
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
@@ -211,7 +209,7 @@ def convert_format(current_data,camn2cam_id,area_threshold=0.0,only_likely=False
             # no data for this camera, continue
             continue
         for (pt_undistorted,projected_line) in stuff_list:
-            if not numpy.isnan(pt_undistorted[0]): # only use if point was found
+            if not np.isnan(pt_undistorted[0]): # only use if point was found
 
                 # perform area filtering
                 area = pt_undistorted[PT_TUPLE_IDX_AREA]
