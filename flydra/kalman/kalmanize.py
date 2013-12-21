@@ -254,7 +254,7 @@ class KalmanSaver:
         self.obj_id += 1
 
         if self.debug:
-            print 'saving %s as obj_id %d'%(repr(self), obj_id)
+            print 'saving %s as obj_id %d'%(repr(self), self.obj_id)
 
         # save observation 2d data indexes
         debugADS=False
@@ -477,14 +477,6 @@ def kalmanize(src_filename,
 
             data2d = results.root.data2d_distorted
 
-            if 0:
-                print '-='*40
-                print '-='*40
-                print 'using only first 2000 rows'
-                row_idxs = row_idxs[:2000]
-                print '-='*40
-                print '-='*40
-
             frame_count = 0
             last_frame = None
             frame_data = collections.defaultdict(list)
@@ -510,7 +502,6 @@ def kalmanize(src_filename,
                 print 'No 2D data. Nothing to do.'
                 return
 
-            ## row_idxs = numpy.argsort(frames_array)
             if do_full_kalmanization:
                 print '2D data range: approximately %d<frame<%d'%(
                     frames_array[0], frames_array[-1])
