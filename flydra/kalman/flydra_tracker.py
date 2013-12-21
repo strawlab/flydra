@@ -16,7 +16,7 @@ class Tracker:
 
     """
     def __init__(self,
-                 reconstructor_meters,
+                 reconstructor,
                  kalman_model=None,
                  max_frames_skipped=25,
                  save_all_data=False,
@@ -30,7 +30,7 @@ class Tracker:
 
         arguments
         =========
-        reconstructor_meters - reconstructor instance with internal units of meters
+        reconstructor - reconstructor instance
         kalman_model - dictionary of Kalman filter parameters
         area_threshold - minimum area to consider for tracking use
 
@@ -38,7 +38,7 @@ class Tracker:
         self.area_threshold = area_threshold
         self.area_threshold_for_orientation=area_threshold_for_orientation
         self.save_all_data = save_all_data
-        self.reconstructor_meters=reconstructor_meters
+        self.reconstructor=reconstructor
         self.live_tracked_objects = []
         self.dead_tracked_objects = [] # save for getting data out
         self.kill_tracker_callbacks = []
@@ -192,7 +192,7 @@ class Tracker:
         obj_id = self.cur_obj_id
         self.cur_obj_id+=1
 
-        tro = TrackedObject(self.reconstructor_meters,
+        tro = TrackedObject(self.reconstructor,
             obj_id,
             frame,
             first_observation_orig_units,
