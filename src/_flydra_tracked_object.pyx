@@ -1,5 +1,6 @@
 #emacs, this is -*-Python-*- mode
 cimport c_lib
+cimport _fastgeom
 
 # NOTE: 'observations_meters' is not the observation vector for an EKF
 # based tracker. 'observations_meters' is really just the ML estimate
@@ -487,6 +488,7 @@ cdef class TrackedObject:
         cdef double pt_area, mean_val, sumsqf_val
         cdef int cur_val
         cdef int camn, frame_pt_idx
+        cdef _fastgeom.PlueckerLine projected_line_meters
 
         all_close_camn_pt_idxs = [] # store all "maybes"
 
@@ -588,14 +590,6 @@ cdef class TrackedObject:
 
                         # Find point on ray with closest Mahalanobis distance.
 
-                        if 1:
-                            import warnings
-                            warnings.warn('using slow threetuple')
-                            u = projected_line_meters.u
-                            v = projected_line_meters.v
-                            projected_line_meters = flydra.geom.PlueckerLine(
-                                flydra.geom.ThreeTuple((u.a,u.b,u.c)),
-                                flydra.geom.ThreeTuple((v.a,v.b,v.c)))
                         if Pminus_inv is None:
                             Pminus_inv = numpy.linalg.inv( Pminus[:3,:3] )
                         best_3d_location = mahalanobis.line_fit_3d(

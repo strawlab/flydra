@@ -250,8 +250,8 @@ class TestMahalanobis(unittest.TestCase):
         assert numpy.allclose(loc2d, (10.0,0.0) )
 
     def test_3d(self):
-        ln = flydra.geom.PlueckerLine(flydra.geom.ThreeTuple((0,0,0)),
-                                      flydra.geom.ThreeTuple((1,0,0)))
+        ln = fastgeom.PlueckerLine(fastgeom.ThreeTuple((0,0,0)),
+                                   fastgeom.ThreeTuple((1,0,0)))
         mu = numpy.array((10.0,1,0,0,0,0))
         S = numpy.eye(6)
         S_inv = np.linalg.inv( S[:3,:3] )

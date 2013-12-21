@@ -1,5 +1,6 @@
 #emacs, this is -*-Python-*- mode
 import numpy
+cimport _fastgeom
 
 def line_fit_2d(line_2d, mu, sigma_inv):
     """find the point closest to mu on the line according to Mahalanois distance"""
@@ -21,7 +22,7 @@ def line_fit_2d(line_2d, mu, sigma_inv):
     loc2d = (a+s*b,c+s*d)
     return loc2d
 
-def line_fit_3d(line_pluecker, mu, sigma_inv):
+def line_fit_3d(_fastgeom.PlueckerLine line_pluecker, mu, sigma_inv):
     """find the point closest to mu on the line according to Mahalanobis distance"""
 
     # The idea -- Because the Mahalanobis distance function is convex,
@@ -29,8 +30,13 @@ def line_fit_3d(line_pluecker, mu, sigma_inv):
 
     cdef double x0, x1, x2, S00, S01, S02, S10, S11, S12, S20, S21, S22, a,b,c,d,e,f
 
-    a,b,c = line_pluecker.u
-    d,e,f = line_pluecker.v
+    cdef _fastgeom.ThreeTuple lu, lv
+
+    lu = line_pluecker.u
+    lv = line_pluecker.v
+
+    a,b,c = lu.a, lu.b, lu.c
+    d,e,f = lv.a, lv.b, lv.c
 
     # slice into potentially bigger arrays
     x0,x1,x2 = mu[:3]
