@@ -169,14 +169,14 @@ class Tracker:
         # Take-back previous observations - starve this Kalman
         # object (which has higher error) so that 2 Kalman objects
         # don't start sharing all observations.
-        _=[ self.live_tracked_objects[i].remove_previous_observation(debug1=debug2) \
-                for i in to_rewind ]
+        ( self.live_tracked_objects[i].remove_previous_observation(debug1=debug2) \
+                for i in to_rewind )
 
         # remove tracked objects from live list (when their error grows too large)
         kill_idxs.sort()
         kill_idxs.reverse()
         newly_dead = [self.live_tracked_objects.pop(i) for i in kill_idxs]
-        _=[ tro.kill() for tro in newly_dead ]
+        (tro.kill() for tro in newly_dead)
         self.dead_tracked_objects.extend(newly_dead)
         self._flush_dead_queue()
         return data_dict
@@ -208,7 +208,7 @@ class Tracker:
             )
         self.live_tracked_objects.append(tro)
     def kill_all_trackers(self):
-        _=[tro.kill() for tro in self.live_tracked_objects]
+        (tro.kill() for tro in self.live_tracked_objects)
         while len(self.live_tracked_objects):
             self.dead_tracked_objects.append( self.live_tracked_objects.pop() )
         self._flush_dead_queue()
