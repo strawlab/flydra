@@ -1,7 +1,6 @@
 import flydra.data_descriptions as data_descriptions
 import collections
 
-import _flydra_tracked_object as flydra_tracked_object
 from _flydra_tracked_object import TrackedObject
 
 __all__ = ['TrackedObject','Tracker']
