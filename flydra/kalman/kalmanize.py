@@ -31,16 +31,6 @@ tmp = flydra_kalman_utils.ML_estimates_2d_idxs_type
 ML_estimates_2d_idxs_type = tmp
 del tmp
 
-class FakeThreadingEvent:
-    def __init__(self):
-        self._set = False
-    def set(self):
-        self._set = True
-    def isSet(self):
-        return self._set
-    def clear(self):
-        self._set = False
-
 def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
                   debug=0, area_threshold=0):
     if debug is None:
