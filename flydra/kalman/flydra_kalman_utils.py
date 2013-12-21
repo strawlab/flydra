@@ -145,7 +145,6 @@ class KalmanSaveInfo(object):
             raise NotImplementedError('')
         assert save_covariance in ['position','diag']
         self.save_covariance = save_covariance
-        dt = 1.0 # doesn't matter -- just getting state space size
         model = flydra.kalman.dynamic_models.get_kalman_model( name=name, dt=1.0 )
         ss = model['ss']
         if ss == 6:
