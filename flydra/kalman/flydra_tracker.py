@@ -1,13 +1,5 @@
-import numpy
-import numpy as np
-import flydra.kalman.ekf as kalman_ekf
-#import flydra.geom as geom
-import _fastgeom as geom
-import flydra.geom
-import os, math, struct
 import flydra.data_descriptions as data_descriptions
-import warnings, collections
-from pprint import pprint
+import collections
 
 import _flydra_tracked_object as flydra_tracked_object
 from _flydra_tracked_object import TrackedObject
