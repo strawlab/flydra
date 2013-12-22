@@ -486,7 +486,7 @@ cdef class TrackedObject:
         cdef double dist2, dist, p_y_x
         cdef int gated_in, pixel_dist_criterion_passed
 
-        cdef double pt_area, mean_val, sumsqf_val
+        cdef double pt_area, mean_val, sumsqf_val, area
         cdef int cur_val
         cdef int camn, frame_pt_idx
         cdef _fastgeom.PlueckerLine projected_line_meters
