@@ -1,6 +1,7 @@
 #emacs, this is -*-Python-*- mode
 cimport c_lib
 cimport _fastgeom
+cimport _mahalanobis
 
 # NOTE: 'observations_meters' is not the observation vector for an EKF
 # based tracker. 'observations_meters' is really just the ML estimate
@@ -14,7 +15,7 @@ import flydra.kalman.ekf as kalman_ekf
 #import flydra.geom as geom
 import _fastgeom as geom
 import flydra.geom
-import _mahalanobis as mahalanobis
+import _mahalanobis
 import math, struct
 import flydra.data_descriptions
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
@@ -489,10 +490,12 @@ cdef class TrackedObject:
         cdef int cur_val
         cdef int camn, frame_pt_idx
         cdef _fastgeom.PlueckerLine projected_line_meters
+        cdef _fastgeom.ThreeTuple best_3d_location
 
         all_close_camn_pt_idxs = [] # store all "maybes"
 
         prediction_3d = xhatminus[:3]
+        cdef _fastgeom.ThreeTuple fast_prediction_3d = _fastgeom.ThreeTuple(xhatminus[:3])
         pixel_dist_cmp = self.distorted_pixel_euclidian_distance_accept
         neg_predicted_3d = -geom.ThreeTuple( prediction_3d )
         cam_ids_and_points2d = []
@@ -592,14 +595,14 @@ cdef class TrackedObject:
 
                         if Pminus_inv is None:
                             Pminus_inv = numpy.linalg.inv( Pminus[:3,:3] )
-                        best_3d_location = mahalanobis.line_fit_3d(
-                            projected_line_meters, xhatminus, Pminus_inv )
+                        best_3d_location = _mahalanobis._line_fit_3d(
+                            projected_line_meters, fast_prediction_3d, Pminus_inv )
 
                         # find closest distance between projected_line and predicted position for each 2d point
                         #   squared distance between prediction and camera ray
-                        dist2=mahalanobis.dist2( best_3d_location,
-                                                 xhatminus,
-                                                 Pminus_inv )
+                        dist2=_mahalanobis._dist2( best_3d_location,
+                                                   fast_prediction_3d,
+                                                   Pminus_inv )
                         dist = c_lib.sqrt(dist2)
                         nll_this_point = p_y_x + dist # negative log likelihood of this point
 
