@@ -22,7 +22,7 @@ def line_fit_2d(line_2d, mu, sigma_inv):
     loc2d = (a+s*b,c+s*d)
     return loc2d
 
-cdef _fastgeom.ThreeTuple _line_fit_3d(_fastgeom.PlueckerLine line_pluecker, _fastgeom.ThreeTuple mu, sigma_inv):
+cpdef _fastgeom.ThreeTuple line_fit_3d(_fastgeom.PlueckerLine line_pluecker, _fastgeom.ThreeTuple mu, sigma_inv):
     """find the point closest to mu on the line according to Mahalanobis distance"""
 
     # The idea -- Because the Mahalanobis distance function is convex,
@@ -53,23 +53,10 @@ cdef _fastgeom.ThreeTuple _line_fit_3d(_fastgeom.PlueckerLine line_pluecker, _fa
     cdef _fastgeom.ThreeTuple loc3d = _fastgeom.ThreeTuple((a+s*d, b+s*e, c+s*f))
     return loc3d
 
-def line_fit_3d(line_pluecker, mu, sigma_inv):
-    mu_ = _fastgeom.ThreeTuple(mu[:3])
-    r = _line_fit_3d(line_pluecker, mu_, sigma_inv)
-    return (r.a, r.b, r.c)
-
-cdef double _dist2(_fastgeom.ThreeTuple x,_fastgeom.ThreeTuple mu,sigma_inv):
+cpdef double dist2(_fastgeom.ThreeTuple x,_fastgeom.ThreeTuple mu,sigma_inv):
     """return the squared Mahalanobis distance"""
     assert sigma_inv.shape==(3,3)
     cdef _fastgeom.ThreeTuple r = x-mu
     sub = numpy.array((r.a, r.b, r.c))
     cdef double result = numpy.dot( sub.T, numpy.dot( sigma_inv, sub ) )
     return result
-
-def dist2(x,mu,sigma_inv):
-    """return the squared Mahalanobis distance"""
-    assert len(x)==3
-    assert len(mu)==3
-    x_ = _fastgeom.ThreeTuple(x)
-    mu_ = _fastgeom.ThreeTuple(mu)
-    return _dist2(x_,mu_,sigma_inv)

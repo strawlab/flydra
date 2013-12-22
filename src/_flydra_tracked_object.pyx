@@ -595,14 +595,14 @@ cdef class TrackedObject:
 
                         if Pminus_inv is None:
                             Pminus_inv = numpy.linalg.inv( Pminus[:3,:3] )
-                        best_3d_location = _mahalanobis._line_fit_3d(
+                        best_3d_location = _mahalanobis.line_fit_3d(
                             projected_line_meters, fast_prediction_3d, Pminus_inv )
 
                         # find closest distance between projected_line and predicted position for each 2d point
                         #   squared distance between prediction and camera ray
-                        dist2=_mahalanobis._dist2( best_3d_location,
-                                                   fast_prediction_3d,
-                                                   Pminus_inv )
+                        dist2=_mahalanobis.dist2( best_3d_location,
+                                                  fast_prediction_3d,
+                                                  Pminus_inv )
                         dist = c_lib.sqrt(dist2)
                         nll_this_point = p_y_x + dist # negative log likelihood of this point
 
