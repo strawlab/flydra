@@ -5,13 +5,13 @@ import flydra.offline_data_save
 from flydra.kalman.kalmanize import kalmanize
 from flydra.a2.calculate_reprojection_errors import calculate_reprojection_errors
 import pandas
+import water
 import flydra.a2.core_analysis as core_analysis
 from flydra.reconstruct import Reconstructor
 
 def test_reconstruction():
     for use_kalman_smoothing in [False, True]:
-        for with_water in [False]:
-        #for with_water in [False, True]:
+        for with_water in [False, True]:
             yield check_reconstruction, with_water, use_kalman_smoothing
 
 def check_reconstruction(with_water=False, use_kalman_smoothing=False, duration=1.0, fps=120.0):
@@ -44,12 +44,22 @@ def check_reconstruction(with_water=False, use_kalman_smoothing=False, duration=
     # ------------
     # calculate 2d points for each camera
     reconstructor = Reconstructor.from_pymvg(cam_system)
+    if with_water:
+        wateri = water.WaterInterface()
+        reconstructor.add_water(wateri)
+
     data2d = {}
     for camn,cam in enumerate(cams):
         cam_id = cam.name
         assert cam_id!='t'
 
-        data2d[cam_id] = cam.project_3d_to_pixel(pts, distorted=True)
+        if with_water:
+            data2d[cam_id] = water.view_points_in_water( reconstructor,
+                                                         cam_id, pts, wateri).T
+        else:
+            data2d[cam_id] = cam.project_3d_to_pixel(pts)
+
+
 
     data2d['t'] = t
 
