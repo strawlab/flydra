@@ -5,9 +5,9 @@ import flydra.reconstruct
 import _reconstruct_utils as ru
 #import flydra.geom as geom
 import _fastgeom as geom
-import time, math
-from flydra.analysis.result_utils import get_results, get_caminfo_dicts, \
-     get_resolution, get_fps, read_textlog_header
+import time
+from flydra.analysis.result_utils import get_caminfo_dicts, \
+     get_fps, read_textlog_header
 import tables
 import tables as PT
 import warnings
@@ -20,7 +20,6 @@ import dynamic_models
 import collections
 import flydra.version
 from flydra.data_descriptions import TextLogDescription
-from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 from flydra.reconstruct import do_3d_operations_on_2d_point
 import flydra.a2.utils as utils
 from flydra.a2.tables_tools import openFileSafe
@@ -32,18 +31,8 @@ tmp = flydra_kalman_utils.ML_estimates_2d_idxs_type
 ML_estimates_2d_idxs_type = tmp
 del tmp
 
-class FakeThreadingEvent:
-    def __init__(self):
-        self._set = False
-    def set(self):
-        self._set = True
-    def isSet(self):
-        return self._set
-    def clear(self):
-        self._set = False
-
-def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
-                  debug=0, kalman_model=None, area_threshold=0):
+def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
+                  debug=0, area_threshold=0):
     if debug is None:
         debug=0
     frame_data = tracker.calculate_a_posteriori_estimates(
@@ -77,11 +66,11 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
         try:
             (this_observation_mm, this_observation_Lcoords_mm, cam_ids_used,
              min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
-                reconst_orig_units,
+                reconstructor,
                 found_data_dict,
                 max_err,
                 debug=debug)
-        except ru.NoAcceptablePointFound, err:
+        except ru.NoAcceptablePointFound:
             pass
         else:
             hypothesis_test_found_point = True
@@ -97,7 +86,7 @@ def process_frame(reconst_orig_units,tracker,frame,frame_data,camn2cam_id,
         believably_new = tracker.is_believably_new(
             this_observation_mm, debug=debug)
         if (debug > 5):
-                print 'believably_new',believably_new
+            print 'believably_new',believably_new
 
         if believably_new:
             assert min_mean_dist<max_err
@@ -150,7 +139,7 @@ option to this program.
                 print 'camn','raw 2d data','reprojected 3d->2d'
                 for camn in this_observation_camns:
                     cam_id = camn2cam_id[camn]
-                    repro=reconst_orig_units.find2d(
+                    repro=reconstructor.find2d(
                         cam_id, this_observation_mm )
                     print camn,frame_data[camn][0][0][:2],repro
 
@@ -166,25 +155,25 @@ option to this program.
     if debug > 5:
         print
         print 'At end of frame %d, all live tracked objects:'%frame
-        _=[tro.debug_info(level=debug) for tro in tracker.live_tracked_objects]
+        (tro.debug_info(level=debug) for tro in tracker.live_tracked_objects)
         print
         print '-'*80
     elif debug > 2:
         print 'At end of frame %d, all live tracked objects:'%frame
-        _=[tro.debug_info(level=debug) for tro in tracker.live_tracked_objects]
+        (tro.debug_info(level=debug) for tro in tracker.live_tracked_objects)
         print
 
 class KalmanSaver:
     def __init__(self,
                  h5file,
-                 reconst_orig_units,
+                 reconstructor,
                  cam_id2camns=None,
                  min_observations_to_save=0,
                  textlog_save_lines = None,
                  dynamic_model_name=None,
                  dynamic_model=None,
                  fake_timestamp=None,
-                 debug=0):
+                 debug=False):
         self.cam_id2camns = cam_id2camns
         self.min_observations_to_save = min_observations_to_save
         self.debug = 0
@@ -197,7 +186,7 @@ class KalmanSaver:
         filters = tables.Filters(1, complib='lzo') # compress
 
         self.h5file = h5file
-        reconst_orig_units.save_to_h5file(self.h5file)
+        reconstructor.save_to_h5file(self.h5file)
         self.h5_xhat = self.h5file.createTable(
             self.h5file.root,'kalman_estimates',
             kalman_estimates_description,
@@ -265,7 +254,7 @@ class KalmanSaver:
         self.obj_id += 1
 
         if self.debug:
-            print 'saving %s as obj_id %d'%(repr(self), obj_id)
+            print 'saving %s as obj_id %d'%(repr(self), self.obj_id)
 
         # save observation 2d data indexes
         debugADS=False
@@ -400,20 +389,18 @@ def kalmanize(src_filename,
 
             if reconstructor_filename.endswith('h5'):
                 fd = PT.openFile(reconstructor_filename,mode='r')
-                reconst_orig_units = flydra.reconstruct.Reconstructor(
+                reconstructor = flydra.reconstruct.Reconstructor(
                     fd,
                     minimum_eccentricity=options.force_minimum_eccentricity)
             else:
-                reconst_orig_units = flydra.reconstruct.Reconstructor(
+                reconstructor = flydra.reconstruct.Reconstructor(
                     reconstructor_filename,
                     minimum_eccentricity=options.force_minimum_eccentricity)
 
             if options.force_minimum_eccentricity is not None:
-                if (reconst_orig_units.minimum_eccentricity !=
+                if (reconstructor.minimum_eccentricity !=
                     options.force_minimum_eccentricity):
                     raise ValueError('could not force minimum_eccentricity')
-
-            reconstructor_meters = reconst_orig_units
 
             if dest_filename is None:
                 dest_filename = os.path.splitext(
@@ -461,7 +448,7 @@ def kalmanize(src_filename,
                     name=dynamic_model_name, dt=dt )
 
                 h5saver = KalmanSaver(h5file,
-                                      reconst_orig_units,
+                                      reconstructor,
                                       cam_id2camns=cam_id2camns,
                                       min_observations_to_save=min_observations_to_save,
                                       textlog_save_lines=textlog_save_lines,
@@ -472,7 +459,7 @@ def kalmanize(src_filename,
                                       )
 
                 tracker = Tracker(
-                    reconstructor_meters,
+                    reconstructor,
                     kalman_model=kalman_model,
                     save_all_data=True,
                     area_threshold=area_threshold,
@@ -490,18 +477,7 @@ def kalmanize(src_filename,
 
             data2d = results.root.data2d_distorted
 
-            done_frames = []
-
-            if 0:
-                print '-='*40
-                print '-='*40
-                print 'using only first 2000 rows'
-                row_idxs = row_idxs[:2000]
-                print '-='*40
-                print '-='*40
-
             frame_count = 0
-            accum_time = 0.0
             last_frame = None
             frame_data = collections.defaultdict(list)
             time_frame_all_cam_timestamps = []
@@ -526,7 +502,6 @@ def kalmanize(src_filename,
                 print 'No 2D data. Nothing to do.'
                 return
 
-            ## row_idxs = numpy.argsort(frames_array)
             if do_full_kalmanization:
                 print '2D data range: approximately %d<frame<%d'%(
                     frames_array[0], frames_array[-1])
@@ -621,10 +596,9 @@ def kalmanize(src_filename,
                                                   'but continuing analysis without '
                                                   'potentially bad data.')
                                 else:
-                                    process_frame(reconst_orig_units,tracker,
+                                    process_frame(reconstructor,tracker,
                                                   last_frame,frame_data,camn2cam_id,
                                                   debug=debug,
-                                                  kalman_model=kalman_model,
                                                   area_threshold=area_threshold)
                             frame_count += 1
                             if do_full_kalmanization and frame_count%1000==0:
@@ -645,7 +619,7 @@ def kalmanize(src_filename,
                     camn = row['camn']
                     try:
                         cam_id = camn2cam_id[camn]
-                    except KeyError, err:
+                    except KeyError:
                         # This will happen if cameras were re-synchronized (and
                         # thus gain new cam_ids) immediately before saving was
                         # turned on in MainBrain. The reason is that the network
@@ -674,7 +648,7 @@ def kalmanize(src_filename,
                             continue
                         y_distorted = row['y']
 
-                        (x_undistorted,y_undistorted) = reconst_orig_units.undistort(
+                        (x_undistorted,y_undistorted) = reconstructor.undistort(
                             cam_id,(x_distorted,y_distorted))
 
                         (area,slope,eccentricity,frame_pt_idx) = (row['area'],
@@ -689,14 +663,13 @@ def kalmanize(src_filename,
                         if 'sumsqf_val' in row.dtype.fields: sumsqf_val = row['sumsqf_val']
                         else: sumsqf_val = None
 
-                        pmat_inv = reconst_orig_units.get_pmat_inv(cam_id)
-                        pmat_meters_inv = reconstructor_meters.get_pmat_inv(cam_id)
-                        camera_center = reconst_orig_units.get_camera_center(cam_id)
+                        pmat_inv = reconstructor.get_pmat_inv(cam_id)
+                        camera_center = reconstructor.get_camera_center(cam_id)
                         camera_center = numpy.hstack((camera_center[:,0],[1]))
-                        camera_center_meters = reconstructor_meters.get_camera_center(
+                        camera_center_meters = reconstructor.get_camera_center(
                             cam_id)
                         camera_center_meters = numpy.hstack((camera_center_meters[:,0],[1]))
-                        helper = reconstructor_meters.get_reconstruct_helper_dict()[cam_id]
+                        helper = reconstructor.get_reconstruct_helper_dict()[cam_id]
                         rise=slope
                         run=1.0
                         if np.isinf(rise):
@@ -756,8 +729,7 @@ def kalmanize(src_filename,
 
         all_timestamps=np.empty( ( N_frames, N_cams ), dtype=np.float)
         all_timestamps.fill(np.nan)
-        for i,(fno,timestamps,camns) in enumerate(zip(
-            accum_frame_spread_fno,
+        for i,(timestamps,camns) in enumerate(zip(
             accum_frame_all_timestamps,
             accum_frame_all_camns)):
 

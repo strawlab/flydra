@@ -1,7 +1,6 @@
 """linear and non-linear dynamic models for different animals"""
 
 import numpy
-import math
 import warnings
 import re
 
@@ -410,7 +409,7 @@ def get_kalman_model( name=None, dt=None ):
         model_dict = create_dynamic_model_dict(dt=dt,disable_warning=True)
         try:
             kalman_model = model_dict[name]
-        except KeyError, err:
+        except KeyError:
             valid_names = get_model_names()
             raise KeyError("'%s', valid model names: %s"%(str(name),', '.join(map(repr,valid_names))))
     return kalman_model

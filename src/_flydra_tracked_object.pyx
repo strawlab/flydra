@@ -135,7 +135,7 @@ cdef class TrackedObject:
     cdef mybool kill_me, save_all_data
     cdef double area_threshold, area_threshold_for_orientation
 
-    cdef object reconstructor_meters, my_kalman
+    cdef object reconstructor, my_kalman
     cdef object distorted_pixel_euclidian_distance_accept
     cdef double max_variance
     cdef object ekf_observation_covariance_pixels
@@ -148,7 +148,7 @@ cdef class TrackedObject:
     cdef object ekf_kalman_A, ekf_kalman_Q
 
     def __init__(self,
-                 reconstructor_meters, # the Reconstructor instance
+                 reconstructor, # the Reconstructor instance
                  obj_id,
                  long frame, # frame number of first data
                  first_observation_orig_units, # first data
@@ -167,7 +167,7 @@ cdef class TrackedObject:
 
         arguments
         =========
-        reconstructor_meters - reconstructor instance with internal units of meters
+        reconstructor - reconstructor instance with internal units of meters
         obj_id - unique identifier for each object
         frame - frame number of first observation data
         first_observation_orig_units - first observation (in arbitrary units)
@@ -179,7 +179,7 @@ cdef class TrackedObject:
         self.area_threshold_for_orientation = area_threshold_for_orientation
         self.save_all_data = save_all_data
         self.kill_me = False
-        self.reconstructor_meters = reconstructor_meters
+        self.reconstructor = reconstructor
         self.distorted_pixel_euclidian_distance_accept=kalman_model.get('distorted_pixel_euclidian_distance_accept',None)
         self.disable_image_stat_gating = disable_image_stat_gating
         self.orientation_consensus = orientation_consensus
@@ -366,8 +366,8 @@ cdef class TrackedObject:
             # Step 3. Incorporate observation to estimate a posteriori
             if isinstance(self.my_kalman, kalman_ekf.EKF):
                 prediction_3d = xhatminus[:3]
-                pmats_and_points_cov = [ (self.reconstructor_meters.get_pmat(cam_id),
-                                          self.reconstructor_meters.get_pinhole_model_with_jacobian(cam_id),
+                pmats_and_points_cov = [ (self.reconstructor.get_pmat(cam_id),
+                                          self.reconstructor.get_pinhole_model_with_jacobian(cam_id),
                                           value_tuple[:2],#just first 2 components (x,y) become xy2d_observed
                                           self.ekf_observation_covariance_pixels)
                                          for (cam_id,value_tuple) in cam_ids_and_points2d]
@@ -502,10 +502,10 @@ cdef class TrackedObject:
             cam_id = camn2cam_id[camn]
 
             if pixel_dist_cmp is not None:
-                predicted_2d_distorted = self.reconstructor_meters.find2d(cam_id,prediction_3d,distorted=True)
+                predicted_2d_distorted = self.reconstructor.find2d(cam_id,prediction_3d,distorted=True)
 
             if debug>2:
-                predicted_2d_undistorted = self.reconstructor_meters.find2d(cam_id,prediction_3d,distorted=False)
+                predicted_2d_undistorted = self.reconstructor.find2d(cam_id,prediction_3d,distorted=False)
                 print '  cam_id',cam_id,'camn',camn,'--------'
                 print '    predicted_2d (undistorted)',predicted_2d_undistorted
 
@@ -550,7 +550,7 @@ cdef class TrackedObject:
                     # XXX TODO: fixme: should just pass in distorted pixel coordinates, but saves reorganizing all this code.
                     pt_x_undist =  pt_undistorted[PT_TUPLE_IDX_X]
                     pt_y_undist =  pt_undistorted[PT_TUPLE_IDX_Y]
-                    pt_x_dist, pt_y_dist = self.reconstructor_meters.distort( cam_id, (pt_x_undist, pt_y_undist) )
+                    pt_x_dist, pt_y_dist = self.reconstructor.distort( cam_id, (pt_x_undist, pt_y_undist) )
                     pixel_dist = numpy.sqrt((predicted_2d_distorted[0] - pt_x_dist)**2 + (predicted_2d_distorted[1] - pt_y_dist)**2)
                     if pixel_dist > pixel_dist_cmp:
                         pixel_dist_criterion_passed = False
@@ -675,7 +675,7 @@ cdef class TrackedObject:
             # keep 3D "observation" because we need to save 2d observations
             observation_meters = numpy.nan*numpy.ones( (3,))
         elif len(cam_ids_and_points2d)>=2:
-            observation_meters, Lcoords = self.reconstructor_meters.find3d(
+            observation_meters, Lcoords = self.reconstructor.find3d(
                 cam_ids_and_points2d, return_line_coords = True,
                 orientation_consensus=self.orientation_consensus)
         else:

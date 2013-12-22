@@ -342,7 +342,6 @@ class CoordinateProcessor(threading.Thread):
         self.cam_id2cam_no = {}
         self.camn2cam_id = {}
         self.reconstructor = None
-        self.reconstructor_meters = None
         self.tracker = None
         self.ever_synchronized = False
         self.show_sync_errors=show_sync_errors
@@ -442,15 +441,11 @@ class CoordinateProcessor(threading.Thread):
             self.reconstructor = r
 
         if r is None:
-            self.reconstructor_meters = None
             return
-
-        # backwards-compatibility cruft (delete me)
-        self.reconstructor_meters = self.reconstructor
 
     def set_new_tracker(self,kalman_model=None):
         # called from main thread, must lock to send to realtime coord thread
-        tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor_meters,
+        tracker = flydra.kalman.flydra_tracker.Tracker(self.reconstructor,
                                                        kalman_model=kalman_model)
         tracker.set_killed_tracker_callback( self.enqueue_finished_tracked_object )
         with self.tracker_lock:
@@ -611,8 +606,6 @@ class CoordinateProcessor(threading.Thread):
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
 
         convert_format = flydra_kalman_utils.convert_format # shorthand
-
-        debug_drop_fd = None
 
         while not self.quit_event.isSet():
             incoming_2d_data = self.realreceiver.get_data(0.1) # blocks for max 0.1 sec
