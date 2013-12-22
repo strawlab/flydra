@@ -250,17 +250,18 @@ class TestMahalanobis(unittest.TestCase):
         assert numpy.allclose(loc2d, (10.0,0.0) )
 
     def test_3d(self):
-        ln = flydra.geom.PlueckerLine(flydra.geom.ThreeTuple((0,0,0)),
-                                      flydra.geom.ThreeTuple((1,0,0)))
-        mu = numpy.array((10.0,1,0,0,0,0))
-        S = numpy.eye(6)
-        S_inv = np.linalg.inv( S[:3,:3] )
-        loc3d = mahalanobis.line_fit_3d( ln, mu, S_inv)
+        ln = fastgeom.PlueckerLine(fastgeom.ThreeTuple((0,0,0)),
+                                   fastgeom.ThreeTuple((1,0,0)))
+        mu = fastgeom.ThreeTuple((10.0,1,0))
+        S = numpy.eye(3)
+        S_inv = np.linalg.inv( S )
+        r = mahalanobis.line_fit_3d( ln, mu, S_inv)
+        loc3d = (r.a, r.b, r.c)
         assert numpy.allclose(loc3d, (10.0, 0.0, 0.0) )
 
     def test_dist(self):
-        x = numpy.array(( 0, 0, 0))
-        y = numpy.array(( 2, 0, 0))
+        x = fastgeom.ThreeTuple(( 0, 0, 0))
+        y = fastgeom.ThreeTuple(( 2, 0, 0))
         sigma = numpy.eye(3)
         sigma_inv = np.linalg.inv( sigma )
         four = mahalanobis.dist2( x, y, sigma_inv )
