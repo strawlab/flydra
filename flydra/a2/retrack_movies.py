@@ -1,23 +1,19 @@
 from __future__ import with_statement
-import motmot.ufmf.ufmf as ufmf_mod
-import sys, os, tempfile, re, contextlib, warnings, errno
+import os, tempfile, errno
 from optparse import OptionParser
 import flydra.a2.auto_discover_ufmfs as auto_discover_ufmfs
 import numpy as np
-import tables
-import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
 import scipy.misc
-import subprocess
 import flydra.a2.ufmf_tools as ufmf_tools
 import scipy.ndimage
 import flydra.data_descriptions
-from tables_tools import clear_col, openFileSafe
+from tables_tools import openFileSafe
 import motmot.FastImage.FastImage as FastImage
 import motmot.realtime_image_analysis.realtime_image_analysis \
        as realtime_image_analysis
 import cherrypy  # ubuntu: install python-cherrypy3
-import pickle, collections, tempfile, shutil
+import collections, shutil
 
 def get_config_defaults():
     default = {'pixel_aspect': 1,
@@ -53,8 +49,6 @@ def retrack_movies( h5_filename,
 
     # 2D data format for PyTables:
     Info2D = flydra.data_descriptions.Info2D
-    # allow rapid building of numpy.rec.array:
-    Info2DCol_description = tables.Description(Info2D().columns)._v_nestedDescr
 
     if ufmf_filenames is None:
         ufmf_filenames = auto_discover_ufmfs.find_ufmfs( h5_filename,
@@ -214,8 +208,6 @@ def retrack_movies( h5_filename,
                             ymean = np.sum((ysum*ypos))/np.sum(ysum)
 
                             if 1:
-                                this_absdiff_im = absdiff_im[y_slice,x_slice]
-
                                 if camcfg['pixel_aspect']==1:
                                     this_fit_im = this_label_im
                                 elif camcfg['pixel_aspect']==2:
