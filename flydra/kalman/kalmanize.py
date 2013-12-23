@@ -437,7 +437,7 @@ def kalmanize(src_filename,
                     parsed['trigger_CS3'] = 'unknown'
                 textlog_save_lines = [
                     'kalmanize running at %s fps, (top %s, trigger_CS3 %s, flydra_version %s)'%(
-                    str(frames_per_second),str(parsed['top']),
+                    str(frames_per_second),str(parsed.get('top','unknown')),
                     str(parsed['trigger_CS3']),flydra.version.__version__),
                     'original file: %s'%(src_filename,),
                     'dynamic model: %s'%(dynamic_model_name,),
