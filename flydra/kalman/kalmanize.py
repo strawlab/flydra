@@ -361,6 +361,10 @@ def kalmanize(src_filename,
               min_observations_to_save=0,
               options=None,
               ):
+    if options is None:
+        # get default options
+        parser = get_parser()
+        (options, args) = parser.parse_args([])
 
     if debug:
         numpy.set_printoptions(precision=3,linewidth=120,suppress=False)
@@ -833,7 +837,7 @@ This command will exit with a non-zero exit code if there are sync errors.
               options=options,
               )
 
-def main():
+def get_parser():
     usage = '%prog FILE [options]'
 
     parser = OptionParser(usage)
@@ -913,7 +917,10 @@ def main():
     parser.add_option("--disable-image-stat-gating", action='store_true',
                       help="disable gating the data based on image statistics",
                       default=False)
+    return parser
 
+def main():
+    parser = get_parser()
     (options, args) = parser.parse_args()
     if options.exclude_cam_ids is not None:
         options.exclude_cam_ids = options.exclude_cam_ids.split()
