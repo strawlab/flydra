@@ -538,24 +538,35 @@ def kalmanize(src_filename,
                 this_frames = data2d_recarray['frame']
                 print 'Examining frames %d-%d in detail.'%(this_frames[0],this_frames[-1])
                 this_row_idxs = np.argsort( this_frames )
-                for this_row_idx in this_row_idxs:
-                    row = data2d_recarray[this_row_idx]
+                for ii in range(len(this_row_idxs)+1):
 
-                    new_frame = row['frame']
+                    if ii >= len(this_row_idxs):
+                        finish_frame=True
+                    else:
+                        finish_frame = False
 
-                    if start_frame is not None:
-                        if new_frame < start_frame:
-                            continue
-                    if stop_frame is not None:
-                        if new_frame > stop_frame:
-                            continue
+                        this_row_idx = this_row_idxs[ii]
 
-                    if last_frame != new_frame:
-                        if new_frame < last_frame:
-                            print 'new_frame',new_frame
-                            print 'last_frame',last_frame
-                            raise RuntimeError("expected continuously increasing "
-                                               "frame numbers")
+                        row = data2d_recarray[this_row_idx]
+
+                        new_frame = row['frame']
+
+                        if start_frame is not None:
+                            if new_frame < start_frame:
+                                continue
+                        if stop_frame is not None:
+                            if new_frame > stop_frame:
+                                continue
+
+                        if last_frame != new_frame:
+                            if new_frame < last_frame:
+                                print 'new_frame',new_frame
+                                print 'last_frame',last_frame
+                                raise RuntimeError("expected continuously increasing "
+                                                   "frame numbers")
+                            finish_frame =True
+
+                    if finish_frame:
                         # new frame
                         ########################################
                         # Data for this frame is complete
