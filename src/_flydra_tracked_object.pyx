@@ -2,6 +2,7 @@
 cimport c_lib
 cimport _fastgeom
 cimport _mahalanobis
+cimport _pmat_jacobian
 
 # NOTE: 'observations_meters' is not the observation vector for an EKF
 # based tracker. 'observations_meters' is really just the ML estimate
@@ -54,6 +55,7 @@ cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, object xhatminus):
     cdef mybool missing_data
     cdef int i
     cdef int ss
+    cdef _pmat_jacobian.PinholeCameraModelWithJacobian pinhole_model
 
     ss = len(xhatminus)
 
@@ -78,16 +80,17 @@ cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, object xhatminus):
 
     # evaluate jacobian for each participating camera
     for i,(nonlin_model,xy2d_obs,cov) in enumerate(pmats_and_points_cov):
+        pinhole_model = nonlin_model
 
         # fill prediction vector [ h(xhatminus) ]
-        hx_i = nonlin_model(xhatminus)
+        hx_i = pinhole_model(xhatminus)
         hx[2*i:2*i+2] = hx_i
 
         # fill observation  vector
         y[2*i:2*i+2] = xy2d_obs
 
         # fill observation model
-        C_i = nonlin_model.evaluate_jacobian_at(xhatminus)
+        C_i = pinhole_model.evaluate_jacobian_at(xhatminus)
         C[2*i:2*i+2,:3] = C_i
 
         # fill observation covariance
