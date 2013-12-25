@@ -77,7 +77,7 @@ cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, object xhatminus):
     R = numpy.zeros((2*N,2*N), dtype=numpy.float64)
 
     # evaluate jacobian for each participating camera
-    for i,(pmat,nonlin_model,xy2d_obs,cov) in enumerate(pmats_and_points_cov):
+    for i,(nonlin_model,xy2d_obs,cov) in enumerate(pmats_and_points_cov):
 
         # fill prediction vector [ h(xhatminus) ]
         hx_i = nonlin_model(xhatminus)
@@ -368,7 +368,7 @@ cdef class TrackedObject:
             # Step 3. Incorporate observation to estimate a posteriori
             if isinstance(self.my_kalman, kalman_ekf.EKF):
                 prediction_3d = xhatminus[:3]
-                pmats_and_points_cov = [ (self.reconstructor.get_pmat(cam_id),
+                pmats_and_points_cov = [ (
                                           self.reconstructor.get_pinhole_model_with_jacobian(cam_id),
                                           value_tuple[:2],#just first 2 components (x,y) become xy2d_observed
                                           self.ekf_observation_covariance_pixels)
