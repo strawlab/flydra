@@ -392,10 +392,10 @@ def kalmanize(src_filename,
                 reconstructor_filename = src_filename
 
             if reconstructor_filename.endswith('h5'):
-                fd = PT.openFile(reconstructor_filename,mode='r')
-                reconstructor = flydra.reconstruct.Reconstructor(
-                    fd,
-                    minimum_eccentricity=options.force_minimum_eccentricity)
+                with PT.openFile(reconstructor_filename,mode='r') as fd:
+                    reconstructor = flydra.reconstruct.Reconstructor(
+                        fd,
+                        minimum_eccentricity=options.force_minimum_eccentricity)
             else:
                 reconstructor = flydra.reconstruct.Reconstructor(
                     reconstructor_filename,
