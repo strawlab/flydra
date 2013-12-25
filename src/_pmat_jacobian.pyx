@@ -5,6 +5,7 @@ see pinhole_jacobian_demo.py for the derivation of the math in this module.
 """
 import numpy
 import numpy as np
+cimport numpy as np
 
 def make_PinholeCameraModelWithJacobian(*args,**kw):
     return PinholeCameraModelWithJacobian(*args,**kw)
@@ -68,13 +69,11 @@ cdef class PinholeCameraModelWithJacobian:
                        [vx,vy,vz,vw]],
                       dtype=numpy.float64)
         return J
-    def evaluate_jacobian_at(self,X):
+    cpdef evaluate_jacobian_at(self, np.ndarray[np.double_t, ndim=1] X): # tested on Cython 0.19.2
         cdef double ux, uy, uz, uw
         cdef double vx, vy, vz, vw
         cdef double w
 
-        X = np.array(X)
-        assert X.ndim==1
         if len(X)==4:
             assert X[3]==1.0
         else:
@@ -87,13 +86,12 @@ cdef class PinholeCameraModelWithJacobian:
                        [vx,vy,vz]],
                       dtype=numpy.float64)
         return J
-    def __call__(self, X):
+    cpdef evaluate(self, np.ndarray[np.double_t, ndim=1] X):
         """evaluate the non-linear function
 
         Y = h(X)
         """
-        X = np.array(X)
-        assert X.ndim==1
+
         if len(X)==4:
             assert X[3]==1.0
         else:
