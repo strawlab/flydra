@@ -4,6 +4,7 @@
 see pinhole_jacobian_demo.py for the derivation of the math in this module.
 """
 import numpy
+import numpy as np
 
 def make_PinholeCameraModelWithJacobian(*args,**kw):
     return PinholeCameraModelWithJacobian(*args,**kw)
@@ -72,6 +73,12 @@ cdef class PinholeCameraModelWithJacobian:
         cdef double vx, vy, vz, vw
         cdef double w
 
+        X = np.array(X)
+        assert X.ndim==1
+        if len(X)==4:
+            assert X[3]==1.0
+        else:
+            assert len(X)==3
         x,y,z=X[:3]
         w=1.0
         self.evaluate_jacobian_at_(x,y,z,w, &ux, &uy, &uz, &uw,
@@ -85,6 +92,13 @@ cdef class PinholeCameraModelWithJacobian:
 
         Y = h(X)
         """
+        X = np.array(X)
+        assert X.ndim==1
+        if len(X)==4:
+            assert X[3]==1.0
+        else:
+            assert len(X)==3
+
         predicted3d_homogeneous = numpy.ones((4,1))
         predicted3d_homogeneous[:3,0] = X[:3]
         uvw = numpy.dot( self.pmat, predicted3d_homogeneous )

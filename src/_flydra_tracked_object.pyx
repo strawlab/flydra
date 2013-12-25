@@ -83,14 +83,14 @@ cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, object xhatminus):
         pinhole_model = nonlin_model
 
         # fill prediction vector [ h(xhatminus) ]
-        hx_i = pinhole_model(xhatminus)
+        hx_i = pinhole_model(xhatminus[:3])
         hx[2*i:2*i+2] = hx_i
 
         # fill observation  vector
         y[2*i:2*i+2] = xy2d_obs
 
         # fill observation model
-        C_i = pinhole_model.evaluate_jacobian_at(xhatminus)
+        C_i = pinhole_model.evaluate_jacobian_at(xhatminus[:3])
         C[2*i:2*i+2,:3] = C_i
 
         # fill observation covariance
