@@ -1,28 +1,10 @@
 #emacs, this is -*-Python-*- mode
+"""calculate jacobian matrices for pinhole camera model
+
+see pinhole_jacobian_demo.py for the derivation of the math in this module.
+"""
 import numpy
-"""
-import sympy
 
-# Let (u,v) be coorindates on the image plane.  (u,v) = (r/t, s/t)
-# where (r,s,t) = P (x,y,z,w) with (r,s,t) being 2D homogeneous
-# coords, (x,y,z,w) are 3D homogeneous coords, and P is the 3x4 camera calibration matrix.
-
-# write out equations for u and v
-u=sympy.sympify('(P00*x + P01*y + P02*z + P03*w)/(P20*x + P21*y + P22*z + P23*w)')
-v=sympy.sympify('(P10*x + P11*y + P12*z + P13*w)/(P20*x + P21*y + P22*z + P23*w)')
-
-# now take partial derivatives
-pu_x = sympy.diff(u,x)
-pu_y = sympy.diff(u,y)
-pu_z = sympy.diff(u,z)
-pu_w = sympy.diff(u,w)
-
-pv_x = sympy.diff(v,x)
-pv_y = sympy.diff(v,y)
-pv_z = sympy.diff(v,z)
-pv_w = sympy.diff(v,w)
-
-"""
 def make_PinholeCameraModelWithJacobian(*args,**kw):
     return PinholeCameraModelWithJacobian(*args,**kw)
 
