@@ -1,5 +1,5 @@
 import numpy as np
-import _refraction # from flydra
+import flydra.refract as refract
 R2D = 180./np.pi
 
 class WaterInterface:
@@ -30,18 +30,14 @@ def view_points_in_water( reconstructor, cam_id, pts3d, water, distorted=True ):
 
     height = pt1[2]
 
-    epsilon = 1e-16
-    scale=1.0
-
     shifted_water_surface_pts = np.zeros_like( pts3d )
 
     r0 = []
     for i in range(len(shifted_pts)):
         assert depth[i]>=0
         r0.append(
-            _refraction.find_fastest_path_fermat( water.n1, water.n2,
-                                                  height, r[i], depth[i],
-                                                  epsilon, scale))
+            refract.fermat1( water.n1, water.n2,
+                             height, r[i], depth[i]))
 
     r0=np.array(r0)
     shifted_water_surface_pts[:,0] = r0*np.cos(theta)
