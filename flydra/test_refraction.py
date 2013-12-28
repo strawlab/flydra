@@ -14,15 +14,12 @@ def test_refraction():
     # Test case where depth is zero: r == r0
     depth = 0.0
 
-    epsilon = 1e-16
-    scale=1.0
-
-    r0 = _refraction.find_fastest_path_fermat(n1, n2, height, r, depth, epsilon, scale)
+    r0 = _refraction.find_fastest_path_fermat(n1, n2, height, r, depth)
     assert abs(r-r0) < 1e-6
 
     # Test case with real depth
     depth = 3.0
-    r0 = _refraction.find_fastest_path_fermat(n1, n2, height, r, depth, epsilon, scale)
+    r0 = _refraction.find_fastest_path_fermat(n1, n2, height, r, depth)
 
     # test correctness with Snell's Law
     theta1 = np.arctan( r0 / height )
