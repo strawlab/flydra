@@ -80,6 +80,9 @@ ext_modules.append(Extension(name='_Roots3And4',
                                       'src/Roots3And4.c',
                                       ]))
 
+ext_modules.append(Extension(name='_refraction',
+                             sources=['src/_refraction.pyx']))
+
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
                              sources=['flydra/a2/fastfinder_help.pyx'],
                              include_dirs=[np.get_include()],

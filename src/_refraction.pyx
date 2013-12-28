@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import division
+cimport _Roots3And4
 import _Roots3And4
 
 """
@@ -38,7 +38,13 @@ ddur_dh1 = diff(duration,h1)
 #print solve(ddur_dh1,dh1) # fails due to quartic polynomial
 """
 
-def fermat1(n1,n2,z1,h,z2):
+cpdef double find_fastest_path_fermat(double n1,double n2,double z1,double h,double z2):
+    cdef double result
+    cdef double a,b,c,d,e
+
+    if z2==0.0:
+        return h
+
     # see refraction_demo.py for factorization
     a = (n1**2 - n2**2)
     b = (-2*h*n1**2 + 2*h*n2**2)
@@ -46,22 +52,13 @@ def fermat1(n1,n2,z1,h,z2):
     d = 2*h*n2**2*z1**2
     e = -h**2*n2**2*z1**2
 
-    roots = _Roots3And4.roots(a,b,c,d,e)
-
     # According to
     #
     #  Glaeser, G., & Schröcker, H. (2000). Reflections on
     #  Refractions. JOURNAL FOR GEOMETRY AND GRAPHICS VOLUME, 4(1),
     #  1–18.
     #
-    # the following is correct:
+    # we can choose the real root less than h.
 
-    valid = []
-    for r in roots:
-        if abs(r.imag) == 0:
-            r2 = r.real
-            if r2 <= h:
-                valid.append(r2)
-    assert len(valid)==1
-    result = valid[0]
+    result = _Roots3And4.real_root_less_than(a,b,c,d,e,h)
     return result
