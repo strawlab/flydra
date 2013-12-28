@@ -75,6 +75,11 @@ ext_modules.append(Extension(name='_mahalanobis',
 ext_modules.append(Extension(name='_fastgeom',
                              sources=['src/_fastgeom.pyx']))
 
+ext_modules.append(Extension(name='_Roots3And4',
+                             sources=['src/_Roots3And4.pyx',
+                                      'src/Roots3And4.c',
+                                      ]))
+
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
                              sources=['flydra/a2/fastfinder_help.pyx'],
                              include_dirs=[np.get_include()],

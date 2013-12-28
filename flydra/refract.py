@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import division
-import numpy as np
+import _Roots3And4
 
 """
 This code calculates rays according to [Fermat's principle of least
@@ -46,7 +46,7 @@ def fermat1(n1,n2,z1,h,z2):
     d = 2*h*n2**2*z1**2
     e = -h**2*n2**2*z1**2
 
-    roots = np.roots([a,b,c,d,e])
+    roots = _Roots3And4.roots(a,b,c,d,e)
 
     # According to
     #
