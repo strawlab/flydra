@@ -3,8 +3,9 @@ import numpy as np
 cimport numpy as np
 import flydra.water as water
 import flydra.reconstruct as reconstruct
-from math cimport atan2, sqrt, cos, sin
+cimport _refraction
 import _refraction
+from math cimport atan2, sqrt, cos, sin
 import _pmat_jacobian
 
 def make_PinholeCameraWaterModelWithJacobian(*args,**kw):
@@ -78,7 +79,7 @@ cdef class PinholeCameraWaterModelWithJacobian(_pmat_jacobian.PinholeCameraModel
         theta = atan2( s1, s0 )
         r = sqrt( s0*s0 + s1*s1 )
         r0 = _refraction.find_fastest_path_fermat( self.n1, self.n2, self.camz,
-                                                   r, depth, epsilon, scale )
+                                                   r, depth)
 
         t0 = r0*cos(theta)
         t1 = r0*sin(theta)
