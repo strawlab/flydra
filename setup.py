@@ -63,6 +63,9 @@ ext_modules.append(Extension(name='_reconstruct_utils',
 ext_modules.append(Extension(name='_pmat_jacobian',
                              sources=['src/_pmat_jacobian.pyx']))
 
+ext_modules.append(Extension(name='_pmat_jacobian_water',
+                             sources=['src/_pmat_jacobian_water.pyx']))
+
 ext_modules.append(Extension(name='_flydra_tracked_object',
                              sources=['src/_flydra_tracked_object.pyx']))
 
@@ -71,6 +74,11 @@ ext_modules.append(Extension(name='_mahalanobis',
 
 ext_modules.append(Extension(name='_fastgeom',
                              sources=['src/_fastgeom.pyx']))
+
+ext_modules.append(Extension(name='_refraction',
+                             sources=['src/_refraction.pyx',
+                                      'src/refraction.c',
+                                      'src/crosen.c']))
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
                              sources=['flydra/a2/fastfinder_help.pyx'],

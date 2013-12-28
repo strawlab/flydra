@@ -372,7 +372,7 @@ cdef class TrackedObject:
             if isinstance(self.my_kalman, kalman_ekf.EKF):
                 prediction_3d = xhatminus[:3]
                 pmats_and_points_cov = [ (
-                                          self.reconstructor.get_pinhole_model_with_jacobian(cam_id),
+                                          self.reconstructor.get_model_with_jacobian(cam_id),
                                           value_tuple[:2],#just first 2 components (x,y) become xy2d_observed
                                           self.ekf_observation_covariance_pixels)
                                          for (cam_id,value_tuple) in cam_ids_and_points2d]

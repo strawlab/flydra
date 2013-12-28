@@ -12,6 +12,7 @@ cinf = inf
 import flydra.common_variables
 import flydra.undistort
 import xml.etree.ElementTree as ET
+import warnings
 
 cdef float MINIMUM_ECCENTRICITY
 MINIMUM_ECCENTRICITY = flydra.common_variables.MINIMUM_ECCENTRICITY
@@ -281,9 +282,13 @@ cdef class ReconstructHelper:
         imnew = imnew.astype(numpy.uint8)
         return imnew
 
+cdef int gave_water_warning
+gave_water_warning = 0
+
 def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
                                                 double ACCEPTABLE_DISTANCE_PIXELS,
-                                                int debug=0, int max_n_cams=5):
+                                                int debug=0, int max_n_cams=5,
+                                                int with_water = 0):
     """Use hypothesis testing algorithm to find best 3D point
 
     Finds combination of cameras which uses the most number of cameras
@@ -315,6 +320,13 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
     cam_id2idx = {}
     all2d = {}
     Pmat_fastnx = recon.Pmat # shorthand
+
+    global gave_water_warning
+    if with_water:
+        if not gave_water_warning:
+            warnings.warn('_reconstruct_utils: Hypothesis test intersection done '
+                          'without refraction correction. Result will be wrong.')
+            gave_water_warning = 1
     for i,cam_id in enumerate(cam_ids):
         cam_id2idx[cam_id] = i
 
