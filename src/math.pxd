@@ -94,8 +94,6 @@ cdef extern from "math.h" nogil:
     double scalbln(double x, long n)
     double scalbn(double x, int n)
 
-    double nan(const char*)
-    
     bint isfinite(long double)
     bint isnormal(long double)
     bint isnan(long double)
