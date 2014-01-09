@@ -11,9 +11,17 @@ def find_movies(h5_fname,verbose=True,candidate_index=0):
         print 'h5_start, h5_stop',h5_start, h5_stop
     test_path = os.path.expanduser(DEFAULT_MOVIE_SUBDIR)
 
-    if os.path.exists(os.path.join(test_path,uuid)):
+    uuid_path = os.path.join(test_path,uuid)
+    if verbose:
+        print 'looking for uuid path',uuid_path
+
+    if os.path.exists(uuid_path):
         # new code path - movies saved in "<DEFAULT_MOVIE_SUBDIR>/<uuid>/<cam_id>/<time>.fmf"
+        if verbose:
+            print 'finding by uuid'
         return find_movies_uuid(h5_fname,verbose=verbose)
+    if verbose:
+        print 'no uuid path found'
 
     maybe_dirnames = glob.glob( os.path.join(test_path,'*') )
 
@@ -77,6 +85,8 @@ def find_movies_uuid(h5_fname,verbose=True):
     candidates = []
 
     cam_ids = glob.glob( os.path.join(test_path,uuid,'*') )
+    if verbose:
+        print 'putative cam_ids',cam_ids
     for cam_id in cam_ids:
         cam_dir = os.path.join( os.path.join(test_path,uuid, cam_id ) )
 
@@ -85,7 +95,13 @@ def find_movies_uuid(h5_fname,verbose=True):
         mean_files = mean_fmf + mean_ufmf
 
         total_length = len(mean_files)
+        if total_length==0:
+            if verbose:
+                print 'no data for putative cam_id',cam_id
+            continue
         if not total_length==1:
+            if verbose:
+                print 'found %d mean files in dir %s: %s'%(total_length, cam_dir, mean_files)
             raise NotImplementedError('need to figure out what time is best...')
         if len(mean_fmf)==1:
             mode='fmf'
