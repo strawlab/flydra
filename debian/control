@@ -1,0 +1,5 @@
+Source: flydra
+Build-Depends: cython pyrex
+
+Package: python-flydra
+Depends: python-aggdraw python-pandas mayavi2 python-h5py python-sympy python-docopt python-cherrypy3 python-pymvg
