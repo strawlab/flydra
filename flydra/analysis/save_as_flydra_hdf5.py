@@ -8,7 +8,7 @@ def get_valid_userblock_size( min ):
     return result
 
 
-def save_as_flydra_hdf5(newfilename, data, tzname, fps):
+def save_as_flydra_hdf5(newfilename, data, tzname, fps, smoothed_source=None):
 
     first_chars = '{"schema": "http://strawlab.org/schemas/flydra/1.1"}'
     pow2_bytes = get_valid_userblock_size( len(first_chars))
@@ -31,6 +31,9 @@ def save_as_flydra_hdf5(newfilename, data, tzname, fps):
             elif table_name=='trajectories':
                 dset.attrs['frames_per_second'] = fps
                 assert dset.attrs['frames_per_second'] == fps
+                if smoothed_source is not None:
+                    dset.attrs['smoothed_source'] = smoothed_source
+                    assert dset.attrs['smoothed_source'] == smoothed_source
 
     with open(newfilename,mode='r+') as f:
             f.write(userblock)

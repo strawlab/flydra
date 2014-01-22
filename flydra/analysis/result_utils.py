@@ -403,6 +403,8 @@ def read_textlog_header(results,fail_on_error=True):
     paren_contents = paren_contents.split(',')
     for pc in paren_contents:
         name, strvalue = pc.strip().split()
+        if strvalue=='unknown':
+            continue
         parsed[name]=strvalue
     return parsed
 

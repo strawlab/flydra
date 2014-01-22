@@ -4,9 +4,6 @@ def make_ThreeTuple(a,b,c):
     return ThreeTuple((a,b,c))
 
 cdef class ThreeTuple:
-    cdef readonly double a
-    cdef readonly double b
-    cdef readonly double c
     def __init__(self,vals):
         cdef ThreeTuple tt
         if isinstance(vals,ThreeTuple):
@@ -99,8 +96,6 @@ def make_PlueckerLine(u,v):
     return PlueckerLine(u,v)
 
 cdef class PlueckerLine:
-    cdef readonly ThreeTuple u
-    cdef readonly ThreeTuple v
     def __init__(self, ThreeTuple u_ not None, ThreeTuple v_ not None):
         self.u = u_
         self.v = v_

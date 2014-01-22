@@ -254,10 +254,7 @@ def doit(filename,
             sys.exit(1)
     dynamic_model_name = options.dynamic_model
 
-    if options.hack_postmultiply is not None:
-        if show_cameras:
-            raise RuntimeError('cannot show cameras if hack_postmultiply is being used')
-    ca = core_analysis.get_global_CachingAnalyzer(hack_postmultiply=options.hack_postmultiply)
+    ca = core_analysis.get_global_CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
     if obj_ids is None:
         raise ValueError('no obj_ids in file')
@@ -271,7 +268,6 @@ def doit(filename,
             file_timestamp = None
         stim_xml = xml_stimulus.xml_stimulus_from_filename(options.stim_xml,
                                                            timestamp_string=file_timestamp,
-                                                           hack_postmultiply=options.hack_postmultiply,
                                                            )
         try:
             fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
@@ -1295,9 +1291,6 @@ def main():
     parser.add_option("--body-axis", action='store_true',
                       help="show body axis (orientation) data if available",
                       default=False)
-
-    parser.add_option("--hack-postmultiply", type='string',
-                      help="multiply 3D coordinates by a 3x4 matrix")
 
     parser.add_option("--fuse", action='store_true',
                       help=('fuse obj_ids specified in fanout .xml file into '

@@ -27,6 +27,7 @@ def do_it(filename=None,
           hdf5=False,
           tzname=None,
           fps=None,
+          smoothed_source=None,
           ):
 
     if hdf5:
@@ -195,7 +196,8 @@ def do_it(filename=None,
                 data_dict[table_name] = arr
 
         # save as h5 file
-        save_as_flydra_hdf5(newfilename, data_dict, tzname, fps)
+        save_as_flydra_hdf5(newfilename, data_dict, tzname, fps,
+                            smoothed_source=smoothed_source)
 
     else:
         scipy.io.savemat(newfilename,data,appendmat=False)

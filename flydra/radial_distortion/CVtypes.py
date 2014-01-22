@@ -35,17 +35,26 @@ import math
 # ----Load the DLLs ----------------------------------------------------------
 
 if os.name == 'posix' and sys.platform.startswith('linux'):
-    _cxDLL = cdll.LoadLibrary('libcxcore.so')
-    _cvDLL = cdll.LoadLibrary('libcv.so')
-    _hgDLL = cdll.LoadLibrary('libhighgui.so')
+    # FIXME: hacked .so names for OpenCV 2.3/2.4
+    _cxDLL = cdll.LoadLibrary('libopencv_core.so')
+    _cvDLL = cdll.LoadLibrary('libopencv_core.so')
+    _hgDLL = cdll.LoadLibrary('libopencv_highgui.so')
+    ALL_OPENCV_DLLs = [_cxDLL, _cvDLL, _hgDLL,
+                       'libopencv_imgproc.so',
+                       ]
 elif os.name == 'posix' and sys.platform.startswith('darwin'):
-    _cxDLL = cdll.LoadLibrary('libcxcore.dylib')
-    _cvDLL = cdll.LoadLibrary('libcv.dylib')
-    _hgDLL = cdll.LoadLibrary('libhighgui.dylib')
+    # FIXME: hacked .dylib names for OpenCV 2.3/2.4
+    _cxDLL = cdll.LoadLibrary('libopencv_core.dylib')
+    _cvDLL = cdll.LoadLibrary('libopencv_core.dylib')
+    _hgDLL = cdll.LoadLibrary('libopencv_highgui.dylib')
+    ALL_OPENCV_DLLs = [_cxDLL, _cvDLL, _hgDLL,
+                       'libopencv_imgproc.dylib',
+                       ]
 elif os.name == 'nt':
     _cxDLL = cdll.cxcore100
     _cvDLL = cdll.cv100
     _hgDLL = cdll.highgui100
+    ALL_OPENCV_DLLs = [_cxDLL, _cvDLL, _hgDLL]
 else:
     raise NotImplemented
 
@@ -282,7 +291,7 @@ CV_CAP_PROP_HUE = 13
 CV_CAP_PROP_GAIN = 14
 CV_CAP_PROP_CONVERT_RGB = 15
 
-# --- CONSTANTS AND STUFF FROM cxcore.h ----
+# --- CONSTANTS AND STUFF FROM opencv_core.h ----
 CV_AUTOSTEP = 0x7fffffff
 CV_MAX_ARR = 10
 CV_NO_DEPTH_CHECK = 1
@@ -373,8 +382,16 @@ CV_ErrModeSilent = 2     # don't print and continue
 
 #------
 
+class DeferredFail:
+    def __init__(self,name):
+        self.name = name
+    def __call__(self,*args,**kwargs):
+        raise RuntimeError('CVtypes failure: the function "%s" was not found '
+                           'at load time, but this error was deferred until '
+                           'you tried to use the function')
+
 # make function prototypes a bit easier to declare
-def cfunc(name, dll, result, *args):
+def cfunc(name, _, result, *args):
     '''build and apply a ctypes prototype complete with parameter flags
     e.g.
 cvMinMaxLoc = cfunc('cvMinMaxLoc', _cxDLL, None,
@@ -395,7 +412,17 @@ min_val,max_val,min_loc,max_loc = cvMinMaxLoc(img)
     for arg in args:
         atypes.append(arg[1])
         aflags.append((arg[2], arg[0]) + arg[3:])
-    return CFUNCTYPE(result, *atypes)((name, dll), tuple(aflags))
+    result = None
+    for test_dll in ALL_OPENCV_DLLs:
+        try:
+            result = CFUNCTYPE(result, *atypes)((name, test_dll), tuple(aflags))
+        except AttributeError:
+            continue
+        else:
+            break
+    if result is None:
+        result = DeferredFail(name)
+    return result
 
 class ListPOINTER(object):
     '''Just like a POINTER but accept a list of ctype as an argument'''

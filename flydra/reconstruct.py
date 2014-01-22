@@ -9,6 +9,8 @@ from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCE
 import scipy.linalg
 import traceback
 import _pmat_jacobian # in pyrex/C for speed
+import _pmat_jacobian_water # in pyrex/C for speed
+import flydra.water as water
 import flydra.align
 import xml.etree.ElementTree as ET
 import StringIO, warnings
@@ -525,7 +527,7 @@ class SingleCameraCalibration:
 
     @classmethod
     def from_pymvg(cls, pymvg_cam):
-        pmat = pymvg_cam.get_pmat()
+        pmat = pymvg_cam.get_M()
         camdict = pymvg_cam.to_dict()
         if np.sum(abs(np.array(camdict['D']))) != 0:
             rect = np.array(pymvg_cam.to_dict()['R'])
@@ -568,13 +570,14 @@ class SingleCameraCalibration:
                 self.helper == other.helper)
 
     def convert_to_pymvg(self):
-        import pymvg.pymvg as pymvg
+        import pymvg
+        import pymvg.core
 
         if not self.helper.simple:
             raise ValueError('this camera cannot be converted to PyMVG')
 
         K, R = self.get_KR()
-        if not pymvg.is_rotation_matrix(R):
+        if not pymvg.core.is_rotation_matrix(R):
             # RQ may return left-handed rotation matrix. Make right-handed.
             R2 = -R
             K2 = -K
@@ -620,7 +623,7 @@ class SingleCameraCalibration:
              'K':KK,
              'R':rect,
              'translation':t,
-             'rotation':rot,
+             'Q':rot,
              'D':distortion,
              'name':self.cam_id,
              }
@@ -1005,6 +1008,7 @@ class Reconstructor:
                  cal_source = None,
                  do_normalize_pmat=True,
                  minimum_eccentricity=None,
+                 wateri=None,
                  ):
         self.cal_source = cal_source
 
@@ -1074,6 +1078,19 @@ class Reconstructor:
                 mi_col = results.root.calibration.additional_info[:]['minimum_eccentricity']
                 assert len(mi_col)==1
                 self.minimum_eccentricity = mi_col[0]
+
+                if hasattr(results.root.calibration,'refractive_interfaces'):
+                    ri = results.root.calibration.refractive_interfaces[:]
+                    assert len(ri)==1
+                    row = ri[0]
+                    wateri = water.WaterInterface()
+                    assert row['n1']==wateri.n1
+                    assert row['n2']==wateri.n2
+                    assert row['plane_normal_x'] == 0
+                    assert row['plane_normal_y'] == 0
+                    assert row['plane_normal_z'] != 0
+                    assert row['plane_dist_from_origin'] == 0
+
             elif self.cal_source_type == 'normal files':
                 min_e_fname = os.path.join(use_cal_source,'minimum_eccentricity.txt')
                 if os.path.exists(min_e_fname):
@@ -1174,13 +1191,14 @@ class Reconstructor:
             self._helper =  next_self._helper
 
         self.pmat_inv = {}
-        self.pinhole_model_with_jacobian = {}
         for cam_id in cam_ids:
             # For speed reasons, make sure self.Pmat has only numpy arrays.
             self.Pmat[cam_id] = numpy.array(self.Pmat[cam_id])
-
             self.pmat_inv[cam_id] = numpy.linalg.pinv(self.Pmat[cam_id])
-            self.pinhole_model_with_jacobian[cam_id] = _pmat_jacobian.PinholeCameraModelWithJacobian(self.Pmat[cam_id])
+
+        self.cam_ids = cam_ids
+
+        self.add_water(wateri)
 
         self.cam_combinations = [s for s in setOfSubsets(cam_ids) if len(s) >=2]
         def cmpfunc(a,b):
@@ -1193,7 +1211,6 @@ class Reconstructor:
         self.cam_combinations_by_size = {}
         for cc in self.cam_combinations:
             self.cam_combinations_by_size.setdefault(len(cc),[]).append(cc)
-        self.cam_ids = cam_ids
         # fill self._cam_centers_cache
         self._cam_centers_cache = {}
         for cam_id in self.cam_ids:
@@ -1201,6 +1218,22 @@ class Reconstructor:
 
         if close_cal_source:
             use_cal_source.close()
+
+    def add_water(self,wateri):
+        self.wateri = wateri
+        if self.wateri is not None:
+            assert isinstance(self.wateri,water.WaterInterface)
+
+        self._model_with_jacobian = {}
+
+        for cam_id in self.cam_ids:
+            if self.wateri is None:
+                model = _pmat_jacobian.PinholeCameraModelWithJacobian(
+                    self.Pmat[cam_id])
+            else:
+                model = _pmat_jacobian_water.PinholeCameraWaterModelWithJacobian(
+                    self.Pmat[cam_id],self.wateri)
+            self._model_with_jacobian[cam_id] = model
 
     @classmethod
     def from_pymvg(cls, mvg):
@@ -1210,7 +1243,7 @@ class Reconstructor:
         return result
 
     def convert_to_pymvg(self):
-        import pymvg.pymvg as pymvg
+        import pymvg
 
         orig_sccs = [self.get_SingleCameraCalibration(cam_id)
                      for cam_id in self.cam_ids]
@@ -1327,6 +1360,16 @@ class Reconstructor:
             cal_source_type      = PT.StringCol(20)
             cal_source           = PT.StringCol(80)
             minimum_eccentricity = PT.Float32Col() # record what parameter was used during reconstruction
+
+        class RefractiveInterfaces(PT.IsDescription):
+            name      = PT.StringCol(20)
+            n1        = PT.Float64Col()
+            n2        = PT.Float64Col()
+            plane_normal_x = PT.Float64Col()
+            plane_normal_y = PT.Float64Col()
+            plane_normal_z = PT.Float64Col()
+            plane_dist_from_origin = PT.Float64Col()
+
         pytables_filt = numpy.asarray
         ct = h5file.createTable # shorthand
         root = h5file.root # shorthand
@@ -1376,6 +1419,20 @@ class Reconstructor:
         row.append()
         h5additional_info.flush()
 
+        if self.wateri:
+            h5refractive_interfaces = ct(cal_group,'refractive_interfaces',
+                                         RefractiveInterfaces)
+            row = h5refractive_interfaces.row
+            row['name']='water1'
+            row['n1']=self.wateri.n1
+            row['n2']=self.wateri.n2
+            row['plane_normal_x']=0
+            row['plane_normal_y']=0
+            row['plane_normal_z']=1
+            row['plane_dist_from_origin']=0
+            row.append()
+            h5refractive_interfaces.flush()
+
     def get_resolution(self, cam_id):
         return self.Res[cam_id]
 
@@ -1385,8 +1442,8 @@ class Reconstructor:
     def get_pmat_inv(self, cam_id):
         return self.pmat_inv[cam_id]
 
-    def get_pinhole_model_with_jacobian(self, cam_id):
-        return self.pinhole_model_with_jacobian[cam_id]
+    def get_model_with_jacobian(self, cam_id):
+        return self._model_with_jacobian[cam_id]
 
     def get_camera_center(self, cam_id):
         # should be called get_cam_center?
@@ -1500,7 +1557,7 @@ class Reconstructor:
             else:
                 return Lcoords
 
-    def find2d(self,cam_id,X,Lcoords=None,distorted=False):
+    def find2d(self,cam_id,X,Lcoords=None,distorted=False,bypass_refraction=False):
         # see Hartley & Zisserman (2003) p. 449
         X = np.array(X)
         rank1 = X.ndim==1
@@ -1513,6 +1570,28 @@ class Reconstructor:
         else:
             assert X.shape[1]==4
             X = X.T # 4 rows, N columns
+
+
+        if self.wateri is not None and not bypass_refraction:
+            if Lcoords is not None:
+                raise NotImplementedError()
+
+            pts3d = X.T
+            if 1:
+                w = pts3d[:,3]
+                assert np.allclose( w, np.ones_like(w) )
+
+            pts3d = pts3d[:,:3]
+            x = water.view_points_in_water( self,
+                                            cam_id,
+                                            pts3d,
+                                            self.wateri,
+                                            distorted=distorted )
+            if rank1:
+                # convert back to rank1
+                return x[:,0]
+            return x
+
         Pmat = self.Pmat[cam_id]
         x=nx.dot(Pmat,X)
 

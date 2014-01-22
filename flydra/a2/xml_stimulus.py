@@ -4,7 +4,7 @@ import numpy
 import numpy as np
 import os
 import hashlib
-from core_analysis import parse_seq, check_hack_postmultiply
+from core_analysis import parse_seq
 
 class WrongXMLTypeError(Exception):
     pass
@@ -59,8 +59,6 @@ class Stimulus(object):
     root : :mod:`xml.etree.ElementTree` node
         An XML node specifying the root of the stimulus tree.
         Must have tag ``stimxml``.
-    hack_postmultiply : (optional) ndarray
-        Used to transform coordinates when a non aligned calibration was used.
 
 
     Examples
@@ -97,12 +95,11 @@ class Stimulus(object):
     >>> #pyplot.show()
     '''
 
-    def __init__(self,root,hack_postmultiply=None):
+    def __init__(self,root):
         assert root.tag == 'stimxml'
         assert root.attrib['version']=='1'
         self.root = root
         self._R = None
-        self.hack_postmultiply = check_hack_postmultiply(hack_postmultiply)
 
     def get_root(self):
         """get the root XML node
@@ -261,7 +258,7 @@ class Stimulus(object):
             elif child.tag == 'cubic_arena':
                 info = self._get_info_for_cubic_arena(child)
                 actors.extend( experiment_layout.cubic_arena(
-                    info=info,hack_postmultiply=self.hack_postmultiply))
+                    info=info))
             elif child.tag == 'cylindrical_post':
                 info = self._get_info_for_cylindrical_post(child)
                 actors.extend( experiment_layout.cylindrical_post(info=info))
@@ -580,12 +577,11 @@ class StimulusFanout(object):
                 obj_ids = None
         return include_ids, exclude_ids
     def get_stimulus_for_timestamp( self,
-                                    timestamp_string=None,
-                                    hack_postmultiply=None ):
+                                    timestamp_string=None ):
         (single_episode, kh5_file, stim_fname
          ) = self._get_episode_for_timestamp(timestamp_string=timestamp_string)
         root = ET.parse(stim_fname).getroot()
-        stim = Stimulus(root,hack_postmultiply=hack_postmultiply)
+        stim = Stimulus(root)
         #stim.verify_timestamp( fname_timestamp_string )
         return stim
     def iterate_single_episodes(self):
@@ -600,17 +596,15 @@ def xml_fanout_from_filename( filename ):
     return sf
 
 def xml_stimulus_from_filename( filename,
-                                timestamp_string=None,
-                                hack_postmultiply=None ):
+                                timestamp_string=None ):
     root = ET.parse(filename).getroot()
     if root.tag == 'stimxml':
-        return Stimulus(root,hack_postmultiply=hack_postmultiply)
+        return Stimulus(root)
     elif root.tag == 'stimulus_fanout_xml':
         assert timestamp_string is not None
         sf = xml_fanout_from_filename( filename )
         stim = sf.get_stimulus_for_timestamp(
-            timestamp_string=timestamp_string,
-            hack_postmultiply=hack_postmultiply )
+            timestamp_string=timestamp_string)
         return stim
     else:
         raise ValueError('unknown XML file')

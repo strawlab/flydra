@@ -1,7 +1,5 @@
 import tables as PT
-import numpy
 import numpy as np
-import warnings
 import flydra.data_descriptions
 import flydra.kalman.dynamic_models
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
@@ -147,7 +145,6 @@ class KalmanSaveInfo(object):
             raise NotImplementedError('')
         assert save_covariance in ['position','diag']
         self.save_covariance = save_covariance
-        dt = 1.0 # doesn't matter -- just getting state space size
         model = flydra.kalman.dynamic_models.get_kalman_model( name=name, dt=1.0 )
         ss = model['ss']
         if ss == 6:
@@ -211,7 +208,7 @@ def convert_format(current_data,camn2cam_id,area_threshold=0.0,only_likely=False
             # no data for this camera, continue
             continue
         for (pt_undistorted,projected_line) in stuff_list:
-            if not numpy.isnan(pt_undistorted[0]): # only use if point was found
+            if not np.isnan(pt_undistorted[0]): # only use if point was found
 
                 # perform area filtering
                 area = pt_undistorted[PT_TUPLE_IDX_AREA]

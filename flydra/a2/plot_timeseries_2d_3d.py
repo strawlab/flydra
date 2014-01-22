@@ -437,7 +437,8 @@ def doit(
                 X = numpy.vstack( (x,y,z,w) ).T
                 frame = kalman_rows['frame'][cond]
                 #print '%d %d %d'%(frame[0],obj_id, len(frame))
-                time_est = time_model.framestamp2timestamp(frame)
+                if options.timestamps:
+                    time_est = time_model.framestamp2timestamp(frame)
 
                 if kalman_smoothing:
                     kwprops = dict(lw=0.5)

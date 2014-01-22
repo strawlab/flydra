@@ -1,28 +1,12 @@
 #emacs, this is -*-Python-*- mode
+"""calculate jacobian matrices for pinhole camera model
+
+see pinhole_jacobian_demo.py for the derivation of the math in this module.
+"""
 import numpy
-"""
-import sympy
+import numpy as np
+cimport numpy as np
 
-# Let (u,v) be coorindates on the image plane.  (u,v) = (r/t, s/t)
-# where (r,s,t) = P (x,y,z,w) with (r,s,t) being 2D homogeneous
-# coords, (x,y,z,w) are 3D homogeneous coords, and P is the 3x4 camera calibration matrix.
-
-# write out equations for u and v
-u=sympy.sympify('(P00*x + P01*y + P02*z + P03*w)/(P20*x + P21*y + P22*z + P23*w)')
-v=sympy.sympify('(P10*x + P11*y + P12*z + P13*w)/(P20*x + P21*y + P22*z + P23*w)')
-
-# now take partial derivatives
-pu_x = sympy.diff(u,x)
-pu_y = sympy.diff(u,y)
-pu_z = sympy.diff(u,z)
-pu_w = sympy.diff(u,w)
-
-pv_x = sympy.diff(v,x)
-pv_y = sympy.diff(v,y)
-pv_z = sympy.diff(v,z)
-pv_w = sympy.diff(v,w)
-
-"""
 def make_PinholeCameraModelWithJacobian(*args,**kw):
     return PinholeCameraModelWithJacobian(*args,**kw)
 
@@ -85,11 +69,15 @@ cdef class PinholeCameraModelWithJacobian:
                        [vx,vy,vz,vw]],
                       dtype=numpy.float64)
         return J
-    def evaluate_jacobian_at(self,X):
+    cpdef evaluate_jacobian_at(self, np.ndarray[np.double_t, ndim=1] X): # tested on Cython 0.19.2
         cdef double ux, uy, uz, uw
         cdef double vx, vy, vz, vw
         cdef double w
 
+        if len(X)==4:
+            assert X[3]==1.0
+        else:
+            assert len(X)==3
         x,y,z=X[:3]
         w=1.0
         self.evaluate_jacobian_at_(x,y,z,w, &ux, &uy, &uz, &uw,
@@ -98,11 +86,17 @@ cdef class PinholeCameraModelWithJacobian:
                        [vx,vy,vz]],
                       dtype=numpy.float64)
         return J
-    def __call__(self, X):
+    cpdef evaluate(self, np.ndarray[np.double_t, ndim=1] X):
         """evaluate the non-linear function
 
         Y = h(X)
         """
+
+        if len(X)==4:
+            assert X[3]==1.0
+        else:
+            assert len(X)==3
+
         predicted3d_homogeneous = numpy.ones((4,1))
         predicted3d_homogeneous[:3,0] = X[:3]
         uvw = numpy.dot( self.pmat, predicted3d_homogeneous )
