@@ -1710,7 +1710,8 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
     ROS_PROPERTIES = dict(
         shutter=9000,
         gain=300,
-        trigger_mode=-1
+        trigger='',
+        trigger_mode=-1,
     )
 
     def __init__(self, guid, cam_no, show_cam_details, num_buffers=50):
@@ -1737,11 +1738,12 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         N_trigger_modes = self.get_num_trigger_modes()
         if self._show_cam_details:
             LOG.info('  %d available trigger modes:'%N_trigger_modes)
-            LOG.info('  current trigger modes: %d' % self.get_trigger_mode_number())
-            for i in range(N_trigger_modes):
-                mode_string = self.get_trigger_mode_string(i)
-                self._trigger_mode_numbers_from_name[mode_string] = i
-                LOG.info('  mode %d: %s'%(i,mode_string))
+            LOG.info('  current trigger mode: %d' % self.get_trigger_mode_number())
+        for i in range(N_trigger_modes):
+            mode_string = self.get_trigger_mode_string(i)
+            self._trigger_mode_numbers_from_name[mode_string] = i
+        if self._show_cam_details:
+            LOG.info('  mode %d: %s'%(i,mode_string))
 
         #cache the properties
         num_props = self.get_num_camera_properties()
@@ -1759,23 +1761,33 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         return "%s/%s" % (self.guid, paramname)
 
     def load_configuration(self):
-        for k,v in self.ROS_PROPERTIES.iteritems():
-            parampath = self._get_rosparam_path(k)
-            paramval = rospy.get_param(
-                        "flydra/%s" % k,                #try in the flydra namespace first
-                        rospy.get_param(parampath, v)   #try in the private namespace (with default)
+
+        def _get_param_with_fallback(_k, _v):
+            _parampath = self._get_rosparam_path(_k)
+            _paramval = rospy.get_param(
+                        "flydra/%s" % _k,                #try in the flydra namespace first
+                        rospy.get_param(_parampath, _v)   #try in the private namespace (with default)
             )
+            return _parampath, _paramval
+
+        for k,v in self.ROS_PROPERTIES.iteritems():
+            parampath, paramval = _get_param_with_fallback(k,v)
             if k in self._prop_numbers_from_name:
                 prop_num = self._prop_numbers_from_name[k]
                 #call directly to camiface, these parameters are already from the parameter server
                 cam_iface.Camera.set_camera_property(self,prop_num,paramval,0)
-            elif k == "trigger_mode":
-                if paramval < 0:
-                    LOG.info("trigger_mode number not set or correct (%s), setting camera to max framerate" % paramval)
-                    cam_iface.Camera.set_framerate(self, 999)
-                else:
-                    LOG.info("setting trigger_mode number = %s" % paramval)
-                    cam_iface.Camera.set_trigger_mode_number(self, paramval)
+
+        #prefer trigger (which is a string) to trigger_mode (which is a number)
+        _, trigger = _get_param_with_fallback("trigger", self.ROS_PROPERTIES["trigger"])
+        _, trigger_mode = _get_param_with_fallback("trigger_mode", self.ROS_PROPERTIES["trigger_mode"])
+        trigger_mode_number = self._trigger_mode_numbers_from_name.get(trigger, trigger_mode)
+
+        if trigger_mode_number < 0:
+            LOG.info("trigger_mode number not set or correct (%s), setting camera to max framerate" % trigger_mode_number)
+            cam_iface.Camera.set_framerate(self, 999)
+        else:
+            LOG.info("setting trigger_mode number = %s" % trigger_mode_number)
+            cam_iface.Camera.set_trigger_mode_number(self, trigger_mode_number)
 
     def set_camera_property(self, prop_num, prop_value, auto):
         if prop_num in self._prop_names_from_numbers:
