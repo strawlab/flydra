@@ -636,6 +636,7 @@ class CoordinateProcessor(threading.Thread):
         convert_format = flydra_kalman_utils.convert_format # shorthand
 
         debug_drop_fd = None
+        self.main_brain.trigger_device.wait_for_estimate()
 
         while not self.quit_event.isSet():
             incoming_2d_data = self.realreceiver.get_data() # blocks
