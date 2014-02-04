@@ -158,16 +158,22 @@ class DummyMainBrain:
 
 class ROSMainBrain:
     def __init__(self,*args,**kw):
+        rospy.wait_for_service('/flydra_mainbrain/get_version')
         self._get_version = rospy.ServiceProxy('/flydra_mainbrain/get_version',
                                                MainBrainGetVersion)
+        rospy.wait_for_service('/flydra_mainbrain/register_new_camera')
         self._register_new_camera = rospy.ServiceProxy('/flydra_mainbrain/register_new_camera',
                                                        MainBrainRegisterNewCamera)
+        rospy.wait_for_service('/flydra_mainbrain/get_and_clear_commands')
         self._get_and_clear_commands = rospy.ServiceProxy('/flydra_mainbrain/get_and_clear_commands',
                                                           ros_flydra.srv.MainBrainGetAndClearCommands)
+        rospy.wait_for_service('/flydra_mainbrain/set_image')
         self._set_image = rospy.ServiceProxy('/flydra_mainbrain/set_image',
                                              ros_flydra.srv.MainBrainSetImage)
+        rospy.wait_for_service('/flydra_mainbrain/receive_missing_data')
         self._receive_missing_data = rospy.ServiceProxy('/flydra_mainbrain/receive_missing_data',
                                              ros_flydra.srv.MainBrainReceiveMissingData)
+        rospy.wait_for_service('/flydra_mainbrain/close_camera')
         self._close_camera = rospy.ServiceProxy('/flydra_mainbrain/close_camera',
                                              ros_flydra.srv.MainBrainCloseCamera)
 
