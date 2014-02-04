@@ -636,6 +636,8 @@ class CoordinateProcessor(threading.Thread):
         convert_format = flydra_kalman_utils.convert_format # shorthand
 
         debug_drop_fd = None
+
+        #true when mainbrain first starting
         self.main_brain.trigger_device.wait_for_estimate()
 
         while not self.quit_event.isSet():
@@ -893,6 +895,11 @@ class CoordinateProcessor(threading.Thread):
                         if self.reconstructor is None:
                             # can't do any 3D math without calibration information
                             self.main_brain.best_realtime_data = None
+                            continue
+
+                        if not self.main_brain.trigger_device.have_estimate():
+                            # acquire_stamp (the proximate error, however latency estimates for the same reason)
+                            # cannot be calculated unless the triggerbox has a clock model
                             continue
 
                         if 1:
