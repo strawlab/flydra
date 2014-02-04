@@ -1122,7 +1122,7 @@ class MainBrain(object):
         get_and_clear_commands=(ros_flydra.srv.MainBrainGetAndClearCommands),
         set_image=(ros_flydra.srv.MainBrainSetImage),
         receive_missing_data=(ros_flydra.srv.MainBrainReceiveMissingData),
-        close_xcamera=(ros_flydra.srv.MainBrainCloseCamera),
+        close_camera=(ros_flydra.srv.MainBrainCloseCamera),
     )
 
     ROS_CONFIGURATION = dict(
