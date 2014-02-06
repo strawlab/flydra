@@ -1378,10 +1378,12 @@ class MainBrain(object):
                     if corrected_framenumber is None:
                         # don't bother saving if we don't know when it was from
                         continue
+
+                    point_tuple5 = tuple(point_tuple[:5])
                     deferred_2d_data.append((absolute_cam_no, # defer saving to later
                                              corrected_framenumber,
                                              remote_timestamp, camn_received_time)
-                                            +point_tuple[:5]
+                                            +point_tuple5
                                             +(frame_pt_idx,cur_val,mean_val,sumsqf_val))
             self.main_brain.queue_data2d.put(deferred_2d_data)
 
@@ -1659,8 +1661,8 @@ class MainBrain(object):
         self.remote_api.set_image(cam_id, (lb,image))
 
     def receive_missing_data(self, cam_id, framenumber_offset, missing_data_json_buf):
-        missing_data = json.loads( missing_data_json_buf )
-        self.remote_api.receive_missing_data(cam_id, framenumber_offset, missing_data)
+        missing_data = json.loads( missing_data_json_buf.data )
+        self.remote_api.receive_missing_data(cam_id.data, framenumber_offset.data, missing_data)
 
     def close_xcamera(self,cam_id):
         cam_id = cam_id.data
