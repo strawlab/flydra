@@ -2028,6 +2028,7 @@ class AppState(object):
             #
             ##################################################################
 
+            guid = None
             all_cam_info_list = []
             for i in range(cam_iface.get_num_cameras()):
                 try:
