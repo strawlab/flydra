@@ -26,6 +26,7 @@ L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
 NO_BACKWARDS_COMPAT = int(os.environ.get('FLYDRA_NO_BACKWARDS_COMPAT','0'))
+STRICT_WATER = int(os.environ.get('STRICT_WATER','0'))
 
 def mat2quat(m):
     """Initialize q from either a mat3 or mat4 and returns self."""
@@ -1492,6 +1493,8 @@ class Reconstructor:
         This function can optionally undistort points.
 
         """
+        if STRICT_WATER and self.wateri is not None:
+            raise NotImplementedError('no find3d() implemented with refraction')
         svd = scipy.linalg.svd
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
         # also p. 587)
