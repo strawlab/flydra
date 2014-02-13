@@ -44,6 +44,7 @@ import std_srvs.srv
 import std_msgs.msg
 from ros_flydra.msg import flydra_mainbrain_super_packet
 from ros_flydra.msg import flydra_mainbrain_packet, flydra_object, FlydraError
+import triggerbox.msg
 import ros_flydra.srv
 import ros_flydra.cv2_bridge
 from geometry_msgs.msg import Point, Vector3
@@ -1533,6 +1534,10 @@ class MainBrain(object):
                                 std_msgs.msg.String,
                                 self._on_experiment_uuid)
 
+        self.sub_triggerbox_clock_measurements = rospy.Subscriber(
+            self.config['triggerbox_namespace']+'/raw_measurements',
+            triggerbox.msg.TriggerClockMeasurement,
+            self._on_trigger_clock_measurement)
 
         self.services = {}
         for name, srv in self.ROS_CONTROL_API.iteritems():
@@ -1551,6 +1556,12 @@ class MainBrain(object):
             self.h5exp_info.row['uuid'] = self.experiment_uuid
             self.h5exp_info.row.append()
             self.h5exp_info.flush()
+
+    def _on_trigger_clock_measurement(self, msg):
+        self.queue_trigger_clock_info.put((msg.start_timestamp,
+                                           msg.pulsenumber,
+                                           msg.fraction_n_of_255,
+                                           msg.stop_timestamp))
 
     def register_frame(self, id_string, framenumber):
         full_output=True

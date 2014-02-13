@@ -13,6 +13,7 @@ import numpy as np
 import sys, os, re, hashlib
 
 import warnings
+from distutils.version import StrictVersion
 
 import datetime
 import pytz # from http://pytz.sourceforge.net/
@@ -426,11 +427,16 @@ def get_tz(results,default=DEFAULT_TZ):
 def get_time_model_from_data(results,debug=False,full_output=False):
     parsed = read_textlog_header(results)
 
-    # get the timer top value
-    if 'top' not in parsed:
+    flydra_version = parsed.get('flydra_version','0.0.0')
+
+    if 'top' in parsed:
+        # get the timer top value
+        timer_max = int( parsed['top'] )
+    elif StrictVersion(flydra_version) >= StrictVersion('0.5.2'):
+        timer_max = 255
+    else:
         return None
 
-    timer_max = int( parsed['top'] )
     if debug:
         print 'I found the timer max ("top") to be %d.'%timer_max
         FOSC = 8000000 # 8 MHz
