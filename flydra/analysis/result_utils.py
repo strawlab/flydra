@@ -458,6 +458,11 @@ def get_time_model_from_data(results,debug=False,full_output=False):
 
     # open the log of at90usb clock info
 
+    node_type = results.root._g_get_objinfo('trigger_clock_info')
+    if node_type == "NoSuchNode":
+        # No time model possible
+        return
+
     tci = results.root.trigger_clock_info
     tbl = tci.read()
 
