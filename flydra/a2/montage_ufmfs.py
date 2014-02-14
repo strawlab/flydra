@@ -161,6 +161,7 @@ def make_montage( h5_filename,
                   colormap = None,
                   kalman_filename = None,
                   candidate_index = 0,
+                  verbose = False,
                   **kwargs):
     config = get_config_defaults()
     if cfg_filename is not None:
@@ -220,14 +221,30 @@ def make_montage( h5_filename,
     min_ori_qual = config['what to show']['minimum_display_orientation_quality']
 
     if movie_fnames is None:
+        # This works based on UUIDs
         movie_fnames = auto_discover_movies.find_movies( h5_filename,
-                                                         candidate_index=candidate_index)
+                                                         candidate_index=candidate_index,
+                                                         verbose=verbose)
+        if verbose:
+            print 'autodiscovery: found movie_fnames: %r'%(movie_fnames,)
+    else:
+        if verbose:
+            print 'autodiscovery: movie_fnames specified, not finding movies'
+
     if len(movie_fnames)==0:
+        if verbose:
+            print 'autodiscovery: no FMF files found, looking for ufmfs'
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
                                                        ufmf_dir=ufmf_dir,
-                                                       careful=True )
+                                                       careful=True,
+                                                       verbose=verbose,
+                                                       )
     else:
+        if verbose:
+            print 'autodiscovery: prefixing directory'
         if ufmf_dir is not None:
+            if verbose:
+                print 'autodiscovery: prefixing movie names with directory %r'%(ufmf_dir,)
             movie_fnames = [ os.path.join(ufmf_dir,f) for f in movie_fnames]
 
     if len(movie_fnames)==0:
@@ -635,6 +652,9 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     parser.add_option('--movie-cam-ids', type='string', default=None,
                       help="cam_ids of movie files (don't autodiscover from .h5)")
 
+    parser.add_option("--verbose", action='store_true', default=False,
+                      help="verbose mode (help understand autodiscovery)")
+
     parser.add_option('--colormap', type='string', default=None)
 
     parser.add_option( "--caminfo-h5-filename", type="string",
@@ -675,4 +695,5 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   caminfo_h5_filename = options.caminfo_h5_filename,
                   colormap = options.colormap,
                   candidate_index = options.candidate,
+                  verbose = options.verbose,
                   **kwargs)

@@ -1,27 +1,44 @@
 import os, glob, time
-from .auto_discover_ufmfs import get_h5_start_stop, get_uuid
+from .auto_discover_ufmfs import get_h5_start_stop
 
 DEFAULT_MOVIE_SUBDIR = '~/FLYDRA_MOVIES'
 
-def find_movies(h5_fname,verbose=True,candidate_index=0):
+def get_uuid(filename):
+    with tables.openFile(filename,mode='r') as h5file_raw:
+        table_experiment = h5file_raw.root.experiment_info
+        result = table_experiment.read(field='uuid')
+    uuids = np.unique(result)
+    if len(uuids)==0:
+        return None
+    assert len(uuids)==1
+    uuid = uuids[0]
+    return uuid
+
+def find_movies(h5_fname,verbose=False,candidate_index=0):
     '''find movies (.ufmf or .fmf) which are in canonical location'''
     h5_start, h5_stop = get_h5_start_stop(h5_fname)
     uuid = get_uuid(h5_fname)
     if verbose:
         print 'h5_start, h5_stop',h5_start, h5_stop
     test_path = os.path.expanduser(DEFAULT_MOVIE_SUBDIR)
-
-    uuid_path = os.path.join(test_path,uuid)
     if verbose:
-        print 'looking for uuid path',uuid_path
+        print 'find_movies test_path: %r'%(test_path,)
 
-    if os.path.exists(uuid_path):
-        # new code path - movies saved in "<DEFAULT_MOVIE_SUBDIR>/<uuid>/<cam_id>/<time>.fmf"
+    if uuid is not None:
+        uuid_path = os.path.join(test_path,uuid)
         if verbose:
-            print 'finding by uuid'
-        return find_movies_uuid(h5_fname,verbose=verbose)
-    if verbose:
-        print 'no uuid path found'
+            print 'find_movies: looking for uuid path',uuid_path
+
+        if os.path.exists(uuid_path):
+            # new code path - movies saved in "<DEFAULT_MOVIE_SUBDIR>/<uuid>/<cam_id>/<time>.fmf"
+            if verbose:
+                print 'find_movies: finding by uuid'
+            return find_movies_uuid(h5_fname,verbose=verbose)
+        if verbose:
+            print 'find_movies: no uuid path found. It would be %r'%(uuid_path,)
+    else:
+        if verbose:
+            print 'find_movies: no uuid'
 
     maybe_dirnames = glob.glob( os.path.join(test_path,'*') )
 
@@ -48,7 +65,7 @@ def find_movies(h5_fname,verbose=True,candidate_index=0):
     candidate = candidates[candidate_index]
     (dirname, basename) = candidate
 
-    if len(candidates) > 1:
+    if verbose and len(candidates) > 1:
         print '%d candidate movies available, choosing %s/%s'%(len(candidates),
                                                                dirname, basename)
 
