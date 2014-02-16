@@ -1,6 +1,6 @@
 import tables as PT
 
-# pytables files stored using Numeric would by default return Numeric-based results. 
+# pytables files stored using Numeric would by default return Numeric-based results.
 # We want to force those results to be returned as numpy recarrays.
 # Note that we need to keep "python" in the flavors list, otherwise
 # pytables breaks.
@@ -432,7 +432,7 @@ def get_time_model_from_data(results,debug=False,full_output=False):
     if 'top' in parsed:
         # get the timer top value
         timer_max = int( parsed['top'] )
-    elif StrictVersion(flydra_version) >= StrictVersion('0.5.2'):
+    elif StrictVersion(flydra_version) >= StrictVersion('0.5.3'):
         timer_max = 255
     else:
         return None
