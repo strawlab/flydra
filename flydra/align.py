@@ -83,6 +83,8 @@ def build_xform(s,R,t):
     return T
 
 def align_points( s,R,T, X ):
+    assert X.ndim==2
+    assert X.shape[0] in [3,4] # either 3D or 3D homogeneous
     T = build_xform(s,R,T)
     if X.shape[0]==3:
         # make homogeneous
