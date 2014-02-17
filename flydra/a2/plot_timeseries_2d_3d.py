@@ -262,7 +262,8 @@ def doit(
         ca = core_analysis.get_global_CachingAnalyzer()
         (obj_ids, use_obj_ids, is_mat_file, data_file,
          extra) = ca.initial_file_load(kalman_filename)
-        time_model = result_utils.get_time_model_from_data(data_file)
+        if options.timestamps:
+            time_model = result_utils.get_time_model_from_data(data_file)
         if 'frames' in extra:
             frames = extra['frames']
             valid_cond = np.ones((len(frames,)),dtype=np.bool)
