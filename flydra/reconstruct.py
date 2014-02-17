@@ -972,15 +972,27 @@ def Reconstructor_from_xml(elem):
     assert elem.tag == "multi_camera_reconstructor"
     sccs = []
     minimum_eccentricity = None
+    has_water = False
+
     for child in elem:
         if child.tag == "single_camera_calibration":
             scc = SingleCameraCalibration_from_xml(child)
             sccs.append( scc )
         elif child.tag == 'minimum_eccentricity':
             minimum_eccentricity = float(child.text)
+        elif child.tag == 'water':
+            if hasattr(water,'text'):
+                if child.text is not None:
+                    if len(child.text.strip())!=0:
+                        raise NotImplementedError('loading water from xml not supported')
+            has_water = True
         else:
             raise ValueError('unknown tag: %s'%child.tag)
-    return Reconstructor(sccs,minimum_eccentricity=minimum_eccentricity)
+    r = Reconstructor(sccs,minimum_eccentricity=minimum_eccentricity)
+    if has_water:
+        wateri = water.WaterInterface()
+        r.add_water(wateri)
+    return r
 
 class Reconstructor:
     """A complete calibration for all cameras in a flydra setup
@@ -1719,6 +1731,8 @@ class Reconstructor:
         if 1:
             me_elem = ET.SubElement(elem,"minimum_eccentricity")
             me_elem.text = repr(self.minimum_eccentricity)
+        if self.wateri is not None:
+            water_elem = ET.SubElement(elem,"water")
 
 def test_sba():
     import flydra.generate_fake_calibration as gfc
