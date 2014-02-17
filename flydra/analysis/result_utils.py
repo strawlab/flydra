@@ -381,6 +381,9 @@ def timestamp2frame_command():
     print repr(model.timestamp2framestamp(timestamp))
     results.close()
 
+class NoTimestampDataError(Exception):
+    pass
+
 class TextlogParseError(Exception):
     pass
 
@@ -487,6 +490,8 @@ def get_time_model_from_data(results,debug=False,full_output=False):
     framestamp = framenumber + frac
 
     # fit linear model of relationship mainbrain timestamp and usb trigger_device framestamp
+    if len(framestamp)==0 or len(mb_timestamp):
+        raise NoTimestampDataError()
     gain, offset = model_remote_to_local( framestamp, mb_timestamp, debug=debug )
     time_model = TimeModel(gain, offset)
 

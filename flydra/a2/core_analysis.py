@@ -251,7 +251,9 @@ def _initial_file_load(filename):
                 time_model = (
                     flydra.analysis.result_utils.get_time_model_from_data(
                     kresults))
-            except flydra.analysis.result_utils.TextlogParseError, err:
+            except flydra.analysis.result_utils.TextlogParseError:
+                pass
+            except flydra.analysis.result_utils.NoTimestampDataError:
                 pass
             else:
                 if time_model is not None:
