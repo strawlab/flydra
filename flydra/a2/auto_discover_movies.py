@@ -1,5 +1,7 @@
 import os, glob, time
 from .auto_discover_ufmfs import get_h5_start_stop
+import tables
+import numpy as np
 
 DEFAULT_MOVIE_SUBDIR = '~/FLYDRA_MOVIES'
 
