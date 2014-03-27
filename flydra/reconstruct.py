@@ -1029,6 +1029,8 @@ class Reconstructor:
             if not self.cal_source.endswith('h5'):
                 if os.path.isdir(self.cal_source):
                     self.cal_source_type = 'normal files'
+                elif self.cal_source.endswith('.json'):
+                    self.cal_source_type = 'json file'
                 else:
                     self.cal_source_type = 'xml file'
             else:
@@ -1067,6 +1069,11 @@ class Reconstructor:
                 if r_node is None:
                     raise ValueError(
                         'XML file does not contain reconstructor node')
+            cam_ids = next_self.cam_ids
+        elif self.cal_source_type == 'json file':
+            import pymvg
+            mvg = pymvg.MultiCameraSystem.from_pymvg_file(use_cal_source)
+            next_self = Reconstructor.from_pymvg(mvg)
             cam_ids = next_self.cam_ids
         elif self.cal_source_type == 'pytables':
             import tables as PT # PyTables
@@ -1110,7 +1117,7 @@ class Reconstructor:
                     fd = open(min_e_fname,'r')
                     self.minimum_eccentricity = float( fd.read().strip() )
                     fd.close()
-            elif self.cal_source_type == 'xml file':
+            elif self.cal_source_type in ['xml file','json file']:
                 self.minimum_eccentricity = next_self.minimum_eccentricity
             if self.minimum_eccentricity is None:
                 # use default
@@ -1198,7 +1205,7 @@ class Reconstructor:
                 self.Pmat[cam_id] = scci.Pmat
                 self.Res[cam_id] = scci.res
                 self._helper[cam_id] = scci.helper
-        elif self.cal_source_type=='xml file':
+        elif self.cal_source_type in ['xml file','json file']:
             self.Pmat = next_self.Pmat
             self.Res = next_self.Res
             self._helper =  next_self._helper
