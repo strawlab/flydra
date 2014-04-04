@@ -136,7 +136,7 @@ class CalibrationAlignmentWindow(Widget):
     def get_aligned_scaled_R(self):
         M = self.params.get_matrix()
         scaled = self.reconstructor
-        alignedR = scaled.get_aligned_copy(M)
+        alignedR = scaled.get_aligned_copy(M,update_water_boundary=False)
         return alignedR
 
     def _save_align_json_fired(self):

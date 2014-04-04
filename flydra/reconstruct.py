@@ -1283,15 +1283,23 @@ class Reconstructor:
         orig_sccs = [self.get_SingleCameraCalibration(cam_id)
                      for cam_id in self.cam_ids]
         aligned_sccs = [scc.get_copy() for scc in orig_sccs]
-        return Reconstructor(aligned_sccs,
-                             minimum_eccentricity=self.minimum_eccentricity)
+        result = Reconstructor(aligned_sccs,
+                               minimum_eccentricity=self.minimum_eccentricity)
+        result.add_water( self.wateri )
+        return result
 
-    def get_aligned_copy(self, M):
+    def get_aligned_copy(self, M, update_water_boundary=True):
         orig_sccs = [self.get_SingleCameraCalibration(cam_id)
                      for cam_id in self.cam_ids]
         aligned_sccs = [scc.get_aligned_copy(M) for scc in orig_sccs]
-        return Reconstructor(aligned_sccs,
-                             minimum_eccentricity=self.minimum_eccentricity)
+        result = Reconstructor(aligned_sccs,
+                               minimum_eccentricity=self.minimum_eccentricity)
+        wateri = self.wateri
+        if wateri is not None:
+            if update_water_boundary:
+                raise ValueError('cannot update water boundary')
+        result.add_water( wateri )
+        return result
 
     def set_minimum_eccentricity(self,minimum_eccentricity):
         self.minimum_eccentricity = minimum_eccentricity
