@@ -1209,6 +1209,7 @@ class Reconstructor:
             self.Pmat = next_self.Pmat
             self.Res = next_self.Res
             self._helper =  next_self._helper
+            wateri = next_self.wateri
 
         self.pmat_inv = {}
         for cam_id in cam_ids:
