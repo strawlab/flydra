@@ -35,7 +35,7 @@ def find_movies(h5_fname,verbose=False,candidate_index=0):
             # new code path - movies saved in "<DEFAULT_MOVIE_SUBDIR>/<uuid>/<cam_id>/<time>.fmf"
             if verbose:
                 print 'find_movies: finding by uuid'
-            return find_movies_uuid(h5_fname,verbose=verbose)
+            return find_movies_uuid(h5_fname,verbose=verbose,pick_number=candidate_index)
         if verbose:
             print 'find_movies: no uuid path found. It would be %r'%(uuid_path,)
     else:
@@ -96,7 +96,7 @@ def find_movies(h5_fname,verbose=False,candidate_index=0):
             print r
     return results
 
-def find_movies_uuid(h5_fname,verbose=True):
+def find_movies_uuid(h5_fname,pick_number=None,verbose=True):
     uuid = get_uuid(h5_fname)
 
     test_path = os.path.expanduser(DEFAULT_MOVIE_SUBDIR)
@@ -121,8 +121,17 @@ def find_movies_uuid(h5_fname,verbose=True):
         if not total_length==1:
             if verbose:
                 print 'found %d mean files in dir %s: %s'%(total_length, cam_dir, mean_files)
-            raise NotImplementedError('need to figure out what time is best...')
-        if len(mean_fmf)==1:
+            if pick_number is None:
+                raise NotImplementedError('need to figure out what time is best...')
+            else:
+                print 'picking movie number %d (specify with --candidate)'%pick_number
+                if len(mean_fmf):
+                    mean_fmf = [mean_fmf[pick_number]]
+                    assert len(mean_ufmf)==0
+                else:
+                    mean_ufmf = [mean_ufmf[pick_number]]
+                    assert len(mean_fmf)==0
+        if len(mean_fmf):
             mode='fmf'
         else:
             mode='ufmf'
