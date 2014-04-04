@@ -347,7 +347,8 @@ Then run this program::
 
 To ignore 3D trajectories and simply use all data::
 
-  flydra_analysis_generate_recalibration --2d-data <DATAfilename.h5> --disable-kalman-objs <DATAfilename.h5>
+  export DATA2D=<DATAfilename.h5>
+  flydra_analysis_generate_recalibration --2d-data ${DATA2D} --disable-kalman-objs ${DATA2D}
 """
 
 
