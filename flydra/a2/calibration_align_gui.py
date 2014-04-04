@@ -133,10 +133,10 @@ class CalibrationAlignmentWindow(Widget):
         verts = np.dot(M,self.orig_data_verts)
         self.viewed_data.data.points = hom2vtk(verts)
 
-    def get_aligned_scaled_R(self):
+    def get_aligned_R(self):
         M = self.params.get_matrix()
-        scaled = self.reconstructor
-        alignedR = scaled.get_aligned_copy(M,update_water_boundary=False)
+        R = self.reconstructor
+        alignedR = R.get_aligned_copy(M,update_water_boundary=False)
         return alignedR
 
     def _save_align_json_fired(self):
@@ -157,7 +157,7 @@ class CalibrationAlignmentWindow(Widget):
                             action='save as', wildcard=wildcard
                             )
         if dialog.open() == OK:
-            alignedR = self.get_aligned_scaled_R()
+            alignedR = self.get_aligned_R()
             alignedR.save_to_xml_filename(dialog.path)
             #print 'saved calibration to XML file...',dialog.path
 
@@ -167,7 +167,7 @@ class CalibrationAlignmentWindow(Widget):
                             action='save as',
                             )
         if dialog.open() == OK:
-            alignedR = self.get_aligned_scaled_R()
+            alignedR = self.get_aligned_R()
             alignedR.save_to_files_in_new_directory(dialog.path)
             #print 'saved calibration to directory...',dialog.path
 
@@ -284,7 +284,7 @@ def main():
         if reconstructor_path is None:
             raise RuntimeError('must specify reconstructor from CLI if not using .h5 files')
 
-    R = reconstruct.Reconstructor(reconstructor_path).get_scaled()
+    R = reconstruct.Reconstructor(reconstructor_path)
 
     if h5_filename is not None:
         fps = result_utils.get_fps( data_file, fail_on_error=False )
