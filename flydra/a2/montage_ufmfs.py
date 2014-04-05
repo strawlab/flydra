@@ -161,6 +161,7 @@ def make_montage( h5_filename,
                   colormap = None,
                   kalman_filename = None,
                   candidate_index = 0,
+                  nth_frame=1,
                   verbose = False,
                   **kwargs):
     config = get_config_defaults()
@@ -287,6 +288,10 @@ def make_montage( h5_filename,
         rgb8_if_color = True,
         camn2cam_id = camn2cam_id,
         )):
+
+        if frame_enum%nth_frame!=0:
+            continue
+
         tracker_data = frame_dict['tracker_data']
         global_data = frame_dict['global_data']
 
@@ -663,6 +668,9 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     parser.add_option( "--candidate", type="int", default=0,
                        help="when multiple auto-discovered movie options, the index to take")
 
+    parser.add_option( "--nth-frame", type="int", default=1,
+                       help="save every Nth frame")
+
     core_analysis.add_options_to_parser(parser)
     (options, args) = parser.parse_args()
 
@@ -696,4 +704,5 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   colormap = options.colormap,
                   candidate_index = options.candidate,
                   verbose = options.verbose,
+                  nth_frame = options.nth_frame,
                   **kwargs)
