@@ -1589,6 +1589,18 @@ class Reconstructor:
                 return Lcoords
 
     def find2d(self,cam_id,X,Lcoords=None,distorted=False,bypass_refraction=False):
+        """
+        find projection of 3D points in X onto 2D image plan for cam_id
+
+        for rank1 case:
+          X : shape==(3,) single point, or shape==(4,) homogeneous single point
+          returns shape==(2,) projection
+        else:
+          X : (N,4) array of homogeneous points
+          returns shape==(2,N) projection
+
+        """
+
         # see Hartley & Zisserman (2003) p. 449
         X = np.array(X)
         rank1 = X.ndim==1
@@ -1602,7 +1614,9 @@ class Reconstructor:
             assert X.shape[1]==4
             X = X.T # 4 rows, N columns
 
+        N_points = X.shape[1]
 
+        underwater_cond = None
         if self.wateri is not None and not bypass_refraction:
             if Lcoords is not None:
                 raise NotImplementedError()
@@ -1613,33 +1627,53 @@ class Reconstructor:
                 assert np.allclose( w, np.ones_like(w) )
 
             pts3d = pts3d[:,:3]
-            x = water.view_points_in_water( self,
-                                            cam_id,
-                                            pts3d,
-                                            self.wateri,
-                                            distorted=distorted )
-            if rank1:
-                # convert back to rank1
-                return x[:,0]
-            return x
+            underwater_cond = (pts3d[:,2] < 0)
+            underwater_pts = pts3d[underwater_cond]
 
-        Pmat = self.Pmat[cam_id]
-        x=nx.dot(Pmat,X)
-
-        x = x[0:2,:]/x[2,:] # normalize
-
-        if distorted:
-            if rank1:
-                xd, yd = self.distort(cam_id, x)
-                x[0] = xd
-                x[1] = yd
+            if len(underwater_pts):
+                x_underwater = water.view_points_in_water( self,
+                                                           cam_id,
+                                                           underwater_pts,
+                                                           self.wateri,
+                                                           distorted=distorted )
             else:
-                N_pts = x.shape[1]
-                for i in range(N_pts):
-                    xpt = x[:,i]
-                    xd, yd = self.distort(cam_id, xpt)
-                    x[0,i]=xd
-                    x[1,i]=yd
+                x_underwater = None
+
+        if underwater_cond is not None:
+            X_nowater = X[:,~underwater_cond]
+        else:
+            X_nowater = X
+
+        N_pts_nowater = X_nowater.shape[1]
+        if N_pts_nowater:
+            Pmat = self.Pmat[cam_id]
+            x_nowater=nx.dot(Pmat,X_nowater)
+
+            x_nowater = x_nowater[0:2,:]/x_nowater[2,:] # normalize
+
+            if distorted:
+                if rank1:
+                    xd, yd = self.distort(cam_id, x_nowater)
+                    x_nowater[0] = xd
+                    x_nowater[1] = yd
+                else:
+                    N_pts = x_nowater.shape[1]
+                    for i in range(N_pts):
+                        xpt = x_nowater[:,i]
+                        xd, yd = self.distort(cam_id, xpt)
+                        x_nowater[0,i]=xd
+                        x_nowater[1,i]=yd
+
+        if underwater_cond is not None:
+            x = np.empty( (2,N_points), dtype=np.float64)
+            if x_underwater is not None:
+                x[:,underwater_cond] = x_underwater
+            if N_pts_nowater:
+                x[:,~underwater_cond] = x_nowater
+        else:
+            x = x_nowater
+
+        assert x.shape[1]==N_points
 
         # XXX The rest of this function hasn't been (recently) checked
         # for >1 points. (i.e. not rank1)
@@ -1665,7 +1699,8 @@ class Reconstructor:
             if rank1:
                 # convert back to rank1
                 return x[:,0]
-            return x
+            else:
+                return x
 
     def find3d_single_cam(self,cam_id,x):
         """see also SingleCameraCalibration.get_example_3d_point_creating_image_point()"""

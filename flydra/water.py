@@ -14,11 +14,19 @@ class WaterInterface:
         self.n2 = 1.3330
 
 def view_points_in_water( reconstructor, cam_id, pts3d, water, distorted=True ):
+    """
+    pts3d : (N,3) array of 3D points
+
+    returns:
+      (2,N) projection of 3D points
+
+    """
     assert isinstance(water,WaterInterface)
 
     pts3d = np.array(pts3d)
     assert pts3d.ndim==2
-    assert pts3d.shape[1]==3 # pts3d.shape[1] == npts
+    assert pts3d.shape[1]==3 # pts3d.shape[0] == n_points
+    n_points = pts3d.shape[0]
 
     pt1 = reconstructor.get_camera_center(cam_id)[:,0]
     pt2 = np.array(pt1,copy=True); pt2[2]=0 # closest point to camera on water surface, assumes water at z==0
@@ -50,4 +58,5 @@ def view_points_in_water( reconstructor, cam_id, pts3d, water, distorted=True ):
                                 distorted=distorted,
                                 bypass_refraction=True,
                                 )
+    assert pts.shape == (2,n_points)
     return pts
