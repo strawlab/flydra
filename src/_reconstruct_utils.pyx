@@ -330,7 +330,9 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
             raise NotImplementedError('water and hypothesis testing not yet implemented')
         if not gave_water_warning:
             warnings.warn('_reconstruct_utils: Hypothesis test intersection done '
-                          'without refraction correction. Result will be wrong.')
+                          'without refraction correction. Result will be wrong. '
+                          'Set environment variable STRICT_WATER_HYPOTHESIS_TEST '
+                          'to raise an error rather than give this warning.')
             gave_water_warning = 1
     for i,cam_id in enumerate(cam_ids):
         cam_id2idx[cam_id] = i

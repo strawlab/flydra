@@ -1509,8 +1509,15 @@ class Reconstructor:
         This function can optionally undistort points.
 
         """
-        if STRICT_WATER and self.wateri is not None:
-            raise NotImplementedError('no find3d() implemented with refraction')
+        if self.wateri is not None:
+            if STRICT_WATER:
+                raise NotImplementedError('no find3d() implemented with refraction')
+            else:
+                warnings.warn('reconstruct find3d() done without '
+                              'refraction correction. Result will be wrong. '
+                              'Set environment variable STRICT_WATER to '
+                              'raise an error rather than give this warning.')
+
         svd = scipy.linalg.svd
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
         # also p. 587)
