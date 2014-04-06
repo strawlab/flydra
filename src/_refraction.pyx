@@ -27,11 +27,11 @@ least time.
 
 n1: refractive index of medium 1
 n2: refractive index of medium 2
-z1: height of point 1
-z2: depth  of point 2
-h1: horizontal distance between points 1,0
-h2: horizontal distance between points 2,0
-h:  horizontal distance between points 1,2
+z1: height of point 1 (always positive)
+z2: depth  of point 2 (always positive)
+h1: horizontal distance between points 1,0 (always positive)
+h2: horizontal distance between points 2,0 (always positive)
+h:  horizontal distance between points 1,2 (always positive)
 
 duration = n1*sqrt( h1*h1 + z1*z1 ) + n2*sqrt(z2*z2 + h2*h2)
 ddur_dh1 = diff(duration,h1)
