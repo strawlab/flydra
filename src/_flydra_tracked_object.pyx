@@ -1,4 +1,6 @@
 #emacs, this is -*-Python-*- mode
+import numpy as np
+cimport numpy as np
 cimport c_lib
 cimport _fastgeom
 cimport _mahalanobis
@@ -50,14 +52,18 @@ cnan = np.nan
 
 ctypedef int mybool
 
-cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, object xhatminus):
+cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, np.ndarray[np.double_t, ndim=1] xhatminus):
     cdef int N
     cdef mybool missing_data
     cdef int i
     cdef int ss
     cdef _pmat_jacobian.PinholeCameraModelWithJacobian pinhole_model
+    cdef np.ndarray[np.double_t, ndim=1] y
+    cdef np.ndarray[np.double_t, ndim=2] C
+    cdef np.ndarray[np.double_t, ndim=1] hx
+    cdef np.ndarray[np.double_t, ndim=2] R
 
-    ss = len(xhatminus)
+    ss = xhatminus.shape[0]
 
     N = len(pmats_and_points_cov) # number of observations
     if N > 0:
@@ -86,7 +92,7 @@ cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, object xhatminus):
         hx_i = pinhole_model.evaluate(xhatminus[:3])
         hx[2*i:2*i+2] = hx_i
 
-        # fill observation  vector
+        # fill observation vector
         y[2*i:2*i+2] = xy2d_obs
 
         # fill observation model
