@@ -38,7 +38,7 @@ ddur_dh1 = diff(duration,h1)
 #print solve(ddur_dh1,dh1) # fails due to quartic polynomial
 """
 
-cpdef double find_fastest_path_fermat(double n1,double n2,double z1,double h,double z2):
+cpdef double find_fastest_path_fermat(double n1,double n2,double z1,double h,double z2) except *:
     cdef double result
     cdef double a,b,c,d,e
 
