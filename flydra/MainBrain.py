@@ -967,6 +967,7 @@ class CoordinateProcessor(threading.Thread):
                                     # data.
                                     max_error = \
                                         self.tracker.kalman_model['hypothesis_test_max_acceptable_error']
+                                    with_water = self.reconstructor.wateri is not None
 
                                     try:
                                         (this_observation_orig_units, this_observation_Lcoords_orig_units, cam_ids_used,
@@ -975,6 +976,7 @@ class CoordinateProcessor(threading.Thread):
                                             found_data_dict,
                                             max_error,
                                             max_n_cams=self.max_N_hypothesis_test,
+                                            with_water=with_water,
                                             )
                                     except ru.NoAcceptablePointFound:
                                         pass

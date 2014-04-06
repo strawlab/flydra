@@ -61,6 +61,7 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
     # test to short-circuit rest of function
     if len(found_data_dict) >= 2:
 
+        with_water = reconstructor.wateri is not None
         # Can only do 3D math with at least 2 cameras giving good
         # data.
         try:
@@ -69,7 +70,8 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
                 reconstructor,
                 found_data_dict,
                 max_err,
-                debug=debug)
+                debug=debug,
+                with_water=with_water)
         except ru.NoAcceptablePointFound:
             pass
         else:

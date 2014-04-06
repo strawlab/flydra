@@ -13,9 +13,12 @@ import flydra.common_variables
 import flydra.undistort
 import xml.etree.ElementTree as ET
 import warnings
+import os
 
 cdef float MINIMUM_ECCENTRICITY
 MINIMUM_ECCENTRICITY = flydra.common_variables.MINIMUM_ECCENTRICITY
+
+STRICT_WATER = int(os.environ.get('STRICT_WATER_HYPOTHESIS_TEST','0'))
 
 class NoAcceptablePointFound(Exception):
     pass
@@ -323,6 +326,8 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
 
     global gave_water_warning
     if with_water:
+        if STRICT_WATER:
+            raise NotImplementedError('water and hypothesis testing not yet implemented')
         if not gave_water_warning:
             warnings.warn('_reconstruct_utils: Hypothesis test intersection done '
                           'without refraction correction. Result will be wrong.')
