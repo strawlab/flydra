@@ -970,7 +970,7 @@ class CoordinateProcessor(threading.Thread):
                                     with_water = self.reconstructor.wateri is not None
 
                                     try:
-                                        (this_observation_orig_units, this_observation_Lcoords_orig_units, cam_ids_used,
+                                        (this_observation_3d, this_observation_Lcoords, cam_ids_used,
                                          min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
                                             self.reconstructor,
                                             found_data_dict,
@@ -987,17 +987,17 @@ class CoordinateProcessor(threading.Thread):
                                         #  Now join found point into Tracker
                                         if self.save_profiling_data:
                                             self.data_dict_queue.append(('join',(corrected_framenumber,
-                                                                                 this_observation_orig_units,
-                                                                                 this_observation_Lcoords_orig_units,
+                                                                                 this_observation_3d,
+                                                                                 this_observation_Lcoords,
                                                                                  this_observation_camns,
                                                                                  this_observation_idxs
                                                                                  )))
                                         # test for novelty
-                                        believably_new = self.tracker.is_believably_new( this_observation_orig_units)
+                                        believably_new = self.tracker.is_believably_new( this_observation_3d)
                                         if believably_new:
                                             self.tracker.join_new_obj( corrected_framenumber,
-                                                                       this_observation_orig_units,
-                                                                       this_observation_Lcoords_orig_units,
+                                                                       this_observation_3d,
+                                                                       this_observation_Lcoords,
                                                                        this_observation_camns,
                                                                        this_observation_idxs
                                                                        )

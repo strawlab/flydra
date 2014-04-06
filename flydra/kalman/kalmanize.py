@@ -65,7 +65,7 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
         # Can only do 3D math with at least 2 cameras giving good
         # data.
         try:
-            (this_observation_mm, this_observation_Lcoords_mm, cam_ids_used,
+            (this_observation_3d, this_observation_Lcoords, cam_ids_used,
              min_mean_dist) = ru.hypothesis_testing_algorithm__find_best_3d(
                 reconstructor,
                 found_data_dict,
@@ -81,12 +81,12 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
 
         if debug > 5:
             print 'found new point using hypothesis testing:'
-            print 'this_observation_mm',this_observation_mm
+            print 'this_observation_3d',this_observation_3d
             print 'cam_ids_used',cam_ids_used
             print 'min_mean_dist',min_mean_dist
 
         believably_new = tracker.is_believably_new(
-            this_observation_mm, debug=debug)
+            this_observation_3d, debug=debug)
         if (debug > 5):
             print 'believably_new',believably_new
 
@@ -142,14 +142,14 @@ option to this program.
                 for camn in this_observation_camns:
                     cam_id = camn2cam_id[camn]
                     repro=reconstructor.find2d(
-                        cam_id, this_observation_mm )
+                        cam_id, this_observation_3d )
                     print camn,frame_data[camn][0][0][:2],repro
 
             ####################################
             #  Now join found point into Tracker
             tracker.join_new_obj( frame,
-                                  this_observation_mm,
-                                  this_observation_Lcoords_mm,
+                                  this_observation_3d,
+                                  this_observation_Lcoords,
                                   this_observation_camns,
                                   this_observation_idxs,
                                   debug=debug,
