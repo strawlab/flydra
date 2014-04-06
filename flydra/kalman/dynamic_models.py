@@ -202,6 +202,57 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
 
 
     ######################################
+    # 'fishbowl40':
+    # process covariance
+
+    base_model_dict = _get_fixed_vel_model(dt)
+    ss = base_model_dict['ss']
+    os = base_model_dict['os']
+
+    if 1:
+        # this form is after N. Shimkin's lecture notes in
+        # Estimation and Identification in Dynamical Systems
+        # http://webee.technion.ac.il/people/shimkin/Estimation09/ch8_target.pdf
+        assert ss==6
+        T33 = dt**3/3.0
+        T22 = dt**2/2.0
+        T   = dt
+        Q = numpy.array( [[ T33,   0,   0,     T22,   0,   0],
+                          [   0, T33,   0,       0, T22,   0],
+                          [   0,   0, T33,       0,   0, T22],
+                          [   T22,   0, 0,       T,   0,   0],
+                          [     0, T22, 0,       0,   T,   0],
+                          [     0, 0, T22,       0,   0,   T]])
+    # the scale of the covariance
+    Q = 0.01*Q
+
+    # measurement noise covariance matrix
+    R = 1e-7*numpy.eye(os)
+
+    newdict = dict(
+
+        # data association parameters
+
+        # birth model
+        hypothesis_test_max_acceptable_error=25.0,
+        min_dist_to_believe_new_meters=0.2,
+        min_dist_to_believe_new_sigma=10.0,
+
+        initial_position_covariance_estimate=1e-3,
+        initial_velocity_covariance_estimate=10,
+
+        # death model
+        max_variance_dist_meters=0.25,
+        max_frames_skipped=10,
+
+        # kalman filter parameters
+        Q=Q,
+        R=R)
+    newdict.update(base_model_dict)
+    dynamic_models['fishbowl40'] = newdict
+
+
+    ######################################
 
     # 'hydra, units: m':
     # process covariance
@@ -263,6 +314,31 @@ class MamaramaMMEKFAllParams(EKFAllParams):
         super( MamaramaMMEKFAllParams, self).__init__()
         assert dt is not None
         linear_dict = get_kalman_model( name='mamarama, units: mm',
+                                        dt=dt )
+
+        # update some parameters from linear model
+        for key in [
+                    'initial_position_covariance_estimate',
+                    'max_frames_skipped',
+                    'A',
+                    'Q',
+                    'dt',
+                    'hypothesis_test_max_acceptable_error',
+                    'min_dist_to_believe_new_meters',
+                    'min_dist_to_believe_new_sigma',
+                    'max_variance_dist_meters',
+                    ]:
+            self[key] = linear_dict[key]
+        self['ekf_observation_covariance_pixels'] = numpy.array( [[1.0, 0.0],
+                                                                  [0.0, 1.0]],
+                                                                 dtype=numpy.float64 )
+        self['distorted_pixel_euclidian_distance_accept']=20.0 # distance in the raw image plane (i.e. before radial undistortion)
+
+class Fishbowl40EKFAllParams(EKFAllParams):
+    def __init__(self,dt=None):
+        super( Fishbowl40EKFAllParams, self).__init__()
+        assert dt is not None
+        linear_dict = get_kalman_model( name='fishbowl40',
                                         dt=dt )
 
         # update some parameters from linear model
@@ -352,6 +428,7 @@ class HbirdEKFAllParams(EKFAllParams):
         self['distorted_pixel_euclidian_distance_accept']=15.0
 
 ekf_models = {'EKF mamarama, units: mm':MamaramaMMEKFAllParams,
+              'EKF fishbowl40':Fishbowl40EKFAllParams,
               'EKF hydra, units: m':HydraMEKFAllParams,
               'EKF hbird, units: mm':HbirdEKFAllParams,
               }
