@@ -242,7 +242,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         initial_velocity_covariance_estimate=10,
 
         # death model
-        max_variance_dist_meters=0.25,
+        max_variance_dist_meters=0.125,
         max_frames_skipped=10,
 
         # kalman filter parameters
