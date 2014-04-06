@@ -269,7 +269,9 @@ cdef class TrackedObject:
     def debug_info(self,level=3):
         if level > 5:
             sys.stdout.write('%s\n'%self)
-            for i in range(len(self.xhats)):
+            N_pts = len(self.xhats)
+            start_idx = max( N_pts-10, 0 )
+            for i in range(start_idx,N_pts):
                 this_Pmean = math.sqrt(self.Ps[i][0,0]**2 + self.Ps[i][1,1]**2 + self.Ps[i][2,2]**2)
                 sys.stdout.write( ' '.join(map(str,['  ',i,self.frames[i],self.xhats[i][:3],this_Pmean,])) )
                 if self.frames[i] in self.observations_frames:
