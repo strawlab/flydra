@@ -91,6 +91,10 @@ cdef class PinholeCameraWaterModelWithJacobian(_pmat_jacobian.PinholeCameraModel
         s0,s1,depth = pt_shifted
         depth = -depth # convert from -z to z
 
+        if depth < 0:
+            # do not use refraction model if point above water
+            return self.pinhole.evaluate( X )
+
         theta = atan2( s1, s0 )
         r = sqrt( s0*s0 + s1*s1 )
         r0 = _refraction.find_fastest_path_fermat( self.n1, self.n2, self.camz,
