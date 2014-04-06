@@ -31,7 +31,6 @@ cdef class PinholeCameraWaterModelWithJacobian(_pmat_jacobian.PinholeCameraModel
 
         self.dx = np.array( (self.delta, 0,          0) )
         self.dy = np.array( (0,          self.delta, 0) )
-        self.dz = np.array( (0,                      0,     self.delta) )
 
         self.pinhole = _pmat_jacobian.PinholeCameraModelWithJacobian(self.pmat)
 
@@ -41,16 +40,32 @@ cdef class PinholeCameraWaterModelWithJacobian(_pmat_jacobian.PinholeCameraModel
         return (make_PinholeCameraWaterModelWithJacobian, args)
 
     cpdef evaluate_jacobian_at(self, np.ndarray[np.double_t, ndim=1] X):
+        cdef int flip_z
+        cdef np.ndarray[np.double_t, ndim=1] eval_z
+        cdef np.ndarray[np.double_t, ndim=1] dz
+        cdef double z_delta
+
         # evaluate the Jacobian numerically
         F = self.evaluate(X)
 
         Fx = self.evaluate(X + self.dx)
         Fy = self.evaluate(X + self.dy)
-        Fz = self.evaluate(X + self.dz)
+        z_delta = min( abs(X[2]), self.delta ) # do not allow z>0
+        dz = np.array( (0, 0, z_delta) )
+
+        eval_z = X+dz
+        if eval_z[2] > 0:
+            flip_z = False
+        else:
+            flip_z = True
+            eval_z = X-dz
+        Fz = self.evaluate(eval_z)
 
         dF_dx = (Fx-F)/self.delta
         dF_dy = (Fy-F)/self.delta
         dF_dz = (Fz-F)/self.delta
+        if flip_z:
+            dF_dz = -dF_dz
 
         result = np.array([dF_dx,
                            dF_dy,
