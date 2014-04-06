@@ -62,6 +62,7 @@ cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, np.ndarray[np.double_t
     cdef np.ndarray[np.double_t, ndim=2] C
     cdef np.ndarray[np.double_t, ndim=1] hx
     cdef np.ndarray[np.double_t, ndim=2] R
+    cdef np.ndarray[np.double_t, ndim=1] hx_i
 
     ss = xhatminus.shape[0]
 
