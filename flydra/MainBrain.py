@@ -46,11 +46,12 @@ import std_srvs.srv
 import std_msgs.msg
 from ros_flydra.msg import flydra_mainbrain_super_packet
 from ros_flydra.msg import flydra_mainbrain_packet, flydra_object, FlydraError
-import triggerbox.msg
 import ros_flydra.srv
 import ros_flydra.cv2_bridge
 from geometry_msgs.msg import Point, Vector3
+
 from triggerbox.triggerbox_client import TriggerboxClient
+from triggerbox.triggerbox_host import TriggerboxHost
 
 import flydra.rosutils
 LOG = flydra.rosutils.Log()
@@ -1170,6 +1171,7 @@ class MainBrain(object):
     ROS_CONFIGURATION = dict(
         frames_per_second=100.0,
         triggerbox_namespace='/trig1',
+        triggerbox_hardware_device='',
         kalman_model='EKF mamarama, units: mm',
         max_reconstruction_latency_sec=0.06, # 60 msec
         max_N_hypothesis_test=3,
@@ -1499,8 +1501,20 @@ class MainBrain(object):
         self.debug_level = threading.Event()
         self.show_overall_latency = threading.Event()
 
-        self.trigger_device = TriggerboxClient(host_node=self.config['triggerbox_namespace'])
-        self.trigger_device.set_frames_per_second( self.config['frames_per_second'] )
+        #we support in or out of process trigger boxes
+        if self.config['triggerbox_hardware_device']:
+            #in process
+            self.trigger_device =  TriggerboxHost(
+                    device=self.config['triggerbox_hardware_device'],
+                    write_channel_name=None, channel_name=None,
+                    ros_topic_base=self.config['triggerbox_namespace'])
+        else:
+            #out of process
+            self.trigger_device = TriggerboxClient(host_node=self.config['triggerbox_namespace'])
+
+        self.trigger_device.clock_measurement_callback  = self._on_trigger_clock_measurement
+        self.trigger_device.set_frames_per_second_blocking(self.config['frames_per_second'])
+
         self.frame_offsets = {}
         self.last_frame_times = {}
         self.block_triggerbox_activity = False
@@ -1612,11 +1626,6 @@ class MainBrain(object):
                                 std_msgs.msg.String,
                                 self._on_experiment_uuid)
 
-        self.sub_triggerbox_clock_measurements = rospy.Subscriber(
-            self.config['triggerbox_namespace']+'/raw_measurements',
-            triggerbox.msg.TriggerClockMeasurement,
-            self._on_trigger_clock_measurement)
-
         self.services = {}
         for name, srv in self.ROS_CONTROL_API.iteritems():
             self.services[name] = rospy.Service('~%s' % name, srv, self._ros_generic_service_dispatch)
@@ -1635,11 +1644,11 @@ class MainBrain(object):
             self.h5exp_info.row.append()
             self.h5exp_info.flush()
 
-    def _on_trigger_clock_measurement(self, msg):
-        self.queue_trigger_clock_info.put((msg.start_timestamp,
-                                           msg.pulsenumber,
-                                           msg.fraction_n_of_255,
-                                           msg.stop_timestamp))
+    def _on_trigger_clock_measurement(self, start_timestamp, pulsenumber, fraction_n_of_255, stop_timestamp):
+        self.queue_trigger_clock_info.put((start_timestamp,
+                                           pulsenumber,
+                                           fraction_n_of_255,
+                                           stop_timestamp))
 
     def register_frame(self, id_string, framenumber):
         full_output=True
