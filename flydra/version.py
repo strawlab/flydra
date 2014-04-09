@@ -1,3 +1,3 @@
 # "version" and "release" in flydra-sphinx-docs/conf.py are set by
 # importing this.
-__version__ = '0.5.7'
+__version__ = '0.5.8'
