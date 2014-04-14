@@ -1748,8 +1748,8 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         for i in range(N_trigger_modes):
             mode_string = self.get_trigger_mode_string(i)
             self._trigger_mode_numbers_from_name[mode_string] = i
-        if self._show_cam_details:
-            LOG.info('  mode %d: %s'%(i,mode_string))
+            if self._show_cam_details:
+                LOG.info('  mode %d: %s'%(i,mode_string))
 
         #cache the properties
         num_props = self.get_num_camera_properties()
