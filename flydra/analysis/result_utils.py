@@ -490,7 +490,7 @@ def get_time_model_from_data(results,debug=False,full_output=False):
     framestamp = framenumber + frac
 
     # fit linear model of relationship mainbrain timestamp and usb trigger_device framestamp
-    if len(framestamp)==0 or len(mb_timestamp):
+    if len(framestamp)==0 or len(mb_timestamp)==0:
         raise NoTimestampDataError()
     gain, offset = model_remote_to_local( framestamp, mb_timestamp, debug=debug )
     time_model = TimeModel(gain, offset)
