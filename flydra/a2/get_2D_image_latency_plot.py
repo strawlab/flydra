@@ -6,6 +6,7 @@ Usage:
 
 Options:
   -h --help     Show this screen.
+  --3d          Also plot the 3D tracking latency
 """
 from docopt import docopt
 
@@ -13,22 +14,43 @@ import tables
 import matplotlib.pyplot as plt
 import pandas as pd
 import sys
+import numpy as np
 
 import flydra.analysis.result_utils as result_utils
 
-def plot_latency(fname):
+def plot_latency(fname, do_3d_latency=False):
     with tables.openFile(fname, mode='r') as h5:
-        d = h5.root.data2d_distorted[:]
+        d2d = h5.root.data2d_distorted[:]
+        if do_3d_latency:
+            dk = h5.root.kalman_estimates[:]
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+        time_model=result_utils.get_time_model_from_data(h5)
 
-    df = pd.DataFrame(d)
-    camn_list = list(df['camn'].unique())
+    df2d = pd.DataFrame(d2d)
+    camn_list = list(df2d['camn'].unique())
     camn_list.sort()
+
+    if do_3d_latency:
+        dfk = pd.DataFrame(dk)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        for obj_id, dfobj in dfk.groupby('obj_id'):
+            frame = dfobj['frame'].values
+            reconstruct_timestamp = dfobj['timestamp'].values
+            trigger_timestamp = time_model.framestamp2timestamp(frame)
+            latency = reconstruct_timestamp-trigger_timestamp
+            latency[ latency < -1e8 ] = np.nan
+            ax.plot(frame,latency,'b.-')
+        ax.text(0,1,'3D reconstruction', va='top', ha='left', transform=ax.transAxes)
+        ax.set_xlabel('frame')
+        ax.set_ylabel('time (s)')
+
     fig2 = plt.figure()
     axn=None
     fig3 = plt.figure()
     ax3n = None
-    for camn, dfcam in df.groupby('camn'):
+    for camn, dfcam in df2d.groupby('camn'):
         cam_id = camn2cam_id[camn]
         df0 = dfcam[ dfcam['frame_pt_idx']==0 ]
         ts0s = df0['timestamp'].values
@@ -58,8 +80,7 @@ def plot_latency(fname):
 def main():
     args = docopt(__doc__)
     fname = args['FILENAME']
-
-    plot_latency(fname)
+    plot_latency(fname, do_3d_latency=args['--3d'])
 
 if __name__=='__main__':
     main()
