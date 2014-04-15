@@ -158,7 +158,11 @@ class RealtimeROSSenderThread(threading.Thread):
         self._ros_path = ros_path
         self._ros_klass = ros_klass
         self._ros_send_array = ros_send_array
-        self._pub = rospy.Publisher(self._ros_path,self._ros_klass,tcp_nodelay=True)
+        try:
+            self._pub = rospy.Publisher(self._ros_path,self._ros_klass,tcp_nodelay=True)
+        except Exception as err:
+            rospy.logwarn('could not start coordinate publisher: %r'%(err,))
+            self._pub = None
 
     def run(self):
         while not self._quit_event.isSet():
@@ -169,6 +173,10 @@ class RealtimeROSSenderThread(threading.Thread):
                     packets.append( self._queue.get_nowait() )
                 except Queue.Empty:
                     break
+
+            if self._pub is None:
+                continue
+
             if self._ros_send_array:
                 self._pub.publish(self._ros_klass(packets))
             else:

@@ -18,7 +18,6 @@ class FakeMainBrain:
         self.trigger_device = FakeTriggerDevice()
 
 def test_coordinate_receiver1():
-    rospy.init_node('test_coordinate_receiver1',disable_signals=True)
     mb = FakeMainBrain()
     coord_processor = CoordinateProcessor(mb,
                                           save_profiling_data=False,
