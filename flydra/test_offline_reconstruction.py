@@ -33,8 +33,15 @@ def check_reconstruction(with_water=False, use_kalman_smoothing=False, duration=
 
     cams = []
     cams.append(  base.get_view_camera(eye=np.array((1.0,0.0,1.0)),lookat=lookat,up=up) )
-    cams.append(  base.get_view_camera(eye=np.array((1.0,1.0,0.5)),lookat=lookat,up=up) )
-    cams.append(  base.get_view_camera(eye=np.array((-1.0,-1.0,0.3)),lookat=lookat,up=up) )
+
+    distortion1 = np.array( [0.2, 0.3, 0.1, 0.1, 0.1] )
+    cam_wide = pymvg.CameraModel.load_camera_simple(name='cam_wide',
+                                                    fov_x_degrees=90,
+                                                    eye=np.array((-1.0,-1.0,0.7)),
+                                                    lookat=lookat,
+                                                    distortion_coefficients=distortion1,
+                                                    )
+    cams.append(cam_wide)
 
     for i in range(len(cams)):
         cams[i].name = 'cam%02d'%i

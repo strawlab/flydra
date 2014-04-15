@@ -55,12 +55,12 @@ def make_ReconstructHelper(*args,**kw):
 cdef class ReconstructHelper:
     cdef readonly double fc1, fc2, cc1, cc2
     cdef readonly double fc1p, fc2p, cc1p, cc2p
-    cdef readonly double k1, k2, p1, p2
+    cdef readonly double k1, k2, k3, p1, p2
     cdef readonly double alpha_c
     cdef readonly int simple
 
     def __init__(self, fc1, fc2, cc1, cc2, k1, k2, p1, p2, alpha_c=0,
-                 fc1p=None, fc2p=None, cc1p=None, cc2p=None,
+                 fc1p=None, fc2p=None, cc1p=None, cc2p=None, k3=None,
                  ):
         """create instance of ReconstructHelper
 
@@ -78,6 +78,9 @@ cdef class ReconstructHelper:
         self.cc2 = self.cc2p = cc2
         self.k1 = k1
         self.k2 = k2
+        if k3 is None:
+            k3 = 0.0
+        self.k3 = k3
         self.p1 = p1
         self.p2 = p2
         self.alpha_c = alpha_c
@@ -105,13 +108,16 @@ cdef class ReconstructHelper:
         """this allows ReconstructHelper to be pickled"""
         args = (self.fc1, self.fc2, self.cc1, self.cc2,
                 self.k1, self.k2, self.p1, self.p2, self.alpha_c,
-                self.fc1p, self.fc2p, self.cc1p, self.cc2p)
+                self.fc1p, self.fc2p, self.cc1p, self.cc2p, self.k3)
         return (make_ReconstructHelper, args)
 
     def add_element(self, parent):
         """add self as XML element to parent"""
         assert ET.iselement(parent)
         elem = ET.SubElement(parent,"non_linear_parameters")
+
+        if self.k3 != 0.0:
+            raise NotImplementedError('k3 != 0.0')
 
         for name in ['fc1','fc2','cc1','cc2','k1','k2','p1','p2','alpha_c',
                      'fc1p', 'fc2p', 'cc1p', 'cc2p',
@@ -121,7 +127,7 @@ cdef class ReconstructHelper:
 
     def as_obj_for_json(self):
         result = {}
-        for name in ['fc1','fc2','cc1','cc2','k1','k2','p1','p2','alpha_c',
+        for name in ['fc1','fc2','cc1','cc2','k1','k2','k3','p1','p2','alpha_c',
                      'fc1p', 'fc2p', 'cc1p', 'cc2p']:
             result[name] = getattr(self,name)
         return result
@@ -193,6 +199,8 @@ cdef class ReconstructHelper:
         return K
 
     def get_nlparams(self):
+        if self.k3 != 0.0:
+            raise NotImplementedError('k3 != 0.0')
         return (self.k1, self.k2, self.p1, self.p2)
 
     def undistort(self, double x_kk, double y_kk, int n_iterations=5):
@@ -228,7 +236,7 @@ cdef class ReconstructHelper:
 
         for i from 0<=i<n_iterations:
             r_2 = x*x + y*y
-            k_radial = 1.0 + (self.k1) * r_2 + (self.k2) * r_2*r_2
+            k_radial = 1.0 + r_2*(self.k1 + r_2*(self.k2 + r_2*self.k3))
             delta_x = 2.0 * (self.p1)*x*y + (self.p2)*(r_2 + 2.0*x*x)
             delta_y = (self.p1) * (r_2 + 2.0*y*y)+2.0*(self.p2)*x*y
             x = (xd-delta_x)/k_radial
@@ -252,7 +260,8 @@ cdef class ReconstructHelper:
 
         r_2 = x*x + y*y
         r_4 = r_2**2
-        term1 = self.k1*r_2 + self.k2*r_4
+        r_6 = r_2*r_4
+        term1 = self.k1*r_2 + self.k2*r_4 + self.k3*r_6
 
         # OpenCV manual (chaper 6, "3D reconstruction", "camera
         # calibration" section) seems to disagree with
@@ -276,7 +285,7 @@ cdef class ReconstructHelper:
 
         f = self.fc1, self.fc2 # focal length
         c = self.cc1, self.cc2 # center
-        k = self.k1, self.k2, self.p1, self.p2, 0  # NL terms: r^2, r^4, tan1, tan2, r^6
+        k = self.k1, self.k2, self.p1, self.p2, self.k3  # NL terms: r^2, r^4, tan1, tan2, r^6
 
         assert self.simple
         assert self.alpha_c==0

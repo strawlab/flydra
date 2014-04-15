@@ -539,9 +539,8 @@ class SingleCameraCalibration:
             d = np.array(camdict['D'])
             assert d.ndim==1
             assert d.shape==(5,)
-            assert d[4] == 0.0
             #fc1, fc1, cc1, cc2
-            r1, r2, t1, t2 = d[:4]
+            r1, r2, t1, t2, r3 = d[:5]
             K = pymvg_cam.get_K()
             fc1 = K[0,0]
             fc2 = K[1,1]
@@ -550,7 +549,9 @@ class SingleCameraCalibration:
             helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
                                                          cc1,cc2, # image center
                                                          r1,r2, # radial distortion
-                                                         t1,t2) # tangential distortion
+                                                         t1,t2, # tangential distortion
+                                                         k3=r3, # more radial distortion
+                                                         )
         else:
             helper = None
         cam_id = camdict['name']
