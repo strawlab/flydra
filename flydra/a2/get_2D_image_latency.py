@@ -5,7 +5,6 @@ Usage:
 
 Options:
   -h --help     Show this screen.
-  --show        Draw plots.
 """
 from docopt import docopt
 
@@ -14,12 +13,9 @@ import numpy as np
 import sys
 import get_clock_sync
 import flydra.analysis.result_utils as result_utils
-import matplotlib.pyplot as plt
 
 def main():
     args = docopt(__doc__)
-
-    do_plot = args['--show']
 
     filename = args['FILENAME']
     results = tables.openFile(filename,mode='r')
@@ -39,10 +35,6 @@ def main():
     d2d = results.root.data2d_distorted[:]
     cam_info = results.root.cam_info[:]
     results.close()
-
-    if do_plot:
-        fig = plt.figure()
-        ax = None
 
     if 1:
         for cam_id_enum, cam_id in enumerate(cam_ids):
@@ -95,18 +87,6 @@ def main():
                 worst_sync_dict[hostname]*1000.0,
                 frac_skipped*100.0,
                 )
-
-            if do_plot:
-                ax = fig.add_subplot( len(cam_ids), 1, cam_id_enum+1,sharex=ax)
-                ax.plot( mydata['frame'], latency_sec*1000.0, '.',
-                         label='%s %s'%(hostname,cam_id) )
-                ax.legend()
-
-    if do_plot:
-        ax.set_ylabel('latency (msec)')
-        ax.set_xlabel('frame')
-        plt.show()
-
 
 if __name__=='__main__':
     main()
