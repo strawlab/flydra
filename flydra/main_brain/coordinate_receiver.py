@@ -23,8 +23,6 @@ import flydra.data_descriptions
 
 # ensure that pytables uses numpy:
 import tables
-import tables as PT
-assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
 warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
