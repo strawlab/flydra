@@ -601,11 +601,6 @@ class CoordinateProcessor(threading.Thread):
 
                         # ===================================================
 
-                        # XXX hack? make data available via cam_dict
-                        cam_dict = self.main_brain.remote_api.cam_info[cam_id]
-                        with cam_dict['lock']:
-                            cam_dict['points_distorted']=points_distorted
-
                         # Use camn_received_time to determine sync
                         # info. This avoids 2 potential problems:
                         #  * using raw_timestamp can fail if the
