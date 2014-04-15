@@ -587,7 +587,9 @@ class MainBrain(object):
                                    show_overall_latency=self.show_overall_latency,
                                    show_sync_errors=show_sync_errors,
                                    max_reconstruction_latency_sec=self.config['max_reconstruction_latency_sec'],
-                                   max_N_hypothesis_test=self.config['max_N_hypothesis_test'])
+                                   max_N_hypothesis_test=self.config['max_N_hypothesis_test'],
+                                   hostname=self.hostname,
+                                   )
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()
 

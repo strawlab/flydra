@@ -187,8 +187,11 @@ class CoordinateProcessor(threading.Thread):
                  show_sync_errors,
                  show_overall_latency,
                  max_reconstruction_latency_sec,
-                 max_N_hypothesis_test):
-        self.hostname = main_brain.hostname
+                 max_N_hypothesis_test,
+                 hostname,
+                 ):
+        self.did_quit_successfully = False
+        self.hostname = hostname
         self.main_brain = main_brain
         self.debug_level = debug_level
         self.show_overall_latency = show_overall_latency
@@ -348,12 +351,18 @@ class CoordinateProcessor(threading.Thread):
         this_ros_object = flydra_object(obj_id=tracked_object.obj_id,
                                         position=Point(numpy.nan,numpy.nan,numpy.nan),
                                         )
-        ros_packet = flydra_mainbrain_packet(
-            framenumber=tracked_object.current_frameno,
-            reconstruction_stamp=rospy.Time.now(),
-            acquire_stamp=rospy.Time.from_sec(0),
-            objects = [this_ros_object])
-        self.queue_realtime_ros_packets.put( ros_packet )
+        try:
+            reconstruction_stamp=rospy.Time.now()
+            acquire_stamp=rospy.Time.from_sec(0)
+        except rospy.exceptions.ROSInitException as err:
+            pass
+        else:
+            ros_packet = flydra_mainbrain_packet(
+                framenumber=tracked_object.current_frameno,
+                reconstruction_stamp=reconstruction_stamp,
+                acquire_stamp=acquire_stamp,
+                objects = [this_ros_object])
+            self.queue_realtime_ros_packets.put( ros_packet )
 
         if self.debug_level.isSet():
             LOG.debug('killing obj_id %d:'%tracked_object.obj_id)
@@ -608,9 +617,9 @@ class CoordinateProcessor(threading.Thread):
                         #  * using time.time() can fail if the network
                         #    latency jitter is on the order of the
                         #    inter frame interval.
-                        tmp = self.main_brain.register_frame(
-                            cam_id,raw_framenumber)
-                        corrected_framenumber, did_frame_offset_change = tmp
+                        corrected_framenumber, did_frame_offset_change = \
+                          self.main_brain.register_frame(cam_id,raw_framenumber)
+
                         trigger_timestamp = self.main_brain.trigger_device.framestamp2timestamp( corrected_framenumber )
                         if did_frame_offset_change:
                             self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp,
@@ -972,3 +981,5 @@ class CoordinateProcessor(threading.Thread):
             with self.tracker_lock:
                 if self.tracker is not None:
                     self.tracker.kill_all_trackers() # save (if necessary) all old data
+
+        self.did_quit_successfully = True
