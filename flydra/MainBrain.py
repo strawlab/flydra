@@ -1,32 +1,25 @@
 """core runtime code for online, realtime tracking"""
-# TODO:
-# 1. make variable eccentricity threshold dependent on area (bigger area = lower threshold)
 from __future__ import with_statement, division
-import threading, time, socket, select, sys, os, copy, struct
+import threading, time, socket, sys, os, copy, struct
 import warnings
 import json
 import collections
 import flydra.reconstruct
-import flydra.reconstruct_utils as ru
 import numpy
 import numpy as np
-from numpy import nan, inf
-near_inf = 9.999999e20
+from numpy import nan
 import Queue
 
 pytables_filt = numpy.asarray
 import atexit
-import pickle
 
 import flydra.version
 import flydra.kalman.flydra_kalman_utils as flydra_kalman_utils
 import flydra.kalman.flydra_tracker
-import flydra.fastgeom as geom
-#import flydra.geom as geom
 
 import flydra.data_descriptions
 from flydra.main_brain.coordinate_receiver import CoordinateProcessor, \
-     ATTEMPT_DATA_RECOVERY, IMPOSSIBLE_TIMESTAMP
+     ATTEMPT_DATA_RECOVERY
 
 # ensure that pytables uses numpy:
 import tables
@@ -44,11 +37,9 @@ roslib.load_manifest('triggerbox')
 import rospy
 import std_srvs.srv
 import std_msgs.msg
-from ros_flydra.msg import flydra_mainbrain_super_packet
-from ros_flydra.msg import flydra_mainbrain_packet, flydra_object, FlydraError
+from ros_flydra.msg import FlydraError
 import ros_flydra.srv
 import ros_flydra.cv2_bridge
-from geometry_msgs.msg import Point, Vector3
 
 from triggerbox.triggerbox_client import TriggerboxClient
 from triggerbox.triggerbox_host import TriggerboxHost
@@ -656,7 +647,6 @@ class MainBrain(object):
                                            stop_timestamp))
 
     def register_frame(self, id_string, framenumber):
-        full_output=True
         frame_timestamp = time.time()
         last_frame_timestamp = self.last_frame_times.get(id_string,-np.inf)
         this_interval = frame_timestamp-last_frame_timestamp
