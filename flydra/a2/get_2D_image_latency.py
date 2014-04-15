@@ -20,12 +20,10 @@ def main():
     args = docopt(__doc__)
 
     do_plot = args['--show']
-    debug=False
-    #debug=True
 
     filename = args['FILENAME']
     results = tables.openFile(filename,mode='r')
-    time_model=result_utils.get_time_model_from_data(results,debug=debug)
+    time_model=result_utils.get_time_model_from_data(results,debug=False)
     worst_sync_dict = get_clock_sync.get_worst_sync_dict(results)
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
 
@@ -47,7 +45,7 @@ def main():
         ax = None
 
     if 1:
-        for camn_enum, cam_id in enumerate(cam_ids):
+        for cam_id_enum, cam_id in enumerate(cam_ids):
             camns = cam_id2camns[cam_id]
             if not len(camns)==1:
                 raise NotImplementedError
@@ -99,8 +97,9 @@ def main():
                 )
 
             if do_plot:
-                ax = fig.add_subplot(len(camns),1,camn_enum,sharex=ax)
-                ax.plot( mydata['frame'], latency_sec*1000.0, '.', label='%s %s'%(hostname,cam_id) )
+                ax = fig.add_subplot( len(cam_ids), 1, cam_id_enum+1,sharex=ax)
+                ax.plot( mydata['frame'], latency_sec*1000.0, '.',
+                         label='%s %s'%(hostname,cam_id) )
                 ax.legend()
 
     if do_plot:
