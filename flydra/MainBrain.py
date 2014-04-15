@@ -23,8 +23,7 @@ from flydra.main_brain.coordinate_receiver import CoordinateProcessor, \
 
 # ensure that pytables uses numpy:
 import tables
-import tables as PT
-assert PT.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
+assert tables.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
 warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
@@ -46,9 +45,6 @@ from triggerbox.triggerbox_host import TriggerboxHost
 
 import flydra.rosutils
 LOG = flydra.rosutils.Log(to_ros=True)
-
-import flydra.debuglock
-DebugLock = flydra.debuglock.DebugLock
 
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 0 # how many data points are required before saving trajectory?
 
@@ -102,10 +98,10 @@ ExperimentInfo = flydra.data_descriptions.ExperimentInfo
 FilteredObservations = flydra_kalman_utils.FilteredObservations
 ML_estimates_2d_idxs_type = flydra_kalman_utils.ML_estimates_2d_idxs_type
 
-h5_obs_names = PT.Description(FilteredObservations().columns)._v_names
+h5_obs_names = tables.Description(FilteredObservations().columns)._v_names
 
 # allow rapid building of numpy.rec.array:
-Info2DCol_description = PT.Description(Info2D().columns)._v_nestedDescr
+Info2DCol_description = tables.Description(Info2D().columns)._v_nestedDescr
 
 def save_ascii_matrix(filename,m):
     fd=open(filename,mode='wb')
@@ -1134,7 +1130,7 @@ class MainBrain(object):
         self.KalmanEstimatesDescription = self.kalman_saver_info_instance.get_description()
         self.dynamic_model = dynamic_model
 
-        self.h5_xhat_names = PT.Description(self.KalmanEstimatesDescription().columns)._v_names
+        self.h5_xhat_names = tables.Description(self.KalmanEstimatesDescription().columns)._v_names
 
         # send params over to realtime coords thread
         self.coord_processor.set_new_tracker(kalman_model=dynamic_model)
@@ -1183,7 +1179,7 @@ class MainBrain(object):
         self.pub_data_file.publish(self.h5filename)
 
         self.block_triggerbox_activity = True
-        self.h5file = PT.openFile(self.h5filename, mode="w", title="Flydra data file")
+        self.h5file = tables.openFile(self.h5filename, mode="w", title="Flydra data file")
         expected_rows = int(1e6)
         ct = self.h5file.createTable # shorthand
         root = self.h5file.root # shorthand
