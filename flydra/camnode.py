@@ -578,17 +578,15 @@ class ProcessCamClass(rospy.SubscribeListener):
             ray_valid = False
             if self._hlper is not None:
                 x0u, y0u = self._hlper.undistort( x0_abs, y0_abs )
-                if line_found:
-
-                    # (If we have self._hlper _pmat_inv, we can assume we have
-                    # self._pmat_inv and sef._camera_center.)
-                    (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
-                     ray5) = do_3d_operations_on_2d_point(self._hlper,x0u,y0u,
-                                                          self._pmat_inv,
-                                                          self._camera_center,
-                                                          x0_abs, y0_abs,
-                                                          rise, run)
-                    ray_valid = True
+                # (If we have self._hlper _pmat_inv, we can assume we have
+                # self._pmat_inv and sef._camera_center.)
+                (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
+                 ray5) = do_3d_operations_on_2d_point(self._hlper,x0u,y0u,
+                                                      self._pmat_inv,
+                                                      self._camera_center,
+                                                      x0_abs, y0_abs,
+                                                      rise, run)
+                ray_valid = True
             else:
                 x0u = x0_abs # fake undistorted data
                 y0u = y0_abs

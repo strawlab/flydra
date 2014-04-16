@@ -297,7 +297,7 @@ def do_3d_operations_on_2d_point(helper,
 
     found_point_image_plane = [x0u,y0u,1.0]
 
-    if not numpy.isnan(rise):
+    if not (numpy.isnan(rise) or numpy.isnan(run)):
         # calculate plane containing camera origin and found line
         # in 3D world coords
 
