@@ -558,7 +558,7 @@ class SingleCameraCalibration:
         result = cls( cam_id=cam_id,
                       Pmat=pmat,
                       res=(camdict['width'],camdict['height']),
-                      helper = None,
+                      helper = helper,
                       )
         return result
 
