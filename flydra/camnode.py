@@ -538,10 +538,10 @@ class ProcessCamClass(rospy.SubscribeListener):
         fc2 = intlin[1,1]
         cc1 = intlin[0,2]
         cc2 = intlin[1,2]
-        k1, k2, p1, p2 = intnonlin
+        k1, k2, p1, p2, k3 = intnonlin
 
         self._hlper = reconstruct_utils.ReconstructHelper(
-            fc1, fc2, cc1, cc2, k1, k2, p1, p2 )
+            fc1, fc2, cc1, cc2, k1, k2, p1, p2, k3=k3 )
 
     def _convert_to_wire_order(self, xpoints, hw_roi_frame, running_mean_im, sumsqf ):
         """the images passed in are already in roi coords, as are index_x and index_y.
@@ -563,7 +563,7 @@ class ProcessCamClass(rospy.SubscribeListener):
             sumsqf_val = float(sumsqf[index_y, index_x])
 
             if numpy.isnan(slope):
-                run = numpy.nan
+                run = rise = numpy.nan
                 line_found = False
             else:
                 line_found = True
