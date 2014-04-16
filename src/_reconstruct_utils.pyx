@@ -138,7 +138,7 @@ cdef class ReconstructHelper:
         rad_fd = open(fname,'w')
         K = self.get_K()
         nlparams = self.get_nlparams()
-        k1, k2, p1, p2 = nlparams
+        k1, k2, p1, p2, k3 = nlparams
         rad_fd.write('K11 = %s;\n'%repr(K[0,0]))
         rad_fd.write('K12 = %s;\n'%repr(K[0,1]))
         rad_fd.write('K13 = %s;\n'%repr(K[0,2]))
@@ -153,6 +153,7 @@ cdef class ReconstructHelper:
         rad_fd.write('kc2 = %s;\n'%repr(k2))
         rad_fd.write('kc3 = %s;\n'%repr(p1))
         rad_fd.write('kc4 = %s;\n'%repr(p2))
+        rad_fd.write('kc5 = %s;\n'%repr(k3))
         rad_fd.write('\n')
         if comments is not None:
             comments = str(comments)
@@ -199,9 +200,7 @@ cdef class ReconstructHelper:
         return K
 
     def get_nlparams(self):
-        if self.k3 != 0.0:
-            raise NotImplementedError('k3 != 0.0')
-        return (self.k1, self.k2, self.p1, self.p2)
+        return (self.k1, self.k2, self.p1, self.p2, self.k3)
 
     def undistort(self, double x_kk, double y_kk, int n_iterations=5):
         """undistort 2D coordinate pair

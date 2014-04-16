@@ -612,8 +612,8 @@ class SingleCameraCalibration:
                          [     0,     0,       1       ]]).T
 
 
-        k1,k2,p1,p2 = self.helper.get_nlparams()
-        distortion = [k1,k2,p1,p2,0]
+        k1,k2,p1,p2,k3 = self.helper.get_nlparams()
+        distortion = [k1,k2,p1,p2,k3]
 
         C = self.get_cam_center()
         rot = R
@@ -745,8 +745,8 @@ class SingleCameraCalibration:
             fd.write('     [%s, %s, %s],\n'%tuple([repr(x) for x in row]))
         fd.write(    '    ]\n')
 
-        k1,k2,p1,p2 = self.helper.get_nlparams()
-        fd.write(    'radial_params = %s, %s\n'%(repr(k1),repr(k2)))
+        k1,k2,p1,p2,k3 = self.helper.get_nlparams()
+        fd.write(    'radial_params = %s, %s, %s\n'%(repr(k1),repr(k2),repr(k3)))
         fd.write(    'tangential_params = %s, %s\n'%(repr(p1),repr(p2)))
 
     def get_sba_format_line(self):
