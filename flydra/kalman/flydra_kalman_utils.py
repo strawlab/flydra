@@ -202,7 +202,7 @@ ML_estimates_2d_idxs_type = PT.UInt16Atom
 def convert_format(current_data,camn2cam_id,area_threshold=0.0,only_likely=False):
     """convert data from format used for Kalman tracker to hypothesis tester"""
     found_data_dict = {}
-    first_idx_by_camn = {}
+    first_idx_by_cam_id = {}
     for camn, stuff_list in current_data.iteritems():
         if not len(stuff_list):
             # no data for this camera, continue
@@ -230,6 +230,6 @@ def convert_format(current_data,camn2cam_id,area_threshold=0.0,only_likely=False
                         continue
 
                 found_data_dict[cam_id] = pt_undistorted[:9]
-                first_idx_by_camn[camn] = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
+                first_idx_by_cam_id[cam_id] = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
                 break # algorithm only accepts 1 point per camera
-    return found_data_dict, first_idx_by_camn
+    return found_data_dict, first_idx_by_cam_id

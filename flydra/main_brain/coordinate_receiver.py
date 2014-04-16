@@ -814,7 +814,7 @@ class CoordinateProcessor(threading.Thread):
                                     start_3d_proc_b = time.time()
 
                                 # Convert to format accepted by find_best_3d()
-                                found_data_dict,first_idx_by_camn = convert_format(
+                                found_data_dict,first_idx_by_cam_id = convert_format(
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id,
                                     area_threshold=0.0,
@@ -846,7 +846,7 @@ class CoordinateProcessor(threading.Thread):
                                         pass
                                     else:
                                         this_observation_camns = [self.cam_id2cam_no[cam_id] for cam_id in cam_ids_used]
-                                        this_observation_idxs = [first_idx_by_camn[camn] for camn in this_observation_camns] # zero idx
+                                        this_observation_idxs = [first_idx_by_cam_id[cam_id] for cam_id in cam_ids_used]
                                         ####################################
                                         #  Now join found point into Tracker
                                         if self.save_profiling_data:

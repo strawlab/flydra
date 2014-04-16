@@ -52,7 +52,7 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
         print
 
     # Convert to format accepted by find_best_3d()
-    found_data_dict,first_idx_by_camn = convert_format(
+    found_data_dict,first_idx_by_cam_id = convert_format(
         frame_data,
         camn2cam_id,
         area_threshold=area_threshold)
@@ -130,9 +130,8 @@ option to this program.
             this_observation_camns = [
                 cam_id2camn[cam_id] for cam_id in cam_ids_used]
 
-            # zero idx
             this_observation_idxs = [
-                first_idx_by_camn[camn] for camn in this_observation_camns]
+                first_idx_by_cam_id[cam_id] for cam_id in cam_ids_used]
 
             if debug>5:
                 print 'this_observation_camns',this_observation_camns
