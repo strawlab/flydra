@@ -426,11 +426,15 @@ def get_time_model_from_data(results,debug=False,full_output=False):
     parsed = read_textlog_header(results)
 
     flydra_version = parsed.get('flydra_version','0.0.0')
+    try:
+        fv = StrictVersion(flydra_version)
+    except ValueError:
+        fv = StrictVersion('0.5.2')
 
     if 'top' in parsed:
         # get the timer top value
         timer_max = int( parsed['top'] )
-    elif StrictVersion(flydra_version) >= StrictVersion('0.5.2'):
+    elif fv >= StrictVersion('0.5.2'):
         timer_max = 255
     else:
         return None
