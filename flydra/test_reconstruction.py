@@ -248,6 +248,10 @@ def check_online_reconstruction(with_water=False, duration=1.0, fps=120.0):
 
 
     for framenumber, orig_timestamp in enumerate(orig_timestamps):
+        # frame 0 - first 2D coordinates
+        # frame 1 - synchronization
+        # frame 2 - first saveable data
+
         timestamp = time.time()
         with time_lock:
             time_dict[framenumber]=timestamp
@@ -292,6 +296,16 @@ def check_online_reconstruction(with_water=False, duration=1.0, fps=120.0):
             port = ports[cam_id]
             sender.sendto(buf,(MB_HOSTNAME,port))
         time.sleep( dt )
+
+        with coord_processor.tracker_lock:
+            results = [tro.get_most_recent_data() \
+                       for tro in coord_processor.tracker.live_tracked_objects]
+            assert len(results)==1
+            obj_id, xhat, P = results[0]
+            expected = np.array([D[dim][framenumber] for dim in 'xyz'])
+            actual = xhat[:3]
+            assert np.allclose(actual,expected,rtol=1e-2,atol=1e-2)
+
         if not coord_processor.is_alive():
             break
 
