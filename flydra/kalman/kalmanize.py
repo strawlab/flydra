@@ -285,22 +285,22 @@ class KalmanSaver:
         obj_id_array = numpy.empty(
             observations_frames.shape, dtype=numpy.uint32)
         obj_id_array.fill(self.obj_id)
-        observations_data = numpy.array(
-            tro.observations_data, dtype=numpy.float32)
-        observations_Lcoords = numpy.array(
-            tro.observations_Lcoords, dtype=numpy.float32)
-        list_of_obs = [observations_data[:,i]
-                       for i in range(observations_data.shape[1])]
-        list_of_lines = [observations_Lcoords[:,i]
-                         for i in range(observations_Lcoords.shape[1])]
+        MLE_position = numpy.array(
+            tro.MLE_position, dtype=numpy.float32)
+        MLE_Lcoords = numpy.array(
+            tro.MLE_Lcoords, dtype=numpy.float32)
+        list_of_pos = [MLE_position[:,i]
+                       for i in range(MLE_position.shape[1])]
+        list_of_lines = [MLE_Lcoords[:,i]
+                         for i in range(MLE_Lcoords.shape[1])]
         array_list = ([obj_id_array,observations_frames]+
-                      list_of_obs+[this_idxs]+list_of_lines)
+                      list_of_pos+[this_idxs]+list_of_lines)
         obs_recarray = numpy.rec.fromarrays(
             array_list, names = self.h5_obs_names)
         if 1:
             # End tracking at last non-nan observation (must be > 1
             # camera for final points).
-            idx = numpy.nonzero(~numpy.isnan(observations_data))[0][-1]
+            idx = numpy.nonzero(~numpy.isnan(MLE_position))[0][-1]
             last_observation_frame = observations_frames[idx]
         else:
             # End tracking at last observation (can be 1 camera for

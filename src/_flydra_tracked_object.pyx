@@ -6,10 +6,6 @@ cimport _fastgeom
 cimport _mahalanobis
 cimport _pmat_jacobian
 
-# NOTE: 'observations_meters' is not the observation vector for an EKF
-# based tracker. 'observations_meters' is really just the ML estimate
-# of target position based on the camera image detections.
-
 import numpy
 import numpy as np
 import time, sys
@@ -138,8 +134,6 @@ cdef class TrackedObject:
     """
     Track one object using a Kalman filter.
 
-    TrackedObject handles all internal units in meters, but external interfaces are original units
-
     """
     cdef readonly long current_frameno
     cdef readonly long last_frameno_with_data
@@ -152,7 +146,7 @@ cdef class TrackedObject:
     cdef double max_variance
     cdef object ekf_observation_covariance_pixels
 
-    cdef readonly object frames, xhats, timestamps, Ps, observations_data, observations_Lcoords
+    cdef readonly object frames, xhats, timestamps, Ps, MLE_position, MLE_Lcoords
     cdef readonly object observations_frames, observations_2d
     cdef int disable_image_stat_gating, orientation_consensus
     cdef object fake_timestamp
@@ -163,8 +157,8 @@ cdef class TrackedObject:
                  reconstructor, # the Reconstructor instance
                  obj_id,
                  long frame, # frame number of first data
-                 first_observation_orig_units, # first data
-                 first_observation_Lcoords_orig_units, # first data
+                 obs0_position, # first data
+                 obs0_Lcoords, # first data
                  first_observation_camns,
                  first_observation_idxs,
                  kalman_model=None,
@@ -179,10 +173,10 @@ cdef class TrackedObject:
 
         arguments
         =========
-        reconstructor - reconstructor instance with internal units of meters
+        reconstructor - reconstructor instance
         obj_id - unique identifier for each object
         frame - frame number of first observation data
-        first_observation_orig_units - first observation (in arbitrary units)
+        obs0_position - first observation (in arbitrary units)
         kalman_model - Kalman parameters
         area_threshold - minimum area to consider for tracking use
         """
@@ -199,18 +193,17 @@ cdef class TrackedObject:
 
         self.current_frameno = frame
         self.last_frameno_with_data = frame
-        first_observation_meters = first_observation_orig_units
-        if first_observation_Lcoords_orig_units is None:
-            first_observation_Lcoords = NO_LCOORDS
+        obs0_position = obs0_position
+        if obs0_Lcoords is None:
+            obs0_Lcoords = NO_LCOORDS
         else:
-            line3d_orig_units = flydra.geom.line_from_HZline(first_observation_Lcoords_orig_units) # PlueckerLine instance
-            loc = line3d_orig_units.closest() # closest point on line to origin
-            loc_meters = loc
-            line3d_meters = flydra.geom.line_from_points( loc_meters, loc_meters+line3d_orig_units.direction() )
-            first_observation_Lcoords = line3d_meters.to_hz()
+            PL_line3d = flydra.geom.line_from_HZline(obs0_Lcoords) # PlueckerLine instance
+            loc = PL_line3d.closest() # closest point on line to origin
+            line3d = flydra.geom.line_from_points( loc, loc+PL_line3d.direction() )
+            obs0_Lcoords = line3d.to_hz()
         ss = kalman_model['ss']
         initial_x = numpy.zeros( (ss,) )
-        initial_x[:3] = first_observation_meters
+        initial_x[:3] = obs0_position
         P_k1=numpy.eye(ss) # initial state error covariance guess
         for i in range(0,3):
             P_k1[i,i]=kalman_model['initial_position_covariance_estimate']
@@ -250,8 +243,8 @@ cdef class TrackedObject:
         self.Ps = [P_k1]
 
         self.observations_frames = [frame]
-        self.observations_data = [first_observation_meters]
-        self.observations_Lcoords = [first_observation_Lcoords]
+        self.MLE_position = [obs0_position]
+        self.MLE_Lcoords = [obs0_Lcoords]
 
         first_observations_2d_pre = [[camn,idx] for camn,idx in zip(first_observation_camns,first_observation_idxs)]
         first_observations_2d = []
@@ -276,14 +269,14 @@ cdef class TrackedObject:
                 sys.stdout.write( ' '.join(map(str,['  ',i,self.frames[i],self.xhats[i][:3],this_Pmean,])) )
                 if self.frames[i] in self.observations_frames:
                     j =  self.observations_frames.index(  self.frames[i] )
-                    sys.stdout.write( '%s\n'%self.observations_data[j] )
+                    sys.stdout.write( '%s\n'%self.MLE_position[j] )
                 else:
                     sys.stdout.write('\n')
             sys.stdout.write('\n')
         elif level > 2:
-            sys.stdout.write('%d observations, %d estimates for %s\n'%(len(self.xhats),len(self.observations_data),self))
+            sys.stdout.write('%d observations, %d estimates for %s\n'%(len(self.xhats),len(self.MLE_position),self))
 
-    def distance_in_meters_and_nsigma( self, testx ):
+    def get_distance_and_nsigma( self, testx ):
         xhat = self.xhats[-1][:3]
 
         dist2 = numpy.sum((testx-xhat)**2) # distance squared
@@ -367,14 +360,14 @@ cdef class TrackedObject:
                 print
 
             # Step 2. Filter incoming 2D data to use informative points (data association)
-            (observation_meters, Lcoords, used_camns_and_idxs,
+            (position_MLE, Lcoords, used_camns_and_idxs,
              cam_ids_and_points2d,
              all_close_camn_pt_idxs) = self._filter_data(xhatminus, Pminus,
                                                          data_dict,
                                                          camn2cam_id,
                                                          debug=debug1)
             if debug1>2:
-                print 'position MLE, used_camns_and_idxs',observation_meters,used_camns_and_idxs
+                print 'position MLE, used_camns_and_idxs',position_MLE,used_camns_and_idxs
                 print 'Lcoords (3D body orientation) : %s'%str(Lcoords)
 
             # Step 3. Incorporate observation to estimate a posteriori
@@ -393,7 +386,7 @@ cdef class TrackedObject:
             else:
                 xhat, P = self.my_kalman.step2__calculate_a_posteriori(
                     xhatminus, Pminus,
-                    y=observation_meters)
+                    y=position_MLE)
 
             # calculate mean variance of x y z position (assumes first three components of state vector are position)
 
@@ -430,14 +423,14 @@ cdef class TrackedObject:
                 self.timestamps.append(self.fake_timestamp)
             self.Ps.append( P )
 
-            if observation_meters is not None:
+            if position_MLE is not None:
                 self.last_frameno_with_data = frame
                 self.observations_frames.append( frame )
-                self.observations_data.append( observation_meters )
+                self.MLE_position.append( position_MLE )
                 if Lcoords is None:
-                    self.observations_Lcoords.append( NO_LCOORDS )
+                    self.MLE_Lcoords.append( NO_LCOORDS )
                 else:
-                    self.observations_Lcoords.append( Lcoords )
+                    self.MLE_Lcoords.append( Lcoords )
                 this_observations_2d = []
                 for (camn, frame_pt_idx, dd_idx) in used_camns_and_idxs:
                     this_observations_2d.extend( [camn,frame_pt_idx] )
@@ -468,8 +461,8 @@ cdef class TrackedObject:
         self.Ps.pop()
         if self.observations_frames[-1] == frame:
             self.observations_frames.pop()
-            self.observations_data.pop()
-            self.observations_Lcoords.pop()
+            self.MLE_position.pop()
+            self.MLE_Lcoords.pop()
             self.observations_2d.pop()
 
         # reset self.my_kalman
@@ -501,7 +494,7 @@ cdef class TrackedObject:
         cdef double pt_area, mean_val, sumsqf_val, area
         cdef int cur_val
         cdef int camn, frame_pt_idx
-        cdef _fastgeom.PlueckerLine projected_line_meters
+        cdef _fastgeom.PlueckerLine projected_line
         cdef _fastgeom.ThreeTuple best_3d_location
 
         all_close_camn_pt_idxs = [] # store all "maybes"
@@ -548,7 +541,7 @@ cdef class TrackedObject:
 
             Pminus_inv = None # defer inverting Pminus until necessary.
 
-            for idx,(pt_undistorted,projected_line_meters) in enumerate(
+            for idx,(pt_undistorted,projected_line) in enumerate(
                 candidate_point_list):
 
                 # Iterate over each candidate point. Each point has:
@@ -608,7 +601,7 @@ cdef class TrackedObject:
                         if Pminus_inv is None:
                             Pminus_inv = numpy.linalg.inv( Pminus[:3,:3] )
                         best_3d_location = _mahalanobis.line_fit_3d(
-                            projected_line_meters, fast_prediction_3d, Pminus_inv )
+                            projected_line, fast_prediction_3d, Pminus_inv )
 
                         # find closest distance between projected_line and predicted position for each 2d point
                         #   squared distance between prediction and camera ray
@@ -648,7 +641,7 @@ cdef class TrackedObject:
                     print '       (not acceptable)'
 
             if closest_idx is not None:
-                pt_undistorted, projected_line_meters = candidate_point_list[closest_idx]
+                pt_undistorted, projected_line = candidate_point_list[closest_idx]
                 area = pt_undistorted[PT_TUPLE_IDX_AREA]
                 if area >= self.area_threshold_for_orientation:
                     # with orientation
@@ -682,14 +675,14 @@ cdef class TrackedObject:
         # Now cam_ids_and_points2d has just the 2d points we'll use for this reconstruction
         if len(cam_ids_and_points2d)==1:
             # keep 3D "observation" because we need to save 2d observations
-            observation_meters = numpy.nan*numpy.ones( (3,))
+            position_MLE = numpy.nan*numpy.ones( (3,))
         elif len(cam_ids_and_points2d)>=2:
-            observation_meters, Lcoords = self.reconstructor.find3d(
+            position_MLE, Lcoords = self.reconstructor.find3d(
                 cam_ids_and_points2d, return_line_coords = True,
                 orientation_consensus=self.orientation_consensus)
         else:
-            observation_meters = None
-        return (observation_meters, Lcoords, used_camns_and_idxs,
+            position_MLE = None
+        return (position_MLE, Lcoords, used_camns_and_idxs,
                 cam_ids_and_points2d, all_close_camn_pt_idxs)
 
     def get_most_recent_data(self):

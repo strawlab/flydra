@@ -67,7 +67,7 @@ class Tracker:
         X = Xmm
         min_dist_to_believe_new_meters = self.kalman_model['min_dist_to_believe_new_meters']
         min_dist_to_believe_new_nsigma = self.kalman_model['min_dist_to_believe_new_sigma']
-        results = [ tro.distance_in_meters_and_nsigma(X) for tro in self.live_tracked_objects]
+        results = [ tro.get_distance_and_nsigma(X) for tro in self.live_tracked_objects]
         for (dist_meters, dist_nsigma) in results:
             if debug>5:
                 print 'distance in meters, nsigma:',dist_meters, dist_nsigma
