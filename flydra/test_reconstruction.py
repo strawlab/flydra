@@ -19,7 +19,7 @@ MB_HOSTNAME = 'localhost'
 CAM_HOSTNAME = 'localhost'
 SPINUP_DURATION = 0.2
 
-def setup_data(with_water=False, duration=1.0, fps=120.0):
+def setup_data(with_water=False, duration=1.0, fps=120.0, with_orientation=False):
     # generate fake trajectory
     dt = 1/fps
     t = np.arange(0.0, duration, dt)
@@ -59,18 +59,34 @@ def setup_data(with_water=False, duration=1.0, fps=120.0):
         wateri = water.WaterInterface()
         reconstructor.add_water(wateri)
 
-    data2d = {}
+    data2d = {'2d_pos_by_cam_ids':{},
+              '2d_slope_by_cam_ids':{},
+              }
     for camn,cam in enumerate(cams):
         cam_id = cam.name
         assert cam_id!='t'
 
         if with_water:
-            data2d[cam_id] = water.view_points_in_water( reconstructor,
-                                                         cam_id, pts, wateri).T
+            center_2d = water.view_points_in_water( reconstructor,
+                                                    cam_id, pts, wateri).T
         else:
-            data2d[cam_id] = cam.project_3d_to_pixel(pts)
+            center_2d = cam.project_3d_to_pixel(pts)
 
+        data2d['2d_pos_by_cam_ids'][cam_id] = center_2d
 
+        if with_orientation:
+            dx = np.gradient( center_2d[:,0] )
+            dy = np.gradient( center_2d[:,1] )
+            slope = np.arctan2( dy, dx )
+            print 'slope.shape',slope.shape
+            data2d['2d_slope_by_cam_ids'][cam_id] = slope
+        else:
+            data2d['2d_slope_by_cam_ids'][cam_id] = np.zeros( (len(data2d['2d_pos_by_cam_ids'][cam_id]), ))
+
+    if with_orientation:
+        eccentricity=20.0
+    else:
+        eccentricity=0.0
 
     data2d['t'] = t
     result = dict(data2d=data2d,
@@ -79,17 +95,21 @@ def setup_data(with_water=False, duration=1.0, fps=120.0):
                   x=x,
                   y=y,
                   z=z,
-#                  cam_system=cam_system,
+                  eccentricity=eccentricity,
                   )
     return result
 
 def test_offline_reconstruction():
     for use_kalman_smoothing in [False, True]:
-        for with_water in [False, True]:
-            yield check_offline_reconstruction, with_water, use_kalman_smoothing
+        for with_orientation in [False, True]:
+            for with_water in [False, True]:
+                yield check_offline_reconstruction, with_water, use_kalman_smoothing, with_orientation
 
-def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, duration=1.0, fps=120.0):
-    D = setup_data(with_water=with_water, duration=duration, fps=fps)
+def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, with_orientation=False, duration=1.0, fps=120.0):
+    D = setup_data( duration=duration, fps=fps,
+                    with_water=with_water,
+                    with_orientation=with_orientation,
+                    )
 
     data2d_fname = tempfile.mktemp(suffix='-data2d.h5')
     to_unlink = [data2d_fname]
@@ -98,6 +118,7 @@ def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, d
                                             data2d=D['data2d'],
                                             fps=fps,
                                             reconstructor=D['reconstructor'],
+                                            eccentricity=D['eccentricity'],
                                             )
 
         data3d_fname = tempfile.mktemp(suffix='-data3d.h5')
@@ -194,10 +215,17 @@ class FakeMainBrain:
 
 def test_online_reconstruction():
     for with_water in [False]:#, True]:
-        yield check_online_reconstruction, with_water
+        for with_orientation in [False,True]:
+            yield check_online_reconstruction, with_water, with_orientation
 
-def check_online_reconstruction(with_water=False, duration=1.0, fps=120.0):
-    D = setup_data(with_water=with_water, duration=duration, fps=fps)
+def check_online_reconstruction(with_water=False,
+                                with_orientation=False,
+                                duration=1.0, fps=120.0,
+                                ):
+    D = setup_data( duration=duration, fps=fps,
+                    with_water=with_water,
+                    with_orientation=with_orientation,
+                    )
 
     time_lock = threading.Lock()
     time_dict = {}
@@ -236,9 +264,12 @@ def check_online_reconstruction(with_water=False, duration=1.0, fps=120.0):
 
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     area = 1.0
-    slope = 1.0
-    eccentricity = 0.0
-    line_found,slope_found = [0.0]*2
+    if D['eccentricity']:
+        line_found = True
+        slope_found = True
+    else:
+        line_found = False
+        slope_found = False
     ray_valid = True
     cur_val, mean_val, sumsqf_val = (100.0, 2.0, 3.0)
     rise, run = np.nan, np.nan
@@ -256,10 +287,11 @@ def check_online_reconstruction(with_water=False, duration=1.0, fps=120.0):
         with time_lock:
             time_dict[framenumber]=timestamp
 
-        for cam_id in data2d:
+        for cam_id in data2d['2d_pos_by_cam_ids']:
             scc = R.get_SingleCameraCalibration(cam_id)
             camn_received_time = timestamp
-            pt_x,pt_y = data2d[cam_id][framenumber]
+            pt_x,pt_y = data2d['2d_pos_by_cam_ids'][cam_id][framenumber]
+            slope = data2d['2d_slope_by_cam_ids'][cam_id][framenumber]
             cam = R.get_SingleCameraCalibration(cam_id)
             if 0 <= pt_x < cam.res[0] and 0 <= pt_y < cam.res[1]:
                 n_pts = 1
@@ -281,7 +313,7 @@ def check_online_reconstruction(with_water=False, duration=1.0, fps=120.0):
                     pt_x,pt_y,
                     rise, run)
 
-                pt = (pt_x,pt_y,area,slope,eccentricity,
+                pt = (pt_x,pt_y,area,slope,D['eccentricity'],
                       p1,p2,p3,p4,line_found,slope_found,
                       x_undistorted,y_undistorted,
                       ray_valid,

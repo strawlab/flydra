@@ -40,7 +40,7 @@ def startup_message(h5textlog, fps):
 
     h5textlog.flush()
 
-def save_data( fname, data2d, reconstructor, fps ):
+def save_data( fname, data2d, reconstructor, fps, eccentricity ):
     assert isinstance(reconstructor, Reconstructor)
     with PT.openFile(fname,
                      mode="w",
@@ -56,13 +56,12 @@ def save_data( fname, data2d, reconstructor, fps ):
 
 
         t=data2d['t']
-        del data2d['t']
 
         h5cam_info = ct(root,'cam_info', CamSyncInfo, "Cam Sync Info")
         cam_info_row = h5cam_info.row
 
         cam_id2camn = {}
-        for camn, cam_id in enumerate(data2d.keys()):
+        for camn, cam_id in enumerate(data2d['2d_pos_by_cam_ids'].keys()):
             cam_id2camn[cam_id] = camn
             cam_info_row['camn'] = camn
             cam_info_row['cam_id'] = cam_id
@@ -74,8 +73,9 @@ def save_data( fname, data2d, reconstructor, fps ):
         frame_pt_idx = 0
         for frame in range(len(t)):
             timestamp = t[frame]
-            for cam_id in data2d.keys():
-                pt2d = data2d[cam_id][frame]
+            for cam_id in data2d['2d_pos_by_cam_ids'].keys():
+                pt2d = data2d['2d_pos_by_cam_ids'][cam_id][frame]
+                slope = data2d['2d_slope_by_cam_ids'][cam_id][frame]
 
                 camn = cam_id2camn[cam_id]
 
@@ -86,8 +86,8 @@ def save_data( fname, data2d, reconstructor, fps ):
                 detection['x']=pt2d[0]
                 detection['y']=pt2d[1]
                 detection['area']=1
-                detection['slope']=0
-                detection['eccentricity']=0
+                detection['slope']=slope
+                detection['eccentricity']=eccentricity
                 detection['frame_pt_idx']=frame_pt_idx
 
                 # fake values
