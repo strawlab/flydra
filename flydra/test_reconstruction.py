@@ -214,7 +214,7 @@ class FakeMainBrain:
         return corrected_framenumber, did_frame_offset_change
 
 def test_online_reconstruction():
-    for with_water in [False]:#, True]:
+    for with_water in [False, True]:
         for with_orientation in [False,True]:
             yield check_online_reconstruction, with_water, with_orientation
 
@@ -277,6 +277,7 @@ def check_online_reconstruction(with_water=False,
     dt = 1.0/fps
     time.sleep(SPINUP_DURATION)
 
+    errors = []
 
     for framenumber, orig_timestamp in enumerate(orig_timestamps):
         # frame 0 - first 2D coordinates
@@ -336,7 +337,7 @@ def check_online_reconstruction(with_water=False,
             obj_id, xhat, P = results[0]
             expected = np.array([D[dim][framenumber] for dim in 'xyz'])
             actual = xhat[:3]
-            assert np.allclose(actual,expected,rtol=1e-2,atol=1e-2)
+            errors.append( np.sqrt(np.sum((expected-actual)**2)) )
 
         if not coord_processor.is_alive():
             break
@@ -351,6 +352,14 @@ def check_online_reconstruction(with_water=False,
     coord_processor.join()
     if not coord_processor.did_quit_successfully:
         raise RuntimeError('coordinate processor thread had error')
+
+    mean_error = np.mean(errors)
+    assert len(errors) == len(orig_timestamps)
+
+    # We should have very low error
+    assert mean_error < 0.02, ('mean error was %.3f, '
+                              'but should have been < 0.02.'%(
+        mean_error,))
 
 if __name__=='__main__':
     for test_func in [test_online_reconstruction, test_offline_reconstruction]:
