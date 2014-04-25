@@ -66,31 +66,16 @@ class CoordRealReceiver(threading.Thread):
     def __init__(self,hostname,quit_event):
         self.hostname = hostname
         self.quit_event = quit_event
-        self.socket_lock = threading.Lock()
 
         self.out_queue = Queue.Queue()
-        with self.socket_lock:
-            self.listen_sockets = {}
 
-        threading.Thread.__init__(self,name='CoordRealReceiver thread')
-
-    def add_socket(self, cam_id):
         sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sockobj.bind((self.hostname, 0))
-        sockobj.setblocking(0)
-        with self.socket_lock:
-            self.listen_sockets[sockobj]=cam_id
-            _,port = sockobj.getsockname()
 
-        return port
+        self.listen_socket = sockobj
+        _,self.port = sockobj.getsockname()
 
-    def remove_socket(self,cam_id):
-        with self.socket_lock:
-            for sockobj, test_cam_id in self.listen_sockets.iteritems():
-                if cam_id == test_cam_id:
-                    sockobj.close()
-                    del self.listen_sockets[sockobj]
-                    break # XXX naughty to delete item inside iteration
+        threading.Thread.__init__(self,name='CoordRealReceiver thread')
 
     def get_data(self,timeout):
         Q = self.out_queue
@@ -106,31 +91,9 @@ class CoordRealReceiver(threading.Thread):
         return L
 
     def run(self):
-        timeout=.1
-        empty_list = []
         while not self.quit_event.isSet():
-            with self.socket_lock:
-                listen_sockets = self.listen_sockets.keys()
-            try:
-                in_ready, out_ready, exc_ready = select.select( listen_sockets,
-                                                                empty_list, empty_list, timeout )
-            except select.error:
-                LOG.warn('select.error on listen socket, ignoring...')
-            except socket.error:
-                LOG.warn('socket.error on listen socket, ignoring...')
-            else:
-                if not len(in_ready):
-                    continue
-
-                # now gather all data waiting on the sockets
-
-                for sockobj in in_ready:
-                    with self.socket_lock:
-                        cam_id = self.listen_sockets[sockobj]
-
-                    data, addr = sockobj.recvfrom(4096)
-
-                    self.out_queue.put(data)
+            data, addr = self.listen_socket.recvfrom(4096)
+            self.out_queue.put(data)
 
 class RealtimeROSSenderThread(threading.Thread):
     """a class to send realtime data from a separate thread"""
@@ -219,7 +182,7 @@ class CoordinateProcessor(threading.Thread):
         self.general_save_info = {}
 
         self.realreceiver = CoordRealReceiver(self.hostname, self.quit_event)
-        self.realreceiver.setDaemon(True)
+        self.realreceiver.daemon = True
         self.realreceiver.start()
 
         self.queue_realtime_ros_packets = Queue.Queue()
@@ -362,7 +325,7 @@ class CoordinateProcessor(threading.Thread):
 
             # create and bind socket to listen to. add_socket uses an ephemerial
             # socket (i.e. the OS assigns a high and free port for us)
-            cam2mainbrain_data_port =self.realreceiver.add_socket(cam_id)
+            cam2mainbrain_data_port =self.realreceiver.port
             self.cam2mainbrain_data_ports.append( cam2mainbrain_data_port )
 
             # find absolute_cam_no
@@ -386,7 +349,6 @@ class CoordinateProcessor(threading.Thread):
             del self.cam_ids[cam_idx]
             del self.cam2mainbrain_data_ports[cam_idx]
             del self.absolute_cam_nos[cam_idx]
-            self.realreceiver.remove_socket(cam_id)
             del self.last_timestamps[cam_idx]
             del self.last_framenumbers_delay[cam_idx]
             del self.last_framenumbers_skip[cam_idx]
