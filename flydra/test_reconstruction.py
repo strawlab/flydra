@@ -322,7 +322,7 @@ def check_online_reconstruction(with_water=False,
             else:
                 n_pts = 0
             n_frames_skipped = 0
-            header = (timestamp, camn_received_time, framenumber,
+            header = (cam_id,timestamp, camn_received_time, framenumber,
                       n_pts,n_frames_skipped)
             header_buf = struct.pack(header_fmt,*header)
             if n_pts:

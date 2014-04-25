@@ -130,7 +130,7 @@ class CoordRealReceiver(threading.Thread):
 
                     data, addr = sockobj.recvfrom(4096)
 
-                    self.out_queue.put((cam_id, data ))
+                    self.out_queue.put(data)
 
 class RealtimeROSSenderThread(threading.Thread):
     """a class to send realtime data from a separate thread"""
@@ -482,6 +482,7 @@ class CoordinateProcessor(threading.Thread):
 
         #true when mainbrain first starting
         self.main_brain.trigger_device.wait_for_estimate()
+        buf_data = ''
 
         while not self.quit_event.isSet():
             incoming_2d_data = self.realreceiver.get_data(0.1) # blocks for max 0.1 sec
@@ -496,28 +497,29 @@ class CoordinateProcessor(threading.Thread):
 
             with self.all_data_lock:
                 deferred_2d_data = []
-                for cam_id, newdata in incoming_2d_data:
+                for new_data_buf in incoming_2d_data:
 
-                    cam_idx = self.cam_ids.index(cam_id)
-                    absolute_cam_no = self.absolute_cam_nos[cam_idx]
+                    buf_data += new_data_buf
 
-                    data = newdata
-
-                    while len(data):
-                        header = data[:header_size]
+                    while len(buf_data):
+                        header = buf_data[:header_size]
                         if len(header) != header_size:
                             # incomplete header buffer
                             break
                         # this raw_timestamp is the remote camera's timestamp (?? from the driver, not the host clock??)
-                        (raw_timestamp, camn_received_time, raw_framenumber,
+                        (cam_id, raw_timestamp, camn_received_time, raw_framenumber,
                          n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
+
+                        cam_idx = self.cam_ids.index(cam_id)
+                        absolute_cam_no = self.absolute_cam_nos[cam_idx]
+
                         if BENCHMARK_GATHER:
                             incoming_remote_received_timestamps.append( camn_received_time )
 
                         points_in_pluecker_coords_meters = []
                         points_undistorted = []
                         points_distorted = []
-                        if len(data) < header_size + n_pts*pt_size:
+                        if len(buf_data) < header_size + n_pts*pt_size:
                             # incomplete point info
                             break
                         predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip[cam_idx] + 1
@@ -563,7 +565,7 @@ class CoordinateProcessor(threading.Thread):
                                  ray_valid,
                                  ray0, ray1, ray2, ray3, ray4, ray5, # pluecker coords from cam center to detected point
                                  cur_val, mean_val, sumsqf_val,
-                                 )= struct.unpack(pt_fmt,data[start:end])
+                                 )= struct.unpack(pt_fmt,buf_data[start:end])
                                 # nan cannot get sent across network in platform-independent way
                                 if not line_found:
                                     p1,p2,p3,p4 = nan,nan,nan,nan
@@ -599,7 +601,7 @@ class CoordinateProcessor(threading.Thread):
                             # timestamps with frame number
                             points_distorted.append( no_point_tuple )
                             points_undistorted.append( no_point_tuple )
-                        data = data[end:]
+                        buf_data = buf_data[end:]
 
                         # ===================================================
 

@@ -6,7 +6,8 @@ timestamp_echo_fmt_diff = '<d'
 timestamp_echo_gatherer_port = 9993 # on MainBrain
 timestamp_echo_fmt2 = '<dd'
 
+cam_id_count = 30
 recv_pt_fmt = '<dddddddddBBddBddddddBdd'
-recv_pt_header_fmt = '<ddliI'
+recv_pt_header_fmt = '<%dpddliI'%(cam_id_count,)
 
 emulated_camera_control = 9645

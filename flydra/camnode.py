@@ -436,6 +436,8 @@ class ProcessCamClass(rospy.SubscribeListener):
         else:
             self.shortest_IFI = numpy.inf
         self.cam2mainbrain_port = cam2mainbrain_port
+        if len(cam_id) > (flydra.common_variables.cam_id_count-1):
+            raise ValueError('cam_id %r is too long'%cam_id)
         self.cam_id = cam_id
         self.log_message_queue = log_message_queue
 
@@ -1032,8 +1034,8 @@ class ProcessCamClass(rospy.SubscribeListener):
                     self.realtime_analyzer.clear_threshold = (
                         self.clear_threshold_shared.get_nowait() )
 
-                # XXX could speed this with a join operation I think
                 data = struct.pack(flydra.common_variables.recv_pt_header_fmt,
+                                   self.cam_id,
                                    timestamp,cam_received_time,
                                    framenumber,len(points),n_frames_skipped)
                 for point_tuple in points:
