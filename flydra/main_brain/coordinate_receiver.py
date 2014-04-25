@@ -268,8 +268,8 @@ class CoordinateProcessor(threading.Thread):
                 (tracked_object.obj_id,
                  tracked_object.frames, tracked_object.xhats, tracked_object.Ps,
                  tracked_object.timestamps,
-                 tracked_object.observations_frames, tracked_object.observations_data,
-                 tracked_object.observations_2d, tracked_object.observations_Lcoords,
+                 tracked_object.observations_frames, tracked_object.MLE_position,
+                 tracked_object.observations_2d, tracked_object.MLE_Lcoords,
                  ) )
         # send a ROS message that this object is dead
         this_ros_object = flydra_object(obj_id=tracked_object.obj_id,
