@@ -272,7 +272,6 @@ def check_online_reconstruction(with_water=False,
         slope_found = False
     ray_valid = True
     cur_val, mean_val, sumsqf_val = (100.0, 2.0, 3.0)
-    rise, run = np.nan, np.nan
 
     dt = 1.0/fps
     time.sleep(SPINUP_DURATION)
@@ -293,7 +292,17 @@ def check_online_reconstruction(with_water=False,
             camn_received_time = timestamp
             pt_x,pt_y = data2d['2d_pos_by_cam_ids'][cam_id][framenumber]
             slope = data2d['2d_slope_by_cam_ids'][cam_id][framenumber]
+
+            if np.isinf(slope):
+                run = 0.0
+                rise = 1.0
+            else:
+                run = 1.0
+                rise = slope
+
             cam = R.get_SingleCameraCalibration(cam_id)
+            cc = R.get_camera_center(cam_id)[:,0]
+            cc = np.array([cc[0],cc[1],cc[2],1.0])
             if 0 <= pt_x < cam.res[0] and 0 <= pt_y < cam.res[1]:
                 n_pts = 1
             else:
@@ -310,7 +319,7 @@ def check_online_reconstruction(with_water=False,
                  ray5) = flydra.reconstruct.do_3d_operations_on_2d_point(
                     scc.helper,x_undistorted,y_undistorted,
                     scc.pmat_inv,
-                    scc.get_cam_center(),
+                    cc,
                     pt_x,pt_y,
                     rise, run)
 
