@@ -18,6 +18,7 @@ from flydra.main_brain.coordinate_receiver import CoordinateProcessor
 MB_HOSTNAME = 'localhost'
 CAM_HOSTNAME = 'localhost'
 SPINUP_DURATION = 0.2
+MAX_MEAN_ERROR = 0.002
 
 def setup_data(with_water=False, duration=1.0, fps=120.0, with_orientation=False):
     # generate fake trajectory
@@ -169,10 +170,8 @@ def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, w
                                  (D['z']-z_actual)**2))
 
     # We should have very low error
-    assert mean_error < 0.02, ('mean error was %.3f, '
-                              'but should have been < 0.02.'%(
-        mean_error,))
-
+    fudge = 2 if use_kalman_smoothing else 1
+    assert mean_error < fudge*MAX_MEAN_ERROR
 
 class FakeTriggerDevice():
     def __init__(self,time_lock,time_dict):
@@ -382,9 +381,7 @@ def check_online_reconstruction(with_water=False,
     assert len(errors)+num_sync_frames == len(orig_timestamps)
 
     # We should have very low error
-    assert mean_error < 0.02, ('mean error was %.3f, '
-                              'but should have been < 0.02.'%(
-        mean_error,))
+    assert mean_error < MAX_MEAN_ERROR
 
 if __name__=='__main__':
     # test online reconstruction
