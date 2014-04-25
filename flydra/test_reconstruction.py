@@ -337,7 +337,9 @@ def check_online_reconstruction(with_water=False,
 
             port = ports[cam_id]
             sender.sendto(buf,(MB_HOSTNAME,port))
-        time.sleep( dt )
+        if framenumber < 2:
+            # give a chance for coord reciever to synchronize
+            time.sleep( dt )
 
         with coord_processor.tracker_lock:
             results = [tro.get_most_recent_data() \
@@ -352,11 +354,10 @@ def check_online_reconstruction(with_water=False,
             break
 
     # we put all our data into the queue already
-    time.sleep(0.1)
     while 1:
+        time.sleep(0.1)
         if coord_processor.realreceiver.out_queue.empty():
             break
-        time.sleep(0.1)
     coord_processor.quit()
     coord_processor.join()
     if not coord_processor.did_quit_successfully:
