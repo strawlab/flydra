@@ -108,10 +108,6 @@ class CoordRealReceiver(threading.Thread):
     def run(self):
         timeout=.1
         empty_list = []
-        BENCHMARK_2D_GATHER = False
-        if BENCHMARK_2D_GATHER:
-            header_fmt = flydra.common_variables.recv_pt_header_fmt
-            header_size = struct.calcsize(header_fmt)
         while not self.quit_event.isSet():
             with self.socket_lock:
                 listen_sockets = self.listen_sockets.keys()
@@ -134,16 +130,6 @@ class CoordRealReceiver(threading.Thread):
 
                     data, addr = sockobj.recvfrom(4096)
 
-                    if BENCHMARK_2D_GATHER:
-                        header = data[:header_size]
-                        if len(header) != header_size:
-                            # incomplete header buffer
-                            break
-                        # this timestamp is the remote camera's timestamp
-                        (timestamp, camn_received_time, framenumber,
-                         n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
-                        recv_latency_msec = (time.time()-camn_received_time)*1e3
-                        LOG.info('recv_latency_msec % 3.1f'%recv_latency_msec)
                     self.out_queue.put((cam_id, data ))
 
 class RealtimeROSSenderThread(threading.Thread):
