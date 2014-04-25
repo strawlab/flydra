@@ -382,11 +382,6 @@ def check_online_reconstruction(with_water=False,
     n_frames = framenumber-num_sync_frames
     fps = n_frames/(t_stop-t_start)
 
-    # we put all our data into the queue already
-    while 1:
-        time.sleep(0.1)
-        if coord_processor.realreceiver.out_queue.empty():
-            break
     coord_processor.quit()
     coord_processor.join()
     if not coord_processor.did_quit_successfully:

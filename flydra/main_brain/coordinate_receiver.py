@@ -61,40 +61,6 @@ PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
 PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
 
-class CoordRealReceiver(threading.Thread):
-    # called from CoordinateProcessor thread
-    def __init__(self,hostname,quit_event):
-        self.hostname = hostname
-        self.quit_event = quit_event
-
-        self.out_queue = Queue.Queue()
-
-        sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sockobj.bind((self.hostname, 0))
-
-        self.listen_socket = sockobj
-        _,self.port = sockobj.getsockname()
-
-        threading.Thread.__init__(self,name='CoordRealReceiver thread')
-
-    def get_data(self,timeout):
-        Q = self.out_queue
-        L = []
-
-        try:
-            L.append( Q.get(1,timeout) ) # block=True
-            while 1:
-                # don't wait for next items, but collect them if they're there
-                L.append( Q.get_nowait() )
-        except Queue.Empty:
-            pass
-        return L
-
-    def run(self):
-        while not self.quit_event.isSet():
-            data, addr = self.listen_socket.recvfrom(4096)
-            self.out_queue.put(data)
-
 class RealtimeROSSenderThread(threading.Thread):
     """a class to send realtime data from a separate thread"""
     def __init__(self,ros_path,ros_klass,ros_send_array,queue,quit_event,name):
@@ -181,9 +147,18 @@ class CoordinateProcessor(threading.Thread):
 
         self.general_save_info = {}
 
-        self.realreceiver = CoordRealReceiver(self.hostname, self.quit_event)
-        self.realreceiver.daemon = True
-        self.realreceiver.start()
+        sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socket_timeout = True
+        if socket_timeout:
+            timeout_sec = 0 # in seconds
+            timeout_usec = 500000 # in microseconds
+            timeval=struct.pack("LL", timeout_sec, timeout_usec)
+            sockobj.setsockopt(socket.SOL_SOCKET, socket.SO_RCVTIMEO, timeval)
+        sockobj.bind((self.hostname, 0))
+
+
+        self.listen_socket = sockobj
+        _,self.listen_port = sockobj.getsockname()
 
         self.queue_realtime_ros_packets = Queue.Queue()
         self.tp = RealtimeROSSenderThread(
@@ -323,10 +298,7 @@ class CoordinateProcessor(threading.Thread):
         with self.all_data_lock:
             self.cam_ids.append(cam_id)
 
-            # create and bind socket to listen to. add_socket uses an ephemerial
-            # socket (i.e. the OS assigns a high and free port for us)
-            cam2mainbrain_data_port =self.realreceiver.port
-            self.cam2mainbrain_data_ports.append( cam2mainbrain_data_port )
+            self.cam2mainbrain_data_ports.append( self.listen_port )
 
             # find absolute_cam_no
             self.max_absolute_cam_nos += 1
@@ -340,7 +312,7 @@ class CoordinateProcessor(threading.Thread):
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
             self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no}
-        return cam2mainbrain_data_port
+        return self.listen_port
 
     def disconnect(self,cam_id):
         # called from Remote-API thread on camera disconnect
@@ -447,10 +419,14 @@ class CoordinateProcessor(threading.Thread):
         buf_data = ''
 
         while not self.quit_event.isSet():
-            incoming_2d_data = self.realreceiver.get_data(0.1) # blocks for max 0.1 sec
-            if not len(incoming_2d_data):
-                continue
-
+            try:
+                incoming_2d_data, _ = self.listen_socket.recvfrom(4096)
+            except socket.error as err:
+                if err.errno == 11:
+                    # no data ready. try again (after checking if we should quit).
+                    continue
+                else:
+                    raise
             new_data_framenumbers.clear()
 
             BENCHMARK_GATHER=False
@@ -459,9 +435,8 @@ class CoordinateProcessor(threading.Thread):
 
             with self.all_data_lock:
                 deferred_2d_data = []
-                for new_data_buf in incoming_2d_data:
-
-                    buf_data += new_data_buf
+                if 1:
+                    buf_data += incoming_2d_data
 
                     while len(buf_data):
                         header = buf_data[:header_size]
