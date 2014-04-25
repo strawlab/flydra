@@ -10,6 +10,7 @@ Options:
   --2d          Plot the 2D tracking latency
   --end-idx=N   Only show this many rows [default: 100000]
 """
+from __future__ import print_function
 from docopt import docopt
 
 import tables
@@ -21,6 +22,9 @@ import numpy as np
 import flydra.analysis.result_utils as result_utils
 
 def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000):
+    if do_3d_latency==False and do_2d_latency==False:
+        print('hmm, not plotting 3d or 2d data. nothing to do')
+        return
 
     with tables.openFile(fname, mode='r') as h5:
         if do_2d_latency:
