@@ -5,6 +5,7 @@ Usage:
 
 Options:
   -h --help     Show this screen.
+  --end-idx=N   Only show this many rows [default: 100000]
 """
 from docopt import docopt
 
@@ -32,8 +33,9 @@ def main():
     camns = camn2cam_id.keys()
 
     # read all data
-    d2d = results.root.data2d_distorted[:]
-    cam_info = results.root.cam_info[:]
+    end_idx=args['--end-idx']
+    d2d = results.root.data2d_distorted[:end_idx]
+    cam_info = results.root.cam_info[:end_idx]
     results.close()
 
     if 1:
