@@ -39,6 +39,8 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False):
 
     cams = []
     cams.append(  base.get_view_camera(eye=np.array((1.0,0.0,1.0)),lookat=lookat,up=up) )
+    cams.append(  base.get_view_camera(eye=np.array((1.2,3.4,5.6)),lookat=lookat,up=up) )
+    cams.append(  base.get_view_camera(eye=np.array((0,0.3,1.0)),lookat=lookat,up=up) )
 
     distortion1 = np.array( [0.2, 0.3, 0.1, 0.1, 0.1] )
     cam_wide = pymvg.CameraModel.load_camera_simple(name='cam_wide',
