@@ -2,6 +2,7 @@ import time
 import socket, struct
 import Queue, threading
 import tempfile, os
+import pprint
 
 import numpy as np
 
@@ -20,10 +21,10 @@ CAM_HOSTNAME = 'localhost'
 SPINUP_DURATION = 0.2
 MAX_MEAN_ERROR = 0.002
 
-def setup_data(with_water=False, duration=1.0, fps=120.0, with_orientation=False):
+def setup_data(with_water=False, fps=120.0, with_orientation=False):
     # generate fake trajectory
     dt = 1/fps
-    t = np.arange(0.0, duration, dt)
+    t = np.arange(0.0, 1.0, dt)
 
     x = 0.2*np.cos(t*0.9)
     y = 0.3*np.sin(t*0.7)
@@ -105,8 +106,8 @@ def test_offline_reconstruction():
             for with_water in [False, True]:
                 yield check_offline_reconstruction, with_water, use_kalman_smoothing, with_orientation
 
-def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, with_orientation=False, duration=1.0, fps=120.0):
-    D = setup_data( duration=duration, fps=fps,
+def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, with_orientation=False, fps=120.0):
+    D = setup_data( fps=fps,
                     with_water=with_water,
                     with_orientation=with_orientation,
                     )
@@ -218,9 +219,9 @@ def test_online_reconstruction():
 
 def check_online_reconstruction(with_water=False,
                                 with_orientation=False,
-                                duration=1.0, fps=120.0,
+                                fps=120.0,
                                 ):
-    D = setup_data( duration=duration, fps=fps,
+    D = setup_data( fps=fps,
                     with_water=with_water,
                     with_orientation=with_orientation,
                     )
@@ -367,6 +368,12 @@ def check_online_reconstruction(with_water=False,
         if not coord_processor.is_alive():
             break
 
+    t_start = time_dict[num_sync_frames]
+    t_stop = time_dict[framenumber]
+    dur = t_stop-t_start
+    n_frames = framenumber-num_sync_frames
+    fps = n_frames/(t_stop-t_start)
+
     # we put all our data into the queue already
     while 1:
         time.sleep(0.1)
@@ -382,11 +389,15 @@ def check_online_reconstruction(with_water=False,
 
     # We should have very low error
     assert mean_error < MAX_MEAN_ERROR
+    return {'fps':fps}
 
 if __name__=='__main__':
     # test online reconstruction
     for test_func in [test_online_reconstruction]:
+        rd = {}
         for args in test_func():
             func = args[0]
             this_args = args[1:]
-            func(*this_args)
+            result = func(*this_args)
+            rd[this_args]=result
+        pprint.pprint(rd)
