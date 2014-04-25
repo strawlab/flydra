@@ -280,6 +280,14 @@ def check_online_reconstruction(with_water=False,
     ray_valid = True
     cur_val, mean_val, sumsqf_val = (100.0, 2.0, 3.0)
 
+    centers = {}
+    sccs = {}
+    for cam_id in data2d['2d_pos_by_cam_ids']:
+        sccs[cam_id] = R.get_SingleCameraCalibration(cam_id)
+        cc = R.get_camera_center(cam_id)[:,0]
+        cc = np.array([cc[0],cc[1],cc[2],1.0])
+        centers[cam_id] = cc
+
     dt = 1.0/fps
     time.sleep(SPINUP_DURATION)
 
@@ -296,7 +304,7 @@ def check_online_reconstruction(with_water=False,
             time_dict[framenumber]=timestamp
 
         for cam_id in data2d['2d_pos_by_cam_ids']:
-            scc = R.get_SingleCameraCalibration(cam_id)
+            scc = sccs[cam_id]
             camn_received_time = timestamp
             pt_x,pt_y = data2d['2d_pos_by_cam_ids'][cam_id][framenumber]
             slope = data2d['2d_slope_by_cam_ids'][cam_id][framenumber]
@@ -308,10 +316,8 @@ def check_online_reconstruction(with_water=False,
                 run = 1.0
                 rise = slope
 
-            cam = R.get_SingleCameraCalibration(cam_id)
-            cc = R.get_camera_center(cam_id)[:,0]
-            cc = np.array([cc[0],cc[1],cc[2],1.0])
-            if 0 <= pt_x < cam.res[0] and 0 <= pt_y < cam.res[1]:
+            cc = centers[cam_id]
+            if 0 <= pt_x < scc.res[0] and 0 <= pt_y < scc.res[1]:
                 n_pts = 1
             else:
                 n_pts = 0
