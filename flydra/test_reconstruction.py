@@ -78,7 +78,6 @@ def setup_data(with_water=False, duration=1.0, fps=120.0, with_orientation=False
             dx = np.gradient( center_2d[:,0] )
             dy = np.gradient( center_2d[:,1] )
             slope = np.arctan2( dy, dx )
-            print 'slope.shape',slope.shape
             data2d['2d_slope_by_cam_ids'][cam_id] = slope
         else:
             data2d['2d_slope_by_cam_ids'][cam_id] = np.zeros( (len(data2d['2d_pos_by_cam_ids'][cam_id]), ))
@@ -246,6 +245,12 @@ def check_online_reconstruction(with_water=False,
     coord_processor.daemon = True
     coord_processor.start()
 
+    # quit the coordinate sender thread so we can intercept its queue
+    coord_processor.tp._quit_event = threading.Event()
+    coord_processor.tp._quit_event.set()
+    coord_processor.tp._queue.put('junk') # allow blocking call to finish
+    coord_processor.tp.join()
+
     ports = {}
     R = D['reconstructor']
     for cam_id in R.cam_ids:
@@ -277,7 +282,8 @@ def check_online_reconstruction(with_water=False,
     time.sleep(SPINUP_DURATION)
 
     errors = []
-
+    num_sync_frames = 2
+    obj_id = None
     for framenumber, orig_timestamp in enumerate(orig_timestamps):
         # frame 0 - first 2D coordinates
         # frame 1 - synchronization
@@ -337,17 +343,26 @@ def check_online_reconstruction(with_water=False,
 
             port = ports[cam_id]
             sender.sendto(buf,(MB_HOSTNAME,port))
-        if framenumber < 2:
-            # give a chance for coord reciever to synchronize
-            time.sleep( dt )
+        if framenumber < num_sync_frames:
+            # Before sync, we may not get data or it may be wrong, so
+            # ignore it. But wait dt seconds to ensure sychronization
+            # has enough time to run.
+            try:
+                coord_processor.queue_realtime_ros_packets.get(True,dt)
+            except Queue.Empty:
+                pass
 
-        with coord_processor.tracker_lock:
-            results = [tro.get_most_recent_data() \
-                       for tro in coord_processor.tracker.live_tracked_objects]
-            assert len(results)==1
-            obj_id, xhat, P = results[0]
+        else:
+
+            next = coord_processor.queue_realtime_ros_packets.get()
+            assert len(next.objects)==1
+            o1 = next.objects[0]
+            if obj_id is not None:
+                assert o1.obj_id==obj_id, 'object id changed'
+            else:
+                obj_id = o1.obj_id
+            actual = o1.position.x, o1.position.y, o1.position.z
             expected = np.array([D[dim][framenumber] for dim in 'xyz'])
-            actual = xhat[:3]
             errors.append( np.sqrt(np.sum((expected-actual)**2)) )
 
         if not coord_processor.is_alive():
@@ -364,7 +379,7 @@ def check_online_reconstruction(with_water=False,
         raise RuntimeError('coordinate processor thread had error')
 
     mean_error = np.mean(errors)
-    assert len(errors) == len(orig_timestamps)
+    assert len(errors)+num_sync_frames == len(orig_timestamps)
 
     # We should have very low error
     assert mean_error < 0.02, ('mean error was %.3f, '
@@ -372,7 +387,8 @@ def check_online_reconstruction(with_water=False,
         mean_error,))
 
 if __name__=='__main__':
-    for test_func in [test_online_reconstruction, test_offline_reconstruction]:
+    # test online reconstruction
+    for test_func in [test_online_reconstruction]:
         for args in test_func():
             func = args[0]
             this_args = args[1:]
