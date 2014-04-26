@@ -195,7 +195,6 @@ class CoordinateProcessor(threading.Thread):
         self.timestamp_check_dict = {}
         self.realtime_kalman_coord_dict = collections.defaultdict(dict)
         self.oldest_timestamp_by_corrected_framenumber = {}
-        self.new_data_framenumbers = set()
         self.buf_data = ''
 
         threading.Thread.__init__(self,name='CoordinateProcessor')
@@ -366,7 +365,6 @@ class CoordinateProcessor(threading.Thread):
                 del self.realtime_kalman_coord_dict[k]
             for k in self.oldest_timestamp_by_corrected_framenumber.keys():
                 del self.oldest_timestamp_by_corrected_framenumber[k]
-            self.new_data_framenumbers.clear()
 
         # make new absolute_cam_no to indicate new synchronization state
         self.max_absolute_cam_nos += 1
@@ -427,8 +425,6 @@ class CoordinateProcessor(threading.Thread):
 
         oldest_timestamp_by_corrected_framenumber = self.oldest_timestamp_by_corrected_framenumber
 
-        new_data_framenumbers = self.new_data_framenumbers
-
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
 
         convert_format = flydra_kalman_utils.convert_format # shorthand
@@ -451,7 +447,7 @@ class CoordinateProcessor(threading.Thread):
                     continue
                 else:
                     raise
-            new_data_framenumbers.clear()
+            new_data_framenumbers = set()
 
             BENCHMARK_GATHER=False
             if BENCHMARK_GATHER:
@@ -579,6 +575,7 @@ class CoordinateProcessor(threading.Thread):
                         trigger_timestamp = self.main_brain.trigger_device.framestamp2timestamp( corrected_framenumber )
                         if did_frame_offset_change:
                             self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp)
+                            new_data_framenumbers.clear()
 
                         self.last_timestamps[cam_idx]=trigger_timestamp
                         self.last_framenumbers_delay[cam_idx]=raw_framenumber

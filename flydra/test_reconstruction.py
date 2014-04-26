@@ -234,7 +234,7 @@ def check_online_reconstruction(with_water=False,
                                           max_N_hypothesis_test=3,
                                           hostname=MB_HOSTNAME,
                                           )
-    multithreaded = False
+    multithreaded = True
     if multithreaded:
         coord_processor.daemon = True
         coord_processor.start()
@@ -347,9 +347,12 @@ def check_online_reconstruction(with_water=False,
                 pt_buf = ''
             buf = header_buf + pt_buf
 
-            port = ports[cam_id]
-            sender.sendto(buf,(MB_HOSTNAME,port))
-            print 'sent frame %d %s'%(framenumber,cam_id)
+            if multithreaded:
+                port = ports[cam_id]
+                sender.sendto(buf,(MB_HOSTNAME,port))
+                print 'sent frame %d %s'%(framenumber,cam_id)
+            else:
+                1/0
         print 'done sending frame %d'%framenumber
 
         if not multithreaded:
@@ -428,7 +431,7 @@ def check_online_reconstruction(with_water=False,
     assert mean_error < MAX_MEAN_ERROR
     return {'fps':fps}
 
-if __name__=='__main__':
+def main():
     # test online reconstruction
     for test_func in [test_online_reconstruction]:
         rd = {}
