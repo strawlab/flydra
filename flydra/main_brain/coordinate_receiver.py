@@ -413,12 +413,8 @@ class CoordinateProcessor(threading.Thread):
                 LOG.info('excellent, 3D reconstruction thread running in maximum prioity mode')
             except Exception as x:
                 LOG.warn('could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x)))
-        #true when mainbrain first starting
         self.main_brain.trigger_device.wait_for_estimate()
-
-        first = True
-        while first or not self.quit_event.isSet():
-            first = False
+        while not self.quit_event.isSet():
             try:
                 print 'recv 1'
                 incoming_2d_data, _ = self.listen_socket.recvfrom(4096)
