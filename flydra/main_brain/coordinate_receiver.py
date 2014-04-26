@@ -398,13 +398,6 @@ class CoordinateProcessor(threading.Thread):
     def run(self):
         """main loop of CoordinateProcessor"""
 
-        do_profile = False
-        if do_profile:
-            import cProfile
-            import lsprofcalltree
-            p = cProfile.Profile()
-            p.enable(subcalls=True, builtins=True)
-
         if os.name == 'posix':
             try:
                 max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
@@ -427,17 +420,9 @@ class CoordinateProcessor(threading.Thread):
         self.finish_processing()
 
     def finish_processing(self):
-        if 1:
-            with self.tracker_lock:
-                if self.tracker is not None:
-                    self.tracker.kill_all_trackers() # save (if necessary) all old data
-
-        do_profile = False
-        if do_profile:
-            k = lsprofcalltree.KCacheGrind(p)
-            data = open(os.path.expanduser('~/reconstruction.kgrind'), 'w')
-            k.output(data)
-            data.close()
+        with self.tracker_lock:
+            if self.tracker is not None:
+                self.tracker.kill_all_trackers() # save (if necessary) all old data
 
         self.did_quit_successfully = True
 
