@@ -352,7 +352,7 @@ class CoordinateProcessor(threading.Thread):
             LOG.warn('re-synchronized while saving data!')
             return
 
-        if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
+        if 1:
             self.queue_synchronze_ros_msgs.put( std_msgs.msg.String(cam_id) )
             LOG.info('%s (re)synchronized'%cam_id)
             # discard all previous data
@@ -364,8 +364,6 @@ class CoordinateProcessor(threading.Thread):
             for k in oldest_timestamp_by_corrected_framenumber.keys():
                 del oldest_timestamp_by_corrected_framenumber[k]
             new_data_framenumbers.clear()
-        else:
-            LOG.info('%s first 2D coordinates received'%cam_id)
 
         # make new absolute_cam_no to indicate new synchronization state
         self.max_absolute_cam_nos += 1
