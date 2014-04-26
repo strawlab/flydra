@@ -235,6 +235,7 @@ def check_online_reconstruction(with_water=False,
                                           hostname=MB_HOSTNAME,
                                           )
     multithreaded = False
+    multithreaded = True
     if multithreaded:
         coord_processor.daemon = True
         coord_processor.start()
@@ -293,7 +294,7 @@ def check_online_reconstruction(with_water=False,
 
     errors = []
     num_sync_frames = 2
-    #obj_id = None
+    obj_id = None
     for framenumber, orig_timestamp in enumerate(orig_timestamps):
         # frame 0 - first 2D coordinates
         # frame 1 - synchronization
@@ -352,50 +353,27 @@ def check_online_reconstruction(with_water=False,
             if multithreaded:
                 port = ports[cam_id]
                 sender.sendto(buf,(MB_HOSTNAME,port))
-                print 'sent frame %d %s'%(framenumber,cam_id)
             else:
                 coord_processor.process_data(buf)
-
-        print 'done sending frame %d'%framenumber
 
         if framenumber < num_sync_frames:
             # Before sync, we may not get data or it may be wrong, so
             # ignore it. But wait dt seconds to ensure sychronization
             # has enough time to run.
             try:
-                print 'data 0'
                 coord_processor.queue_realtime_ros_packets.get(True,dt)
-                print 'data 1'
             except Queue.Empty:
                 pass
 
         else:
-            print 'data 2'
             next = coord_processor.queue_realtime_ros_packets.get()
-            print 'data 2.1'
-
-            # while 1:
-            #     try:
-            #         print 'data 2'
-            #         next = coord_processor.queue_realtime_ros_packets.get(True,dt)
-            #         print 'data 2.1'
-            #         break
-            #     except Queue.Empty as err:
-            #         print 'data 2.2'
-            #         if multithreaded:
-            #             raise
-            #     if not multithreaded:
-            #         print 'data 3'
-            #         coord_processor.run()
-            #         print 'data 4'
 
             assert len(next.objects)==1
             o1 = next.objects[0]
-            print next
-            # if obj_id is not None:
-            #     assert o1.obj_id==obj_id, 'object id changed'
-            # else:
-            #     obj_id = o1.obj_id
+            if obj_id is not None:
+                assert o1.obj_id==obj_id, 'object id changed'
+            else:
+                obj_id = o1.obj_id
             actual = o1.position.x, o1.position.y, o1.position.z
             expected = np.array([D[dim][framenumber] for dim in 'xyz'])
             errors.append( np.sqrt(np.sum((expected-actual)**2)) )
