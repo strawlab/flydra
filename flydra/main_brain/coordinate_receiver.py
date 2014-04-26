@@ -379,19 +379,19 @@ class CoordinateProcessor(threading.Thread):
         #image to put in the h5 file
         self.main_brain.remote_api.external_request_image_async(cam_id)
 
-    def register_frame(self, id_string, framenumber):
+    def register_frame(self, cam_id, framenumber):
         frame_timestamp = time.time()
-        last_frame_timestamp = self.last_frame_times.get(id_string,-np.inf)
+        last_frame_timestamp = self.last_frame_times.get(cam_id,-np.inf)
         this_interval = frame_timestamp-last_frame_timestamp
 
         did_frame_offset_change = False
         if this_interval > flydra.common_variables.sync_duration:
-            self.frame_offsets[id_string] = framenumber
+            self.frame_offsets[cam_id] = framenumber
             did_frame_offset_change = True
 
-        self.last_frame_times[id_string] = frame_timestamp
+        self.last_frame_times[cam_id] = frame_timestamp
 
-        corrected_framenumber = framenumber-self.frame_offsets[id_string]
+        corrected_framenumber = framenumber-self.frame_offsets[cam_id]
         return corrected_framenumber, did_frame_offset_change
 
     def run(self):
