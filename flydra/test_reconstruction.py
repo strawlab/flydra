@@ -176,7 +176,7 @@ def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, w
     fudge = 2 if use_kalman_smoothing else 1
     assert mean_error < fudge*MAX_MEAN_ERROR
 
-class FakeTriggerDevice():
+class FakeTriggerDevice:
     def __init__(self,time_lock,time_dict):
         self.time_lock = time_lock
         self.time_dict = time_dict
@@ -184,9 +184,9 @@ class FakeTriggerDevice():
         return
     def have_estimate(self):
         return True
-    def framestamp2timestamp(self, framestamp):
+    def framestamp2timestamp(self, corrected_framestamp):
         with self.time_lock:
-            result = self.time_dict[framestamp]
+            result = self.time_dict[corrected_framestamp]
         return result
 
 class FakeRemoteApi():
@@ -194,10 +194,10 @@ class FakeRemoteApi():
         pass
 
 class FakeMainBrain:
-    def __init__(self,time_lock, time_dict):
+    def __init__(self,trigger_device):
         self.hostname = MB_HOSTNAME
         self.queue_error_ros_msgs = Queue.Queue()
-        self.trigger_device = FakeTriggerDevice(time_lock=time_lock, time_dict=time_dict)
+        self.trigger_device = trigger_device
         self.remote_api = FakeRemoteApi()
         self.counts = {}
     def is_saving_data(self):
@@ -219,7 +219,8 @@ def check_online_reconstruction(with_water=False,
 
     time_lock = threading.Lock()
     time_dict = {}
-    mb = FakeMainBrain(time_lock=time_lock, time_dict=time_dict)
+    trigger_device = FakeTriggerDevice(time_lock=time_lock, time_dict=time_dict)
+    mb = FakeMainBrain(trigger_device=trigger_device)
     debug_level=threading.Event()
     #debug_level.set()
     show_overall_latency=threading.Event()
