@@ -416,11 +416,8 @@ class CoordinateProcessor(threading.Thread):
         self.main_brain.trigger_device.wait_for_estimate()
         while not self.quit_event.isSet():
             try:
-                print 'recv 1'
                 incoming_2d_data, _ = self.listen_socket.recvfrom(4096)
-                print 'recv 2'
             except socket.error as err:
-                print 'recv 3'
                 if err.errno == 11:
                     # no data ready. try again (after checking if we should quit).
                     continue
@@ -430,7 +427,6 @@ class CoordinateProcessor(threading.Thread):
         self.finish_processing()
 
     def finish_processing(self):
-        print 'broke out of loop'
         if 1:
             with self.tracker_lock:
                 if self.tracker is not None:
@@ -444,7 +440,6 @@ class CoordinateProcessor(threading.Thread):
             data.close()
 
         self.did_quit_successfully = True
-        print 'done with run()'
 
     def process_data(self, incoming_2d_data ):
 
@@ -943,4 +938,3 @@ class CoordinateProcessor(threading.Thread):
 
                 if len(deferred_2d_data):
                     self.main_brain.queue_data2d.put( deferred_2d_data )
-            print 'listen loop done'
