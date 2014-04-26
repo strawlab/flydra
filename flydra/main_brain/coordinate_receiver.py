@@ -386,7 +386,7 @@ class CoordinateProcessor(threading.Thread):
 
         did_frame_offset_change = False
         if this_interval > flydra.common_variables.sync_duration:
-            self.frame_offsets[id_string] = framenumber-2 # XXX FIXME: why the magic -2 here?!?!
+            self.frame_offsets[id_string] = framenumber
             did_frame_offset_change = True
 
         self.last_frame_times[id_string] = frame_timestamp
