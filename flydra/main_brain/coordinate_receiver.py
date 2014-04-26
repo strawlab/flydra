@@ -191,6 +191,13 @@ class CoordinateProcessor(threading.Thread):
                         'ErrorSender')
         self.te.start()
 
+        self.realtime_coord_dict = {}
+        self.timestamp_check_dict = {}
+        self.realtime_kalman_coord_dict = collections.defaultdict(dict)
+        self.oldest_timestamp_by_corrected_framenumber = {}
+        self.new_data_framenumbers = set()
+        self.buf_data = ''
+
         threading.Thread.__init__(self,name='CoordinateProcessor')
 
     def mainbrain_is_attempting_synchronizing(self):
@@ -342,11 +349,7 @@ class CoordinateProcessor(threading.Thread):
         self.quit_event.set()
         self.join() # wait until CoordReveiver thread quits
 
-    def OnSynchronize(self, cam_idx, cam_id, framenumber, timestamp,
-                      realtime_coord_dict, timestamp_check_dict,
-                      realtime_kalman_coord_dict,
-                      oldest_timestamp_by_corrected_framenumber,
-                      new_data_framenumbers):
+    def OnSynchronize(self, cam_idx, cam_id, framenumber, timestamp):
 
         if self.main_brain.is_saving_data():
             LOG.warn('re-synchronized while saving data!')
@@ -356,14 +359,14 @@ class CoordinateProcessor(threading.Thread):
             self.queue_synchronze_ros_msgs.put( std_msgs.msg.String(cam_id) )
             LOG.info('%s (re)synchronized'%cam_id)
             # discard all previous data
-            for k in realtime_coord_dict.keys():
-                del realtime_coord_dict[k]
-                del timestamp_check_dict[k]
-            for k in realtime_kalman_coord_dict.keys():
-                del realtime_kalman_coord_dict[k]
-            for k in oldest_timestamp_by_corrected_framenumber.keys():
-                del oldest_timestamp_by_corrected_framenumber[k]
-            new_data_framenumbers.clear()
+            for k in self.realtime_coord_dict.keys():
+                del self.realtime_coord_dict[k]
+                del self.timestamp_check_dict[k]
+            for k in self.realtime_kalman_coord_dict.keys():
+                del self.realtime_kalman_coord_dict[k]
+            for k in self.oldest_timestamp_by_corrected_framenumber.keys():
+                del self.oldest_timestamp_by_corrected_framenumber[k]
+            self.new_data_framenumbers.clear()
 
         # make new absolute_cam_no to indicate new synchronization state
         self.max_absolute_cam_nos += 1
@@ -418,12 +421,13 @@ class CoordinateProcessor(threading.Thread):
         pt_fmt = flydra.common_variables.recv_pt_fmt
         pt_size = struct.calcsize(pt_fmt)
 
-        realtime_coord_dict = {}
-        timestamp_check_dict = {}
-        realtime_kalman_coord_dict = collections.defaultdict(dict)
-        oldest_timestamp_by_corrected_framenumber = {}
+        realtime_coord_dict = self.realtime_coord_dict
+        timestamp_check_dict = self.timestamp_check_dict
+        realtime_kalman_coord_dict = self.realtime_kalman_coord_dict
 
-        new_data_framenumbers = set()
+        oldest_timestamp_by_corrected_framenumber = self.oldest_timestamp_by_corrected_framenumber
+
+        new_data_framenumbers = self.new_data_framenumbers
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
 
@@ -431,12 +435,17 @@ class CoordinateProcessor(threading.Thread):
 
         #true when mainbrain first starting
         self.main_brain.trigger_device.wait_for_estimate()
-        buf_data = ''
+        buf_data = self.buf_data
 
-        while not self.quit_event.isSet():
+        first = True
+        while first or not self.quit_event.isSet():
+            first = False
             try:
+                print 'recv 1'
                 incoming_2d_data, _ = self.listen_socket.recvfrom(4096)
+                print 'recv 2'
             except socket.error as err:
+                print 'recv 3'
                 if err.errno == 11:
                     # no data ready. try again (after checking if we should quit).
                     continue
@@ -569,12 +578,7 @@ class CoordinateProcessor(threading.Thread):
 
                         trigger_timestamp = self.main_brain.trigger_device.framestamp2timestamp( corrected_framenumber )
                         if did_frame_offset_change:
-                            self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp,
-                                                realtime_coord_dict,
-                                                timestamp_check_dict,
-                                                realtime_kalman_coord_dict,
-                                                oldest_timestamp_by_corrected_framenumber,
-                                                new_data_framenumbers )
+                            self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp)
 
                         self.last_timestamps[cam_idx]=trigger_timestamp
                         self.last_framenumbers_delay[cam_idx]=raw_framenumber
@@ -923,7 +927,9 @@ class CoordinateProcessor(threading.Thread):
 
                 if len(deferred_2d_data):
                     self.main_brain.queue_data2d.put( deferred_2d_data )
+            print 'listen loop done'
 
+        print 'broke out of loop'
         if 1:
             with self.tracker_lock:
                 if self.tracker is not None:
@@ -936,3 +942,4 @@ class CoordinateProcessor(threading.Thread):
             data.close()
 
         self.did_quit_successfully = True
+        print 'done with run()'
