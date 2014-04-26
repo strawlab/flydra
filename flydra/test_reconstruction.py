@@ -234,7 +234,7 @@ def check_online_reconstruction(with_water=False,
                                           max_N_hypothesis_test=3,
                                           hostname=MB_HOSTNAME,
                                           )
-    multithreaded = True
+    multithreaded = False
     if multithreaded:
         coord_processor.daemon = True
         coord_processor.start()
@@ -255,6 +255,8 @@ def check_online_reconstruction(with_water=False,
     model = flydra.kalman.dynamic_models.get_kalman_model(name=D['dynamic_model_name'],dt=(1.0/fps))
     coord_processor.set_new_tracker(model)
     if multithreaded:
+        # XXX remove this in the future
+
         # monkeypatch to allow hacky calling of .run() repeatedly
         def no_op():
             pass
@@ -352,15 +354,9 @@ def check_online_reconstruction(with_water=False,
                 sender.sendto(buf,(MB_HOSTNAME,port))
                 print 'sent frame %d %s'%(framenumber,cam_id)
             else:
-                1/0
-        print 'done sending frame %d'%framenumber
+                coord_processor.process_data(buf)
 
-        if not multithreaded:
-            time.sleep(0.001)
-            coord_processor.quit_event.set()
-            print 'run 1'
-            coord_processor.run()
-            print 'run 2'
+        print 'done sending frame %d'%framenumber
 
         if framenumber < num_sync_frames:
             # Before sync, we may not get data or it may be wrong, so
@@ -410,7 +406,10 @@ def check_online_reconstruction(with_water=False,
 
 
     if multithreaded:
-        orig_kill_all_trackers()
+        orig_kill_all_trackers() # remove this in the future...
+
+    if not multithreaded:
+        coord_processor.finish_processing()
 
     t_start = time_dict[num_sync_frames]
     t_stop = time_dict[framenumber]

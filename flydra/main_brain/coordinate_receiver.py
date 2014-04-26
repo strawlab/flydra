@@ -413,6 +413,44 @@ class CoordinateProcessor(threading.Thread):
                 LOG.info('excellent, 3D reconstruction thread running in maximum prioity mode')
             except Exception as x:
                 LOG.warn('could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x)))
+        #true when mainbrain first starting
+        self.main_brain.trigger_device.wait_for_estimate()
+
+        first = True
+        while first or not self.quit_event.isSet():
+            first = False
+            try:
+                print 'recv 1'
+                incoming_2d_data, _ = self.listen_socket.recvfrom(4096)
+                print 'recv 2'
+            except socket.error as err:
+                print 'recv 3'
+                if err.errno == 11:
+                    # no data ready. try again (after checking if we should quit).
+                    continue
+                else:
+                    raise
+            self.process_data( incoming_2d_data )
+        self.finish_processing()
+
+    def finish_processing(self):
+        print 'broke out of loop'
+        if 1:
+            with self.tracker_lock:
+                if self.tracker is not None:
+                    self.tracker.kill_all_trackers() # save (if necessary) all old data
+
+        do_profile = False
+        if do_profile:
+            k = lsprofcalltree.KCacheGrind(p)
+            data = open(os.path.expanduser('~/reconstruction.kgrind'), 'w')
+            k.output(data)
+            data.close()
+
+        self.did_quit_successfully = True
+        print 'done with run()'
+
+    def process_data(self, incoming_2d_data ):
 
         header_fmt = flydra.common_variables.recv_pt_header_fmt
         header_size = struct.calcsize(header_fmt)
@@ -429,24 +467,9 @@ class CoordinateProcessor(threading.Thread):
 
         convert_format = flydra_kalman_utils.convert_format # shorthand
 
-        #true when mainbrain first starting
-        self.main_brain.trigger_device.wait_for_estimate()
         buf_data = self.buf_data
 
-        first = True
-        while first or not self.quit_event.isSet():
-            first = False
-            try:
-                print 'recv 1'
-                incoming_2d_data, _ = self.listen_socket.recvfrom(4096)
-                print 'recv 2'
-            except socket.error as err:
-                print 'recv 3'
-                if err.errno == 11:
-                    # no data ready. try again (after checking if we should quit).
-                    continue
-                else:
-                    raise
+        if 1:
             new_data_framenumbers = set()
 
             BENCHMARK_GATHER=False
@@ -925,18 +948,3 @@ class CoordinateProcessor(threading.Thread):
                 if len(deferred_2d_data):
                     self.main_brain.queue_data2d.put( deferred_2d_data )
             print 'listen loop done'
-
-        print 'broke out of loop'
-        if 1:
-            with self.tracker_lock:
-                if self.tracker is not None:
-                    self.tracker.kill_all_trackers() # save (if necessary) all old data
-
-        if do_profile:
-            k = lsprofcalltree.KCacheGrind(p)
-            data = open(os.path.expanduser('~/reconstruction.kgrind'), 'w')
-            k.output(data)
-            data.close()
-
-        self.did_quit_successfully = True
-        print 'done with run()'
