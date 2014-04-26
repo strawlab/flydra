@@ -48,8 +48,6 @@ LOG = flydra.rosutils.Log(to_ros=True)
 
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 0 # how many data points are required before saving trajectory?
 
-SYNC_INTERVAL = 2.0
-
 import flydra.common_variables
 
 PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
@@ -519,8 +517,6 @@ class MainBrain(object):
         self.trigger_device.clock_measurement_callback  = self._on_trigger_clock_measurement
         self.trigger_device.set_frames_per_second_blocking(self.config['frames_per_second'])
 
-        self.frame_offsets = {}
-        self.last_frame_times = {}
         self.block_triggerbox_activity = False
 
         remote_api = MainBrain.RemoteAPI(); remote_api.post_init(self)
@@ -644,21 +640,6 @@ class MainBrain(object):
                                            fraction_n_of_255,
                                            stop_timestamp))
 
-    def register_frame(self, id_string, framenumber):
-        frame_timestamp = time.time()
-        last_frame_timestamp = self.last_frame_times.get(id_string,-np.inf)
-        this_interval = frame_timestamp-last_frame_timestamp
-
-        did_frame_offset_change = False
-        if this_interval > SYNC_INTERVAL:
-            self.frame_offsets[id_string] = framenumber-2 # XXX FIXME: why the magic -2 here?!?!
-            did_frame_offset_change = True
-
-        self.last_frame_times[id_string] = frame_timestamp
-
-        corrected_framenumber = framenumber-self.frame_offsets[id_string]
-        return corrected_framenumber, did_frame_offset_change
-
     def _ros_generic_service_dispatch(self, req):
         calledservice = req._connection_header['service']
         calledfunction = calledservice.split('/')[-1]
@@ -773,7 +754,7 @@ class MainBrain(object):
             self.update_tracker_fps(actual_new_fps)
 
         self.coord_processor.mainbrain_is_attempting_synchronizing()
-        self.trigger_device.synchronize(SYNC_INTERVAL+1.0)
+        self.trigger_device.synchronize(flydra.common_variables.sync_duration+1.0)
         if new_fps is not None:
             cam_ids = self.remote_api.external_get_cam_ids()
             for cam_id in cam_ids:

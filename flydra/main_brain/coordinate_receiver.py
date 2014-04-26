@@ -120,6 +120,8 @@ class CoordinateProcessor(threading.Thread):
         self.cam_ids = []
         self.cam2mainbrain_data_ports = []
         self.absolute_cam_nos = [] # a.k.a. "camn"
+        self.frame_offsets = {}
+        self.last_frame_times = {}
         self.last_timestamps = []
         self.last_framenumbers_delay = []
         self.last_framenumbers_skip = []
@@ -379,6 +381,21 @@ class CoordinateProcessor(threading.Thread):
         #image to put in the h5 file
         self.main_brain.remote_api.external_request_image_async(cam_id)
 
+    def register_frame(self, id_string, framenumber):
+        frame_timestamp = time.time()
+        last_frame_timestamp = self.last_frame_times.get(id_string,-np.inf)
+        this_interval = frame_timestamp-last_frame_timestamp
+
+        did_frame_offset_change = False
+        if this_interval > flydra.common_variables.sync_duration:
+            self.frame_offsets[id_string] = framenumber-2 # XXX FIXME: why the magic -2 here?!?!
+            did_frame_offset_change = True
+
+        self.last_frame_times[id_string] = frame_timestamp
+
+        corrected_framenumber = framenumber-self.frame_offsets[id_string]
+        return corrected_framenumber, did_frame_offset_change
+
     def run(self):
         """main loop of CoordinateProcessor"""
 
@@ -550,7 +567,7 @@ class CoordinateProcessor(threading.Thread):
                         #    latency jitter is on the order of the
                         #    inter frame interval.
                         corrected_framenumber, did_frame_offset_change = \
-                          self.main_brain.register_frame(cam_id,raw_framenumber)
+                          self.register_frame(cam_id,raw_framenumber)
 
                         trigger_timestamp = self.main_brain.trigger_device.framestamp2timestamp( corrected_framenumber )
                         if did_frame_offset_change:

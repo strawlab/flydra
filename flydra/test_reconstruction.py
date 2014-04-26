@@ -202,17 +202,6 @@ class FakeMainBrain:
         self.counts = {}
     def is_saving_data(self):
         return False
-    def register_frame(self,cam_id,raw_framenumber):
-        corrected_framenumber = raw_framenumber
-        if cam_id not in self.counts:
-            self.counts[cam_id] = 0
-        count = self.counts[cam_id]
-        if count < 2:
-            did_frame_offset_change = True
-        else:
-            did_frame_offset_change = False
-        self.counts[cam_id] += 1
-        return corrected_framenumber, did_frame_offset_change
 
 def test_online_reconstruction():
     for with_water in [False, True]:
