@@ -433,24 +433,12 @@ class CoordinateProcessor(threading.Thread):
         pt_fmt = flydra.common_variables.recv_pt_fmt
         pt_size = struct.calcsize(pt_fmt)
 
-        realtime_coord_dict = self.realtime_coord_dict
-        timestamp_check_dict = self.timestamp_check_dict
-        realtime_kalman_coord_dict = self.realtime_kalman_coord_dict
-
-        oldest_timestamp_by_corrected_framenumber = self.oldest_timestamp_by_corrected_framenumber
-
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
-
-        convert_format = flydra_kalman_utils.convert_format # shorthand
 
         buf_data = self.buf_data
 
         if 1:
             new_data_framenumbers = set()
-
-            BENCHMARK_GATHER=False
-            if BENCHMARK_GATHER:
-                incoming_remote_received_timestamps = []
 
             with self.all_data_lock:
                 deferred_2d_data = []
@@ -468,9 +456,6 @@ class CoordinateProcessor(threading.Thread):
 
                         cam_idx = self.cam_ids.index(cam_id)
                         absolute_cam_no = self.absolute_cam_nos[cam_idx]
-
-                        if BENCHMARK_GATHER:
-                            incoming_remote_received_timestamps.append( camn_received_time )
 
                         points_in_pluecker_coords_meters = []
                         points_undistorted = []
@@ -559,8 +544,40 @@ class CoordinateProcessor(threading.Thread):
                             points_undistorted.append( no_point_tuple )
                         buf_data = buf_data[end:]
 
-                        # ===================================================
+                        self._process_parsed_data(cam_idx,
+                                                  camn_received_time,
+                                                  absolute_cam_no,
+                                                  n_pts,
+                                                  cam_id, raw_framenumber,
+                                                  new_data_framenumbers,
+                                                  points_in_pluecker_coords_meters,
+                                                  points_distorted,
+                                                  points_undistorted,
+                                                  deferred_2d_data,
+                                                  )
+    def _process_parsed_data(self, cam_idx,
+                             camn_received_time,
+                             absolute_cam_no,
+                             n_pts,
+                             cam_id, raw_framenumber, new_data_framenumbers,
+                             points_in_pluecker_coords_meters,
+                             points_distorted,
+                             points_undistorted,
+                             deferred_2d_data,
+                             ):
+        # Note: this must be called with self.all_data_lock acquired.
 
+        timestamp_check_dict = self.timestamp_check_dict
+        convert_format = flydra_kalman_utils.convert_format # shorthand
+        realtime_coord_dict = self.realtime_coord_dict
+        oldest_timestamp_by_corrected_framenumber = self.oldest_timestamp_by_corrected_framenumber
+        realtime_kalman_coord_dict = self.realtime_kalman_coord_dict
+
+
+        if 1:
+            if 1:
+                if 1:
+                    if 1:
                         # Use camn_received_time to determine sync
                         # info. This avoids 2 potential problems:
                         #  * using raw_timestamp can fail if the
@@ -629,16 +646,6 @@ class CoordinateProcessor(threading.Thread):
                             oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ] = trigger_timestamp, inc_val
 
                         new_data_framenumbers.add( corrected_framenumber ) # insert into set
-
-                if BENCHMARK_GATHER:
-                    incoming_remote_received_timestamps = numpy.array(incoming_remote_received_timestamps)
-                    min_incoming_remote_timestamp = incoming_remote_received_timestamps.min()
-                    max_incoming_remote_timestamp = incoming_remote_received_timestamps.max()
-                    finish_packet_sorting_time = time.time()
-                    min_packet_gather_dur = finish_packet_sorting_time-max_incoming_remote_timestamp
-                    max_packet_gather_dur = finish_packet_sorting_time-min_incoming_remote_timestamp
-                    LOG.info('proc dur: % 3.1f % 3.1f'%(min_packet_gather_dur*1e3,
-                                                     max_packet_gather_dur*1e3))
 
                 finished_corrected_framenumbers = [] # for quick deletion
 
