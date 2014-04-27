@@ -52,7 +52,6 @@ ATTEMPT_DATA_RECOVERY = True
 #ATTEMPT_DATA_RECOVERY = False
 
 IMPOSSIBLE_TIMESTAMP = -10.0
-SHOW_3D_PROCESSING_LATENCY = False
 
 PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
 PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
@@ -674,9 +673,6 @@ class CoordinateProcessor(threading.Thread):
                         if self.debug_level.isSet():
                             LOG.debug('frame %d'%(corrected_framenumber))
 
-                        if SHOW_3D_PROCESSING_LATENCY:
-                            start_3d_proc = time.time()
-
                         # mark for deletion out of data queue
                         finished_corrected_framenumbers.append( corrected_framenumber )
 
@@ -728,8 +724,6 @@ class CoordinateProcessor(threading.Thread):
                                     self.data_dict_queue.append(('ntrack',self.tracker.how_many_are_living()))
 
                                 now = time.time()
-                                if SHOW_3D_PROCESSING_LATENCY:
-                                    start_3d_proc_a = now
                                 if self.show_overall_latency.isSet():
                                     oldest_camera_timestamp, n = oldest_timestamp_by_corrected_framenumber[ corrected_framenumber ]
                                     if n>0:
@@ -773,21 +767,12 @@ class CoordinateProcessor(threading.Thread):
                                     else:
                                         self.main_brain.best_realtime_data = None
 
-                                if SHOW_3D_PROCESSING_LATENCY:
-                                    start_3d_proc_b = time.time()
-
                                 # Convert to format accepted by find_best_3d()
                                 found_data_dict,first_idx_by_cam_id = convert_format(
                                     pluecker_coords_by_camn,
                                     self.camn2cam_id,
                                     area_threshold=0.0,
                                     only_likely=True)
-
-                                if SHOW_3D_PROCESSING_LATENCY:
-                                    if len(found_data_dict) < 2:
-                                        print ' ',
-                                    else:
-                                        print '*',
 
                                 if len(found_data_dict) >= 2:
                                     # Can't do any 3D math without at least 2 cameras giving good
@@ -849,22 +834,6 @@ class CoordinateProcessor(threading.Thread):
                                             acquire_stamp=rospy.Time.from_sec(oldest_camera_timestamp),
                                             objects = ros_objects)
                                         self.queue_realtime_ros_packets.put( ros_packet )
-
-                                if SHOW_3D_PROCESSING_LATENCY:
-                                    start_3d_proc_c = time.time()
-
-                        if SHOW_3D_PROCESSING_LATENCY:
-                            stop_3d_proc = time.time()
-                            dur_3d_proc_msec = (stop_3d_proc - start_3d_proc)*1e3
-                            dur_3d_proc_msec_a = (start_3d_proc_a - start_3d_proc)*1e3
-                            dur_3d_proc_msec_b = (start_3d_proc_b - start_3d_proc)*1e3
-                            dur_3d_proc_msec_c = (start_3d_proc_c - start_3d_proc)*1e3
-
-                            LOG.info('dur_3d_proc_msec % 3.1f % 3.1f % 3.1f % 3.1f'%(
-                                dur_3d_proc_msec,
-                                dur_3d_proc_msec_a,
-                                dur_3d_proc_msec_b,
-                                dur_3d_proc_msec_c))
 
                 for finished in finished_corrected_framenumbers:
                     #check that timestamps are in reasonable agreement (low priority)
