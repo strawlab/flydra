@@ -1,4 +1,4 @@
-import time
+import time, sys
 import socket, struct
 import Queue, threading
 import tempfile, os
@@ -204,13 +204,14 @@ class FakeMainBrain:
         return False
 
 def test_online_reconstruction():
-    for with_water in [False, True]:
-        for with_orientation in [False,True]:
+    for with_water in [False]:#, True]:
+        for with_orientation in [False]:#,True]:
             yield check_online_reconstruction, with_water, with_orientation
 
 def check_online_reconstruction(with_water=False,
                                 with_orientation=False,
                                 fps=120.0,
+                                multithreaded=True,
                                 ):
     D = setup_data( fps=fps,
                     with_water=with_water,
@@ -234,8 +235,6 @@ def check_online_reconstruction(with_water=False,
                                           max_N_hypothesis_test=3,
                                           hostname=MB_HOSTNAME,
                                           )
-    multithreaded = False
-    multithreaded = True
     if multithreaded:
         coord_processor.daemon = True
         coord_processor.start()
@@ -293,12 +292,11 @@ def check_online_reconstruction(with_water=False,
     time.sleep(SPINUP_DURATION)
 
     errors = []
-    num_sync_frames = 2
+    num_sync_frames = 1
     obj_id = None
     for framenumber, orig_timestamp in enumerate(orig_timestamps):
-        # frame 0 - first 2D coordinates
-        # frame 1 - synchronization
-        # frame 2 - first saveable data
+        # frame 0 - first 2D coordinates and synchronization
+        # frame 1 - first saveable data
 
         timestamp = time.time()
         with time_lock:
@@ -408,27 +406,26 @@ def check_online_reconstruction(with_water=False,
     assert mean_error < MAX_MEAN_ERROR
     return {'fps':fps}
 
-def main():
-    # test online reconstruction
-    for test_func in [test_online_reconstruction]:
-        rd = {}
-        for args in test_func():
-            func = args[0]
-            this_args = args[1:]
-            result = func(*this_args)
-            rd[this_args]=result
-        pprint.pprint(rd)
+def benchmark():
+    rd = check_online_reconstruction(with_water=False,
+                                     with_orientation=False,
+                                     multithreaded=False)
+    pprint.pprint(rd)
 
 if __name__=='__main__':
-    if 0:
+    if len(sys.argv) == 2:
+        kcachegrind_output_fname = sys.argv[1]
+    else:
+        kcachegrind_output_fname = None
+    if kcachegrind_output_fname is not None:
         import cProfile
         import lsprofcalltree
         p = cProfile.Profile()
         print 'running test in profile mode'
-        p.runctx('main()',globals(),locals())
+        p.runctx('benchmark()',globals(),locals())
         k = lsprofcalltree.KCacheGrind(p)
-        data = open(os.path.expanduser('~/reconstruction.kgrind'), 'w')
+        data = open(kcachegrind_output_fname, 'w')
         k.output(data)
         data.close()
     else:
-        main()
+        benchmark()
