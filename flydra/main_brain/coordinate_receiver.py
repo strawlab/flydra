@@ -120,6 +120,8 @@ class CoordinateProcessor(threading.Thread):
         self.cam_ids = []
         self.cam2mainbrain_data_ports = []
         self.absolute_cam_nos = [] # a.k.a. "camn"
+        self.frame_offsets = {}
+        self.last_frame_times = {}
         self.last_timestamps = []
         self.last_framenumbers_delay = []
         self.last_framenumbers_skip = []
@@ -188,6 +190,12 @@ class CoordinateProcessor(threading.Thread):
                         self.quit_event,
                         'ErrorSender')
         self.te.start()
+
+        self.realtime_coord_dict = {}
+        self.timestamp_check_dict = {}
+        self.realtime_kalman_coord_dict = collections.defaultdict(dict)
+        self.oldest_timestamp_by_corrected_framenumber = {}
+        self.buf_data = ''
 
         threading.Thread.__init__(self,name='CoordinateProcessor')
 
@@ -340,30 +348,23 @@ class CoordinateProcessor(threading.Thread):
         self.quit_event.set()
         self.join() # wait until CoordReveiver thread quits
 
-    def OnSynchronize(self, cam_idx, cam_id, framenumber, timestamp,
-                      realtime_coord_dict, timestamp_check_dict,
-                      realtime_kalman_coord_dict,
-                      oldest_timestamp_by_corrected_framenumber,
-                      new_data_framenumbers):
+    def OnSynchronize(self, cam_idx, cam_id, framenumber, timestamp):
 
         if self.main_brain.is_saving_data():
             LOG.warn('re-synchronized while saving data!')
             return
 
-        if self.last_timestamps[cam_idx] != IMPOSSIBLE_TIMESTAMP:
+        if 1:
             self.queue_synchronze_ros_msgs.put( std_msgs.msg.String(cam_id) )
             LOG.info('%s (re)synchronized'%cam_id)
             # discard all previous data
-            for k in realtime_coord_dict.keys():
-                del realtime_coord_dict[k]
-                del timestamp_check_dict[k]
-            for k in realtime_kalman_coord_dict.keys():
-                del realtime_kalman_coord_dict[k]
-            for k in oldest_timestamp_by_corrected_framenumber.keys():
-                del oldest_timestamp_by_corrected_framenumber[k]
-            new_data_framenumbers.clear()
-        else:
-            LOG.info('%s first 2D coordinates received'%cam_id)
+            for k in self.realtime_coord_dict.keys():
+                del self.realtime_coord_dict[k]
+                del self.timestamp_check_dict[k]
+            for k in self.realtime_kalman_coord_dict.keys():
+                del self.realtime_kalman_coord_dict[k]
+            for k in self.oldest_timestamp_by_corrected_framenumber.keys():
+                del self.oldest_timestamp_by_corrected_framenumber[k]
 
         # make new absolute_cam_no to indicate new synchronization state
         self.max_absolute_cam_nos += 1
@@ -379,15 +380,23 @@ class CoordinateProcessor(threading.Thread):
         #image to put in the h5 file
         self.main_brain.remote_api.external_request_image_async(cam_id)
 
+    def register_frame(self, cam_id, framenumber):
+        frame_timestamp = time.time()
+        last_frame_timestamp = self.last_frame_times.get(cam_id,-np.inf)
+        this_interval = frame_timestamp-last_frame_timestamp
+
+        did_frame_offset_change = False
+        if this_interval > flydra.common_variables.sync_duration:
+            self.frame_offsets[cam_id] = framenumber
+            did_frame_offset_change = True
+
+        self.last_frame_times[cam_id] = frame_timestamp
+
+        corrected_framenumber = framenumber-self.frame_offsets[cam_id]
+        return corrected_framenumber, did_frame_offset_change
+
     def run(self):
         """main loop of CoordinateProcessor"""
-
-        do_profile = False
-        if do_profile:
-            import cProfile
-            import lsprofcalltree
-            p = cProfile.Profile()
-            p.enable(subcalls=True, builtins=True)
 
         if os.name == 'posix':
             try:
@@ -397,27 +406,7 @@ class CoordinateProcessor(threading.Thread):
                 LOG.info('excellent, 3D reconstruction thread running in maximum prioity mode')
             except Exception as x:
                 LOG.warn('could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x)))
-
-        header_fmt = flydra.common_variables.recv_pt_header_fmt
-        header_size = struct.calcsize(header_fmt)
-        pt_fmt = flydra.common_variables.recv_pt_fmt
-        pt_size = struct.calcsize(pt_fmt)
-
-        realtime_coord_dict = {}
-        timestamp_check_dict = {}
-        realtime_kalman_coord_dict = collections.defaultdict(dict)
-        oldest_timestamp_by_corrected_framenumber = {}
-
-        new_data_framenumbers = set()
-
-        no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
-
-        convert_format = flydra_kalman_utils.convert_format # shorthand
-
-        #true when mainbrain first starting
         self.main_brain.trigger_device.wait_for_estimate()
-        buf_data = ''
-
         while not self.quit_event.isSet():
             try:
                 incoming_2d_data, _ = self.listen_socket.recvfrom(4096)
@@ -427,7 +416,37 @@ class CoordinateProcessor(threading.Thread):
                     continue
                 else:
                     raise
-            new_data_framenumbers.clear()
+            self.process_data( incoming_2d_data )
+        self.finish_processing()
+
+    def finish_processing(self):
+        with self.tracker_lock:
+            if self.tracker is not None:
+                self.tracker.kill_all_trackers() # save (if necessary) all old data
+
+        self.did_quit_successfully = True
+
+    def process_data(self, incoming_2d_data ):
+
+        header_fmt = flydra.common_variables.recv_pt_header_fmt
+        header_size = struct.calcsize(header_fmt)
+        pt_fmt = flydra.common_variables.recv_pt_fmt
+        pt_size = struct.calcsize(pt_fmt)
+
+        realtime_coord_dict = self.realtime_coord_dict
+        timestamp_check_dict = self.timestamp_check_dict
+        realtime_kalman_coord_dict = self.realtime_kalman_coord_dict
+
+        oldest_timestamp_by_corrected_framenumber = self.oldest_timestamp_by_corrected_framenumber
+
+        no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
+
+        convert_format = flydra_kalman_utils.convert_format # shorthand
+
+        buf_data = self.buf_data
+
+        if 1:
+            new_data_framenumbers = set()
 
             BENCHMARK_GATHER=False
             if BENCHMARK_GATHER:
@@ -550,16 +569,12 @@ class CoordinateProcessor(threading.Thread):
                         #    latency jitter is on the order of the
                         #    inter frame interval.
                         corrected_framenumber, did_frame_offset_change = \
-                          self.main_brain.register_frame(cam_id,raw_framenumber)
+                          self.register_frame(cam_id,raw_framenumber)
 
                         trigger_timestamp = self.main_brain.trigger_device.framestamp2timestamp( corrected_framenumber )
                         if did_frame_offset_change:
-                            self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp,
-                                                realtime_coord_dict,
-                                                timestamp_check_dict,
-                                                realtime_kalman_coord_dict,
-                                                oldest_timestamp_by_corrected_framenumber,
-                                                new_data_framenumbers )
+                            self.OnSynchronize( cam_idx, cam_id, raw_framenumber, trigger_timestamp)
+                            new_data_framenumbers.clear()
 
                         self.last_timestamps[cam_idx]=trigger_timestamp
                         self.last_framenumbers_delay[cam_idx]=raw_framenumber
@@ -908,16 +923,3 @@ class CoordinateProcessor(threading.Thread):
 
                 if len(deferred_2d_data):
                     self.main_brain.queue_data2d.put( deferred_2d_data )
-
-        if 1:
-            with self.tracker_lock:
-                if self.tracker is not None:
-                    self.tracker.kill_all_trackers() # save (if necessary) all old data
-
-        if do_profile:
-            k = lsprofcalltree.KCacheGrind(p)
-            data = open(os.path.expanduser('~/reconstruction.kgrind'), 'w')
-            k.output(data)
-            data.close()
-
-        self.did_quit_successfully = True

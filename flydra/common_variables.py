@@ -11,3 +11,5 @@ recv_pt_fmt = '<dddddddddBBddBddddddBdd'
 recv_pt_header_fmt = '<%dpddliI'%(cam_id_count,)
 
 emulated_camera_control = 9645
+
+sync_duration = 2.0 # seconds to pause triggering to cause synchronization

@@ -1,4 +1,4 @@
-import time
+import time, sys
 import socket, struct
 import Queue, threading
 import tempfile, os
@@ -176,7 +176,7 @@ def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, w
     fudge = 2 if use_kalman_smoothing else 1
     assert mean_error < fudge*MAX_MEAN_ERROR
 
-class FakeTriggerDevice():
+class FakeTriggerDevice:
     def __init__(self,time_lock,time_dict):
         self.time_lock = time_lock
         self.time_dict = time_dict
@@ -184,9 +184,9 @@ class FakeTriggerDevice():
         return
     def have_estimate(self):
         return True
-    def framestamp2timestamp(self, framestamp):
+    def framestamp2timestamp(self, corrected_framestamp):
         with self.time_lock:
-            result = self.time_dict[framestamp]
+            result = self.time_dict[corrected_framestamp]
         return result
 
 class FakeRemoteApi():
@@ -194,34 +194,24 @@ class FakeRemoteApi():
         pass
 
 class FakeMainBrain:
-    def __init__(self,time_lock, time_dict):
+    def __init__(self,trigger_device):
         self.hostname = MB_HOSTNAME
         self.queue_error_ros_msgs = Queue.Queue()
-        self.trigger_device = FakeTriggerDevice(time_lock=time_lock, time_dict=time_dict)
+        self.trigger_device = trigger_device
         self.remote_api = FakeRemoteApi()
         self.counts = {}
     def is_saving_data(self):
         return False
-    def register_frame(self,cam_id,raw_framenumber):
-        corrected_framenumber = raw_framenumber
-        if cam_id not in self.counts:
-            self.counts[cam_id] = 0
-        count = self.counts[cam_id]
-        if count < 2:
-            did_frame_offset_change = True
-        else:
-            did_frame_offset_change = False
-        self.counts[cam_id] += 1
-        return corrected_framenumber, did_frame_offset_change
 
 def test_online_reconstruction():
-    for with_water in [False, True]:
-        for with_orientation in [False,True]:
+    for with_water in [False]:#, True]:
+        for with_orientation in [False]:#,True]:
             yield check_online_reconstruction, with_water, with_orientation
 
 def check_online_reconstruction(with_water=False,
                                 with_orientation=False,
                                 fps=120.0,
+                                multithreaded=True,
                                 ):
     D = setup_data( fps=fps,
                     with_water=with_water,
@@ -230,7 +220,8 @@ def check_online_reconstruction(with_water=False,
 
     time_lock = threading.Lock()
     time_dict = {}
-    mb = FakeMainBrain(time_lock=time_lock, time_dict=time_dict)
+    trigger_device = FakeTriggerDevice(time_lock=time_lock, time_dict=time_dict)
+    mb = FakeMainBrain(trigger_device=trigger_device)
     debug_level=threading.Event()
     #debug_level.set()
     show_overall_latency=threading.Event()
@@ -244,8 +235,9 @@ def check_online_reconstruction(with_water=False,
                                           max_N_hypothesis_test=3,
                                           hostname=MB_HOSTNAME,
                                           )
-    coord_processor.daemon = True
-    coord_processor.start()
+    if multithreaded:
+        coord_processor.daemon = True
+        coord_processor.start()
 
     # quit the coordinate sender thread so we can intercept its queue
     coord_processor.tp._quit_event = threading.Event()
@@ -262,6 +254,14 @@ def check_online_reconstruction(with_water=False,
     coord_processor.set_reconstructor(R)
     model = flydra.kalman.dynamic_models.get_kalman_model(name=D['dynamic_model_name'],dt=(1.0/fps))
     coord_processor.set_new_tracker(model)
+    if multithreaded:
+        # XXX remove this in the future
+
+        # monkeypatch to allow hacky calling of .run() repeatedly
+        def no_op():
+            pass
+        orig_kill_all_trackers = coord_processor.tracker.kill_all_trackers
+        coord_processor.tracker.kill_all_trackers = no_op
 
     header_fmt = flydra.common_variables.recv_pt_header_fmt
     pt_fmt = flydra.common_variables.recv_pt_fmt
@@ -292,12 +292,11 @@ def check_online_reconstruction(with_water=False,
     time.sleep(SPINUP_DURATION)
 
     errors = []
-    num_sync_frames = 2
+    num_sync_frames = 1
     obj_id = None
     for framenumber, orig_timestamp in enumerate(orig_timestamps):
-        # frame 0 - first 2D coordinates
-        # frame 1 - synchronization
-        # frame 2 - first saveable data
+        # frame 0 - first 2D coordinates and synchronization
+        # frame 1 - first saveable data
 
         timestamp = time.time()
         with time_lock:
@@ -349,8 +348,12 @@ def check_online_reconstruction(with_water=False,
                 pt_buf = ''
             buf = header_buf + pt_buf
 
-            port = ports[cam_id]
-            sender.sendto(buf,(MB_HOSTNAME,port))
+            if multithreaded:
+                port = ports[cam_id]
+                sender.sendto(buf,(MB_HOSTNAME,port))
+            else:
+                coord_processor.process_data(buf)
+
         if framenumber < num_sync_frames:
             # Before sync, we may not get data or it may be wrong, so
             # ignore it. But wait dt seconds to ensure sychronization
@@ -361,8 +364,8 @@ def check_online_reconstruction(with_water=False,
                 pass
 
         else:
-
             next = coord_processor.queue_realtime_ros_packets.get()
+
             assert len(next.objects)==1
             o1 = next.objects[0]
             if obj_id is not None:
@@ -373,8 +376,16 @@ def check_online_reconstruction(with_water=False,
             expected = np.array([D[dim][framenumber] for dim in 'xyz'])
             errors.append( np.sqrt(np.sum((expected-actual)**2)) )
 
-        if not coord_processor.is_alive():
-            break
+        if multithreaded:
+            if not coord_processor.is_alive():
+                break
+
+
+    if multithreaded:
+        orig_kill_all_trackers() # remove this in the future...
+
+    if not multithreaded:
+        coord_processor.finish_processing()
 
     t_start = time_dict[num_sync_frames]
     t_stop = time_dict[framenumber]
@@ -382,8 +393,9 @@ def check_online_reconstruction(with_water=False,
     n_frames = framenumber-num_sync_frames
     fps = n_frames/(t_stop-t_start)
 
-    coord_processor.quit()
-    coord_processor.join()
+    if multithreaded:
+        coord_processor.quit()
+        coord_processor.join()
     if not coord_processor.did_quit_successfully:
         raise RuntimeError('coordinate processor thread had error')
 
@@ -394,13 +406,26 @@ def check_online_reconstruction(with_water=False,
     assert mean_error < MAX_MEAN_ERROR
     return {'fps':fps}
 
+def benchmark():
+    rd = check_online_reconstruction(with_water=False,
+                                     with_orientation=False,
+                                     multithreaded=False)
+    pprint.pprint(rd)
+
 if __name__=='__main__':
-    # test online reconstruction
-    for test_func in [test_online_reconstruction]:
-        rd = {}
-        for args in test_func():
-            func = args[0]
-            this_args = args[1:]
-            result = func(*this_args)
-            rd[this_args]=result
-        pprint.pprint(rd)
+    if len(sys.argv) == 2:
+        kcachegrind_output_fname = sys.argv[1]
+    else:
+        kcachegrind_output_fname = None
+    if kcachegrind_output_fname is not None:
+        import cProfile
+        import lsprofcalltree
+        p = cProfile.Profile()
+        print 'running test in profile mode'
+        p.runctx('benchmark()',globals(),locals())
+        k = lsprofcalltree.KCacheGrind(p)
+        data = open(kcachegrind_output_fname, 'w')
+        k.output(data)
+        data.close()
+    else:
+        benchmark()
