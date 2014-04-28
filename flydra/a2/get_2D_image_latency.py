@@ -81,8 +81,9 @@ def main():
             mean_latency_sec = latency_sec.mean()
             max_latency_sec = np.max(latency_sec)
 
-            print '%s: median: %.1f, mean: %.1f, worst: %.1f (estimate error: %.1f msec). %.2f%% skipped'%(
+            print '%s (on %s): median: %.1f, mean: %.1f, worst: %.1f (estimate error: %.1f msec). %.2f%% skipped'%(
                 cam_id,
+                hostname,
                 median_latency_sec*1000.0,
                 mean_latency_sec*1000.0,
                 max_latency_sec*1000.0,

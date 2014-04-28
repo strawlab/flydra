@@ -46,11 +46,15 @@ def get_worst_sync_dict(filename_or_h5_file):
         meas_err_at_worst = max_measurement_error[idx]
         result[hostname]=worst
 
-    # special case: a single host called localhost in one place and real hostname in another
-    if len(uhostnames)==1 and uhostnames[0]=='localhost':
-        hostnames2 = numpy.unique(cam_info['hostname'])
-        if len(hostnames2)==1:
-            result[hostnames2[0]]=result['localhost']
+    # special case: if there is a 'localhost' entry in uhostnames, yet cam_info
+    # contains one more hostname that is not localhost, consider that hostname
+    # and localhost to be the same
+    hostnames2 = numpy.unique(cam_info['hostname'])
+    if ('localhost' in uhostnames) and ('localhost' not in hostnames2):
+        if len(hostnames2) == len(uhostnames):
+            real_localhost = set(hostnames2) - set(uhostnames)
+            result[real_localhost.pop()] = result['localhost']
+
     return result
 
 def main():
