@@ -237,6 +237,10 @@ def convert(infilename,
         except numpy.linalg.linalg.LinAlgError:
             warnings.warn('linear algebra error smoothing obj_id %d, skipping.'%(obj_id,))
             continue
+        except core_analysis.CouldNotCalculateOrientationError:
+            warnings.warn('algebra error smoothing obj_id %d, skipping.'%(obj_id,))
+            continue
+
         allrows.append(rows)
         try:
             qualrows = compute_ori_quality(data_file,

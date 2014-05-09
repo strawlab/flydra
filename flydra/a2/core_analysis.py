@@ -90,6 +90,9 @@ class NoObjectIDError(ObjectIDDataError):
 class NotEnoughDataToSmoothError(ObjectIDDataError):
     pass
 
+class CouldNotCalculateOrientationError(ObjectIDDataError):
+    pass
+
 def parse_seq( input ):
     input = input.replace(',',' ')
     seq = map(int,input.split())
@@ -946,7 +949,7 @@ class PreSmoothedDataCache(object):
                     bad_cond = ~good_cond
                     directions[bad_cond,:]=np.nan # ignore bad quality data
 
-                if 1:
+                try:
                     # send kalman-smoothed position estimates (the
                     # velocity will be determined from this)
                     chosen_directions = choose_orientations(
@@ -960,6 +963,9 @@ class PreSmoothedDataCache(object):
                         elevation_up_bias_degrees=elevation_up_bias_degrees,
                         up_dir=up_dir,
                         )
+                except Exception, e:
+                    raise CouldNotCalculateOrientationError(str(e))
+
                 rows['rawdir_x'] = chosen_directions[:,0]
                 rows['rawdir_y'] = chosen_directions[:,1]
                 rows['rawdir_z'] = chosen_directions[:,2]
