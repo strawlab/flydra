@@ -224,6 +224,7 @@ def make_montage( h5_filename,
     if movie_fnames is None:
         # This works based on UUIDs
         movie_fnames = auto_discover_movies.find_movies( h5_filename,
+                                                         ufmf_dir=ufmf_dir,
                                                          candidate_index=candidate_index,
                                                          verbose=verbose)
         if verbose:

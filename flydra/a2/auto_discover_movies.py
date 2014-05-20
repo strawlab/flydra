@@ -16,13 +16,16 @@ def get_uuid(filename):
     uuid = uuids[0]
     return uuid
 
-def find_movies(h5_fname,verbose=False,candidate_index=0):
+def find_movies(h5_fname,ufmf_dir=None,verbose=False,candidate_index=0):
     '''find movies (.ufmf or .fmf) which are in canonical location'''
     h5_start, h5_stop = get_h5_start_stop(h5_fname)
     uuid = get_uuid(h5_fname)
     if verbose:
         print 'h5_start, h5_stop',h5_start, h5_stop
-    test_path = os.path.expanduser(DEFAULT_MOVIE_SUBDIR)
+    if ufmf_dir is None:
+        test_path = os.path.expanduser(DEFAULT_MOVIE_SUBDIR)
+    else:
+        test_path = ufmf_dir
     if verbose:
         print 'find_movies test_path: %r'%(test_path,)
 
