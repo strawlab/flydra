@@ -7,6 +7,7 @@ import pprint
 import core_analysis
 from distutils.version import LooseVersion
 import orientation_ekf_fitter
+from flydra.analysis.result_utils import timestamp2string, get_tz
 
 def get_data2d_distorted_info(filename):
     results = {}
@@ -16,6 +17,7 @@ def get_data2d_distorted_info(filename):
     tmp1, tmp2, tmp3, h5, extra = ca.initial_file_load(filename)
     version = LooseVersion(extra['header']['flydra_version'])
 
+    tz = get_tz(h5)
     if hasattr(h5.root,'data2d_distorted'):
 
         data2d = h5.root.data2d_distorted
@@ -23,6 +25,9 @@ def get_data2d_distorted_info(filename):
         timestamps = data2d.read(field='timestamp')
         results['start_timestamp'] = np.min(timestamps)
         results['stop_timestamp'] = np.max(timestamps)
+
+        results['start_timestamp_iso'] = timestamp2string(results['start_timestamp'],tz)
+        results['stop_timestamp_iso'] = timestamp2string(results['stop_timestamp'],tz)
 
         frames = data2d.read(field='frame')
         results['start_frame'] = np.min(frames)
@@ -58,6 +63,7 @@ def get_kalman_estimates_info(filename):
 
     ca = core_analysis.get_global_CachingAnalyzer()
     tmp1, unique_object_ids, tmp3, h5, extra = ca.initial_file_load(filename)
+    tz = get_tz(h5)
 
     if hasattr(h5.root,'kalman_estimates'):
 
@@ -66,6 +72,9 @@ def get_kalman_estimates_info(filename):
         timestamps = data.read(field='timestamp')
         results['start_timestamp'] = np.min(timestamps)
         results['stop_timestamp'] = np.max(timestamps)
+
+        results['start_timestamp_iso'] = timestamp2string(results['start_timestamp'],tz)
+        results['stop_timestamp_iso'] = timestamp2string(results['stop_timestamp'],tz)
 
         frames = data.read(field='frame')
         results['start_frame'] = np.min(frames)
