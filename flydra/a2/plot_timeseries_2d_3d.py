@@ -21,7 +21,7 @@ import flydra.a2.utils as utils
 from flydra.kalman.point_prob import some_rough_negative_log_likelihood
 import core_analysis
 
-import pytz, datetime, time
+import datetime, time
 import collections
 
 all_kalman_lines = {}

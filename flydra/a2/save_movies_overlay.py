@@ -32,7 +32,7 @@ import progressbar
 import core_analysis
 
 import warnings
-import pytz, datetime
+import datetime
 
 def ensure_minsize_image( arr, (h,w), fill=0):
     if ((arr.shape[0] < h) or (arr.shape[1] < w)):

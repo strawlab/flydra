@@ -27,7 +27,7 @@ import flydra.analysis.result_utils as result_utils
 
 import core_analysis
 
-import pytz, datetime, time
+import datetime, time
 
 class DateFormatter:
     def __init__(self,tz):

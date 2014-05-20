@@ -31,8 +31,6 @@ import densities # from scikits.learn
 
 import warnings
 
-import pytz, datetime
-
 class Frames2Time:
     def __init__(self,frame0,fps):
         self.f0 = frame0

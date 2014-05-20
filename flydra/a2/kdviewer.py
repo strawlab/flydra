@@ -18,7 +18,7 @@ import tables as PT
 from optparse import OptionParser
 import core_analysis
 import scipy.io
-import pytz, datetime
+import datetime
 import pkg_resources
 import flydra.reconstruct as reconstruct
 import flydra.analysis.result_utils as result_utils

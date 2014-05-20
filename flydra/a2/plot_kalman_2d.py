@@ -8,8 +8,6 @@ import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy']) # ensure pytables 2.x
 import tables
 import contextlib
-import pytz # from http://pytz.sourceforge.net/
-import datetime
 import sys, os
 from optparse import OptionParser
 import matplotlib
