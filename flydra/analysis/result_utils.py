@@ -335,7 +335,10 @@ def create_data2d_camera_summary(results):
     table.flush()
 
 def timestamp2string(ts_float,timezone=DEFAULT_TZ):
-    tz = pytz.timezone(timezone)
+    if isinstance(timezone, datetime.tzinfo):
+        tz = timezone
+    else:
+        tz = pytz.timezone(timezone)
     dt_ts = datetime.datetime.fromtimestamp(ts_float,tz)
     # dt_ts.ctime()
     return dt_ts.isoformat()
