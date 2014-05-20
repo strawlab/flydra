@@ -41,7 +41,7 @@ def get_h5_start_stop(filename,careful=True):
 
     return h5_start, h5_stop
 
-def find_ufmfs(filename,ufmf_dir=None,careful=True):
+def find_ufmfs(filename,ufmf_dir=None,careful=True,verbose=False):
 
     ufmf_template = 'small_%(date_time)s_%(cam_id)s.ufmf$'
     date_time_re = '([0-9]{8}_[0-9]{6})'
