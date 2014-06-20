@@ -1,8 +1,8 @@
 <stimxml version="1">
   <cylindrical_arena>
-    <origin>0 0 -0.05</origin>
+    <origin>0 0 0</origin>
     <axis>0 0 1</axis>
-    <diameter>0.42</diameter>
-    <height>0.05</height>
+    <diameter>0.35</diameter>
+    <height>0.005</height>
   </cylindrical_arena>
 </stimxml>
