@@ -9,6 +9,7 @@ from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCE
 from flydra.common_variables import WATER_ROOTS_EPS
 import scipy.linalg
 import traceback
+import pickle
 import _pmat_jacobian # in pyrex/C for speed
 import _pmat_jacobian_water # in pyrex/C for speed
 import flydra.water as water
@@ -1645,11 +1646,25 @@ class Reconstructor:
             underwater_pts = pts3d[underwater_cond]
 
             if len(underwater_pts):
-                x_underwater = water.view_points_in_water( self,
-                                                           cam_id,
-                                                           underwater_pts,
-                                                           self.wateri,
-                                                           distorted=distorted )
+                try:
+                    x_underwater = water.view_points_in_water( self,
+                                                               cam_id,
+                                                               underwater_pts,
+                                                               self.wateri,
+                                                               distorted=distorted )
+                except:
+                    dumper = {'cam_id':cam_id,
+                              'underwater_pts':underwater_pts,
+                              'distorted':distorted,
+                              'cal_source':self.cal_source,
+                              }
+                    bad_fname = '/tmp/flydra-water-error.pkl'
+                    with open(bad_fname,mode='w') as fd:
+                        pickle.dump(dumper,fd)
+                    print 'saved data to %s'%bad_fname
+                    print 'self.wateri',self.wateri
+                    print 'self',self
+                    raise
             else:
                 x_underwater = None
 
