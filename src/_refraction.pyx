@@ -58,7 +58,8 @@ cpdef double find_fastest_path_fermat(double n1,double n2,double z1,double h,dou
     #  Refractions. JOURNAL FOR GEOMETRY AND GRAPHICS VOLUME, 4(1),
     #  1–18.
     #
-    # we can choose the real root less than h.
+    # we can choose the real root less than h. I (ADS) also found that
+    # it should be non-negative.
 
-    result = _Roots3And4.real_root_less_than(a,b,c,d,e,h)
+    result = _Roots3And4.real_nonnegative_root_less_than(a,b,c,d,e,h)
     return result

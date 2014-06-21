@@ -3,10 +3,11 @@ import warnings
 cdef extern from "Roots3And4.h":
     int SolveQuartic(double c[5], double s[4])
 
-cdef double real_root_less_than(double p4, double p3, double p2, double p1, double p0, double maxval) except *:
+cdef double real_nonnegative_root_less_than(double p4, double p3, double p2, double p1, double p0, double maxval) except *:
     cdef double c[5]
     cdef double s[4]
     cdef int i, num, found
+    cdef double si
 
     c[4] = p4
     c[3] = p3
@@ -18,8 +19,9 @@ cdef double real_root_less_than(double p4, double p3, double p2, double p1, doub
 
     found = 0
     for i in range(num):
-        if s[i] <= maxval:
-            result = s[i]
+        si = s[i]
+        if si <= maxval and si >= 0:
+            result = si
             if found != 0:
                 raise ValueError('more than one valid root found')
             found = 1
@@ -27,8 +29,9 @@ cdef double real_root_less_than(double p4, double p3, double p2, double p1, doub
         # hmm, sometimes numerical round-off error gets us here. try again with eps.
         eps=1e-7
         for i in range(num):
-            if s[i] <= maxval + eps:
-                result = s[i]
+            si = s[i]
+            if si <= maxval + eps and si >= 0:
+                result = si
                 if found != 0:
                     raise ValueError('more than one valid root found')
                 found = 1
