@@ -29,3 +29,11 @@ def test_refraction():
     ratio2 = np.sin(theta1) / np.sin(theta2)
 
     assert abs(ratio1 - ratio2) < 1e-6
+
+    # test case that was actually failing in real-world use
+    n1 = 1.0003
+    n2 = 1.333
+    height = 0.40279482775695
+    r = 0.793324332905365
+    depth = 1.7437460383163346
+    r0 = _refraction.find_fastest_path_fermat(n1, n2, height, r, depth)
