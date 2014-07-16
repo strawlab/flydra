@@ -70,18 +70,21 @@ def get_kalman_estimates_info(filename):
         data = h5.root.kalman_estimates
 
         timestamps = data.read(field='timestamp')
-        results['start_timestamp'] = np.min(timestamps)
-        results['stop_timestamp'] = np.max(timestamps)
+        if not len(timestamps):
+            global_results['summary_kalman_estimates']=None
+        else:
+            results['start_timestamp'] = np.min(timestamps)
+            results['stop_timestamp'] = np.max(timestamps)
 
-        results['start_timestamp_iso'] = timestamp2string(results['start_timestamp'],tz)
-        results['stop_timestamp_iso'] = timestamp2string(results['stop_timestamp'],tz)
+            results['start_timestamp_iso'] = timestamp2string(results['start_timestamp'],tz)
+            results['stop_timestamp_iso'] = timestamp2string(results['stop_timestamp'],tz)
 
-        frames = data.read(field='frame')
-        results['start_frame'] = np.min(frames)
-        results['stop_frame'] = np.max(frames)
+            frames = data.read(field='frame')
+            results['start_frame'] = np.min(frames)
+            results['stop_frame'] = np.max(frames)
 
-        results['obj_ids']=unique_object_ids
-        global_results['summary_kalman_estimates']=results
+            results['obj_ids']=unique_object_ids
+            global_results['summary_kalman_estimates']=results
     else:
         global_results['summary_kalman_estimates']=None
 
@@ -99,15 +102,19 @@ def get_dynamics_free_MLE_info(filename):
         data = h5.root.ML_estimates
 
         frames = data.read(field='frame')
-        results['start_frame'] = np.min(frames)
-        results['stop_frame'] = np.max(frames)
+        if not len(frames):
+            global_results['summary_dynamics_free_MLE'] = None
+            global_results['is_3d_orientation_fit'] = False
+        else:
+            results['start_frame'] = np.min(frames)
+            results['stop_frame'] = np.max(frames)
 
-        results['obj_ids']=unique_object_ids
-        results['is_3d_orientation_fit'] = \
-            orientation_ekf_fitter.is_orientation_fit(filename)
+            results['obj_ids']=unique_object_ids
+            results['is_3d_orientation_fit'] = \
+                orientation_ekf_fitter.is_orientation_fit(filename)
 
-        global_results['summary_dynamics_free_MLE'] = results
-        global_results['is_3d_orientation_fit']=results['is_3d_orientation_fit']
+            global_results['summary_dynamics_free_MLE'] = results
+            global_results['is_3d_orientation_fit']=results['is_3d_orientation_fit']
     else:
         global_results['summary_dynamics_free_MLE'] = None
         global_results['is_3d_orientation_fit'] = False
