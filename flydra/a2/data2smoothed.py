@@ -134,6 +134,8 @@ def convert(infilename,
         print 'finding 2d data for each obj_id...'
         timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
         table_kobs_frame = table_kobs.read(field='frame')
+        if len(table_kobs_frame)==0:
+            raise ValueError('no 3D data, cannot convert')
         assert numpy.max(table_kobs_frame) < 2**63
         table_kobs_frame = table_kobs_frame.astype(numpy.int64)
         assert table_kobs_frame.dtype == table_data2d_frames.dtype # otherwise very slow
