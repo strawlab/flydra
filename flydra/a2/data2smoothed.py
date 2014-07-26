@@ -259,15 +259,7 @@ def convert(infilename,
         allqualrows = numpy.concatenate( allqualrows )
     else:
         allqualrows = None
-    try:
-        recarray = numpy.rec.array(allrows)
-    except:
-        print >> sys.stderr, "error converting allrows, attempting to save problem data."
-        import pickle
-        with open('/tmp/flydra_data2smoothed_error_allrows.pkl',mode='wb') as fd:
-            pickle.dump( allrows, fd )
-        print >> sys.stderr, "saved problem data, now raising original error."
-        raise
+    recarray = numpy.rec.array(allrows)
 
     smoothed_source = 'kalman_estimates'
 
