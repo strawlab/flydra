@@ -30,7 +30,7 @@ cdef double real_nonnegative_root_less_than(double p4, double p3, double p2, dou
         eps=1e-7
         for i in range(num):
             si = s[i]
-            if si <= maxval + eps and si >= 0:
+            if si <= maxval + eps and si >= -eps:
                 result = si
                 if found != 0:
                     raise ValueError('more than one valid root found')
@@ -39,4 +39,7 @@ cdef double real_nonnegative_root_less_than(double p4, double p3, double p2, dou
                               'for round-off error.')
         if found==0:
             raise ValueError('valid root not found')
+        if result < 0:
+            # non-negative only to do round-off, make zero
+            result = 0
     return result
