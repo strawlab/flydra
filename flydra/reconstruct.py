@@ -1264,8 +1264,12 @@ class Reconstructor:
         result = cls(sccs)
         return result
 
-    def convert_to_pymvg(self):
+    def convert_to_pymvg(self, ignore_water=False):
         import pymvg
+
+        if not ignore_water and (self.wateri is not None):
+            raise ValueError('Without dropping refractive boundary, this '
+                             'Reconstructor cannot be converted to PyMVG.')
 
         orig_sccs = [self.get_SingleCameraCalibration(cam_id)
                      for cam_id in self.cam_ids]
