@@ -9,6 +9,8 @@ import ransac
 import cgtypes # cgkit 1.x
 import os
 
+from flydra.common_variables import WATER_ROOTS_EPS
+
 svd = np.linalg.svd
 D2R = np.pi/180.0
 
@@ -153,7 +155,7 @@ def doit(filename=None,
 
     M = align.build_xform(s,R,t)
     r2 = recon.get_aligned_copy(M)
-    wateri = water.WaterInterface()
+    wateri = water.WaterInterface(WATER_ROOTS_EPS)
     r2.add_water(wateri)
 
     dst = os.path.splitext(filename)[0] + '-water-aligned.xml'

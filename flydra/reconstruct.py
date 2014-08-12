@@ -1106,7 +1106,7 @@ class Reconstructor:
                     ri = results.root.calibration.refractive_interfaces[:]
                     assert len(ri)==1
                     row = ri[0]
-                    wateri = water.WaterInterface()
+                    wateri = water.WaterInterface(WATER_ROOTS_EPS)
                     assert row['n1']==wateri.n1
                     assert row['n2']==wateri.n2
                     assert row['plane_normal_x'] == 0
