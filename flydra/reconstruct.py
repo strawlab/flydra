@@ -387,7 +387,8 @@ def test_angles_near2():
     assert angles_near(a,b,eps=10.0*D2R,mod_pi=True) == False
 
 def test_pymvg_roundtrip():
-    from pymvg import CameraModel, MultiCameraSystem
+    from pymvg.camera_model import CameraModel
+    from pymvg.multi_camera_system import MultiCameraSystem
 
     # ----------- with no distortion ------------------------
     center1 = np.array( (0, 0.0, 5) )
@@ -573,14 +574,14 @@ class SingleCameraCalibration:
                 self.helper == other.helper)
 
     def convert_to_pymvg(self):
-        import pymvg
-        import pymvg.core
+        import pymvg.camera_model
+        import pymvg.util
 
         if not self.helper.simple:
             raise ValueError('this camera cannot be converted to PyMVG')
 
         K, R = self.get_KR()
-        if not pymvg.core.is_rotation_matrix(R):
+        if not pymvg.util.is_rotation_matrix(R):
             # RQ may return left-handed rotation matrix. Make right-handed.
             R2 = -R
             K2 = -K
@@ -630,7 +631,7 @@ class SingleCameraCalibration:
              'D':distortion,
              'name':self.cam_id,
              }
-        cnew = pymvg.CameraModel.from_dict(d,max_skew_ratio=10)
+        cnew = pymvg.camera_model.CameraModel.from_dict(d)
         return cnew
 
     def get_pmat(self):
@@ -1073,8 +1074,8 @@ class Reconstructor:
                         'XML file does not contain reconstructor node')
             cam_ids = next_self.cam_ids
         elif self.cal_source_type == 'json file':
-            import pymvg
-            mvg = pymvg.MultiCameraSystem.from_pymvg_file(use_cal_source)
+            from pymvg.multi_camera_system import MultiCameraSystem
+            mvg = MultiCameraSystem.from_pymvg_file(use_cal_source)
             next_self = Reconstructor.from_pymvg(mvg)
             cam_ids = next_self.cam_ids
         elif self.cal_source_type == 'pytables':
@@ -1266,7 +1267,7 @@ class Reconstructor:
         return result
 
     def convert_to_pymvg(self, ignore_water=False):
-        import pymvg
+        from pymvg.multi_camera_system import MultiCameraSystem
 
         if not ignore_water and (self.wateri is not None):
             raise ValueError('Without dropping refractive boundary, this '
@@ -1275,7 +1276,7 @@ class Reconstructor:
         orig_sccs = [self.get_SingleCameraCalibration(cam_id)
                      for cam_id in self.cam_ids]
         cams = [o.convert_to_pymvg() for o in orig_sccs]
-        result = pymvg.MultiCameraSystem(cams)
+        result = MultiCameraSystem(cams)
         return result
 
     def get_scaled(self):
