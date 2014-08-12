@@ -38,7 +38,7 @@ ddur_dh1 = diff(duration,h1)
 #print solve(ddur_dh1,dh1) # fails due to quartic polynomial
 """
 
-cpdef double find_fastest_path_fermat(double n1,double n2,double z1,double h,double z2) except *:
+cpdef double find_fastest_path_fermat(double n1,double n2,double z1,double h,double z2,double eps) except *:
     cdef double result
     cdef double a,b,c,d,e
 
@@ -61,5 +61,5 @@ cpdef double find_fastest_path_fermat(double n1,double n2,double z1,double h,dou
     # we can choose the real root less than h. I (ADS) also found that
     # it should be non-negative.
 
-    result = _Roots3And4.real_nonnegative_root_less_than(a,b,c,d,e,h)
+    result = _Roots3And4.real_nonnegative_root_less_than(a,b,c,d,e,h, eps)
     return result

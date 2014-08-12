@@ -6,6 +6,7 @@ import numpy
 import _reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCENTRICITY
+from flydra.common_variables import WATER_ROOTS_EPS
 import scipy.linalg
 import traceback
 import _pmat_jacobian # in pyrex/C for speed
@@ -992,7 +993,7 @@ def Reconstructor_from_xml(elem):
             raise ValueError('unknown tag: %s'%child.tag)
     r = Reconstructor(sccs,minimum_eccentricity=minimum_eccentricity)
     if has_water:
-        wateri = water.WaterInterface()
+        wateri = water.WaterInterface(WATER_ROOTS_EPS)
         r.add_water(wateri)
     return r
 
@@ -1254,7 +1255,7 @@ class Reconstructor:
                     self.Pmat[cam_id])
             else:
                 model = _pmat_jacobian_water.PinholeCameraWaterModelWithJacobian(
-                    self.Pmat[cam_id],self.wateri)
+                    self.Pmat[cam_id],self.wateri,WATER_ROOTS_EPS)
             self._model_with_jacobian[cam_id] = model
 
     @classmethod

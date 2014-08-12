@@ -9,6 +9,7 @@ cdef class PinholeCameraWaterModelWithJacobian(_pmat_jacobian.PinholeCameraModel
     cdef object shift
     cdef _pmat_jacobian.PinholeCameraModelWithJacobian pinhole
     cdef double delta
+    cdef double roots3and4_eps
     cdef object dx,dy
 
     cpdef evaluate_jacobian_at(self, np.ndarray[np.double_t, ndim=1] X)

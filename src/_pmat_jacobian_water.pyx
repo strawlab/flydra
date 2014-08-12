@@ -12,12 +12,13 @@ def make_PinholeCameraWaterModelWithJacobian(*args,**kw):
     return PinholeCameraWaterModelWithJacobian(*args,**kw)
 
 cdef class PinholeCameraWaterModelWithJacobian(_pmat_jacobian.PinholeCameraModelWithJacobian):
-    def __init__(self,P,wateri):
+    def __init__(self,P,wateri,roots3and4_eps):
         self.pmat = P
         self.wateri = wateri
         assert isinstance(wateri, water.WaterInterface)
         self.n1 = wateri.n1
         self.n2 = wateri.n2
+        self.roots3and4_eps = roots3and4_eps
 
         C = reconstruct.pmat2cam_center(self.pmat)
         C = C[:,0]
@@ -98,7 +99,7 @@ cdef class PinholeCameraWaterModelWithJacobian(_pmat_jacobian.PinholeCameraModel
         theta = atan2( s1, s0 )
         r = sqrt( s0*s0 + s1*s1 )
         r0 = _refraction.find_fastest_path_fermat( self.n1, self.n2, self.camz,
-                                                   r, depth)
+                                                   r, depth, self.roots3and4_eps )
 
         t0 = r0*cos(theta)
         t1 = r0*sin(theta)

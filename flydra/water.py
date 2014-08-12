@@ -7,11 +7,12 @@ class WaterInterface:
 
     If water is ever not at z=0, this will be the place to implement it.
     '''
-    def __init__(self):
+    def __init__(self,water_roots_eps):
         # values for air and water from
         # http://en.wikipedia.org/wiki/Refraction
         self.n1 = 1.0003
         self.n2 = 1.3330
+        self.water_roots_eps = water_roots_eps
 
 def view_points_in_water( reconstructor, cam_id, pts3d, water, distorted=True ):
     """
@@ -45,7 +46,7 @@ def view_points_in_water( reconstructor, cam_id, pts3d, water, distorted=True ):
         assert depth[i]>=0
         r0.append(
             _refraction.find_fastest_path_fermat( water.n1, water.n2,
-                                                  height, r[i], depth[i]))
+                                                  height, r[i], depth[i], water.water_roots_eps))
 
     r0=np.array(r0)
     shifted_water_surface_pts[:,0] = r0*np.cos(theta)

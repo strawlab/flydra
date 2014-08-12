@@ -1,5 +1,9 @@
 MINIMUM_ECCENTRICITY = 1.4 # threshold to fit line
 
+# epsilon for numerical precision when computing quartic roots in
+# refractive boundary code
+WATER_ROOTS_EPS = 1e-5
+
 timestamp_echo_listener_port = 9992 # on cameras
 timestamp_echo_fmt1 = '<d'
 timestamp_echo_fmt_diff = '<d'
