@@ -274,11 +274,6 @@ current list of 2D points
 
         data2d = results.root.data2d_distorted # make sure we have 2d data table
 
-        debugADS = False
-        if debugADS:
-            for row in data2d.where(data2d.cols.frame==11900):
-                print '%d: %s'%(row.nrow,str(row))
-
         print 'reading frames...'
         frames = data2d.read(field='frame')
         print 'OK'
@@ -502,10 +497,6 @@ current list of 2D points
             this_camn_idxs = kobs_2d_data[1::2]
 
             this_use_idxs = use_idxs[frames==kframe]
-            if debugADS:
-                print
-                print kframe,'==============='
-                print 'this_use_idxs', this_use_idxs
 
             try:
                 d2d = data2d.readCoordinates( this_use_idxs )
@@ -514,10 +505,6 @@ current list of 2D points
                 print type(this_use_idxs)
                 print this_use_idxs.dtype
                 raise
-            if debugADS:
-                print 'd2d -=--=--=--=--=-'
-                for row in d2d:
-                    print row
             for this_camn,this_camn_idx in zip(this_camns,this_camn_idxs):
                 this_idxs_tmp = numpy.nonzero(d2d['camn'] == this_camn)[0]
                 this_camn_d2d = d2d[d2d['camn'] == this_camn]
@@ -573,7 +560,7 @@ def main():
                       metavar="KALMANFILE")
 
     parser.add_option("-r", "--reconstructor", dest="reconstructor_path", type='string',
-                      help="calibration/reconstructor path (if not specified, defaults to FILE)",
+                      help="calibration/reconstructor path (if not specified, defaults to KALMANFILE)",
                       metavar="RECONSTRUCTOR")
 
     parser.add_option("--start", type="int",
