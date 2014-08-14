@@ -442,105 +442,81 @@ current list of 2D points
         if kalman_filename is None:
             return
 
-        # Do same as above for Kalman-filtered data
-
-        kobs = kresults.root.ML_estimates
-        kframes = kobs.read(field='frame')
-        if frame_start is not None:
-            k_after_start = numpy.nonzero( kframes>=frame_start )[0]
-            #k_after_start = kobs.readCoordinates(idxs)
-            #k_after_start = kobs.getWhereList(
-            #    'frame>=frame_start')
-        else:
-            k_after_start = None
-        if frame_stop is not None:
-            k_before_stop = numpy.nonzero( kframes<=frame_stop )[0]
-            #k_before_stop = kobs.readCoordinates(idxs)
-            #k_before_stop = kobs.getWhereList(
-            #    'frame<=frame_stop')
-        else:
-            k_before_stop = None
-
-        if k_after_start is not None and k_before_stop is not None:
-            k_use_idxs = numpy.intersect1d(k_after_start,k_before_stop)
-        elif k_after_start is not None:
-            k_use_idxs = k_after_start
-        elif k_before_stop is not None:
-            k_use_idxs = k_before_stop
-        else:
-            k_use_idxs = numpy.arange(kobs.nrows)
-
-        obj_ids = kobs.read(field='obj_id')[k_use_idxs]
-        #obj_ids = kobs.readCoordinates( k_use_idxs,
-        #                                field='obj_id')
-        obs_2d_idxs = kobs.read(field='obs_2d_idx')[k_use_idxs]
-        #obs_2d_idxs = kobs.readCoordinates( k_use_idxs,
-        #                                    field='obs_2d_idx')
-        kframes = kframes[k_use_idxs]#kobs.readCoordinates( k_use_idxs,
-                                      # field='frame')
-
-        kobs_2d = kresults.root.ML_estimates_2d_idxs
-        xys_by_obj_id = {}
-        for obj_id,kframe,obs_2d_idx in zip(obj_ids,kframes,obs_2d_idxs):
-            if obj_only is not None:
-                if obj_id not in obj_only:
-                    continue
-
-            obs_2d_idx_find = int(obs_2d_idx) # XXX grr, why can't pytables do this?
-            obj_id_save = int(obj_id) # convert from possible numpy scalar
-            xys_by_cam_id = xys_by_obj_id.setdefault( obj_id_save, {})
-            kobs_2d_data = kobs_2d.read( start=obs_2d_idx_find,
-                                         stop=obs_2d_idx_find+1 )
-            assert len(kobs_2d_data)==1
-            kobs_2d_data = kobs_2d_data[0]
-            this_camns = kobs_2d_data[0::2]
-            this_camn_idxs = kobs_2d_data[1::2]
-
-            this_use_idxs = use_idxs[frames==kframe]
-
-            try:
-                d2d = data2d.readCoordinates( this_use_idxs )
-            except:
-                print repr(this_use_idxs)
-                print type(this_use_idxs)
-                print this_use_idxs.dtype
-                raise
-            for this_camn,this_camn_idx in zip(this_camns,this_camn_idxs):
-                this_idxs_tmp = numpy.nonzero(d2d['camn'] == this_camn)[0]
-                this_camn_d2d = d2d[d2d['camn'] == this_camn]
-                found = False
-                for this_row in this_camn_d2d: # XXX could be sped up
-                    if this_row['frame_pt_idx'] == this_camn_idx:
-                        found = True
-                        break
-                if not found:
-                    if 1:
-                        print 'WARNING:point not found in data -- 3D data starts before 2D I guess.'
-                        continue
-                    else:
-                        raise RuntimeError('point not found in data!?')
-                #this_row = this_camn_d2d[this_camn_idx]
-                this_cam_id = camn2cam_id[this_camn]
-                xys = xys_by_cam_id.setdefault( this_cam_id, ([],[]) )
-                xys[0].append( this_row['x'] )
-                xys[1].append( this_row['y'] )
-
-        for obj_id in xys_by_obj_id:
-            xys_by_cam_id = xys_by_obj_id[obj_id]
-            for cam_id, (xs,ys) in xys_by_cam_id.iteritems():
-                ax = self.subplot_by_cam_id[cam_id]
-                if 0:
-                    ax.plot(xs,ys,label='obs: %d'%obj_id)
-                else:
-                    ax.plot(xs,ys,'x-',label='obs: %d'%obj_id)
-                ax.text(xs[0],ys[0],'%d:'%(obj_id,))
-                ax.text(xs[-1],ys[-1],':%d'%(obj_id,))
-
         if 0:
-            for cam_id in self.subplot_by_cam_id.keys():
-                ax = self.subplot_by_cam_id[cam_id]
-                ax.legend()
-        print 'note: could/should also plot re-projection of Kalman filtered/smoothed data'
+            # Do same as above for Kalman-filtered data
+
+            kobs = kresults.root.ML_estimates
+            kframes = kobs.read(field='frame')
+            if frame_start is not None:
+                k_after_start = numpy.nonzero( kframes>=frame_start )[0]
+            else:
+                k_after_start = None
+            if frame_stop is not None:
+                k_before_stop = numpy.nonzero( kframes<=frame_stop )[0]
+            else:
+                k_before_stop = None
+
+            if k_after_start is not None and k_before_stop is not None:
+                k_use_idxs = numpy.intersect1d(k_after_start,k_before_stop)
+            elif k_after_start is not None:
+                k_use_idxs = k_after_start
+            elif k_before_stop is not None:
+                k_use_idxs = k_before_stop
+            else:
+                k_use_idxs = numpy.arange(kobs.nrows)
+
+            obj_ids = kobs.read(field='obj_id')[k_use_idxs]
+            obs_2d_idxs = kobs.read(field='obs_2d_idx')[k_use_idxs]
+            kframes = kframes[k_use_idxs]
+
+            kobs_2d = kresults.root.ML_estimates_2d_idxs
+            xys_by_obj_id = {}
+            for obj_id,kframe,obs_2d_idx in zip(obj_ids,kframes,obs_2d_idxs):
+                if obj_only is not None:
+                    if obj_id not in obj_only:
+                        continue
+
+                obs_2d_idx_find = int(obs_2d_idx) # XXX grr, why can't pytables do this?
+                obj_id_save = int(obj_id) # convert from possible numpy scalar
+                xys_by_cam_id = xys_by_obj_id.setdefault( obj_id_save, {})
+                kobs_2d_data = kobs_2d.read( start=obs_2d_idx_find,
+                                             stop=obs_2d_idx_find+1 )
+                assert len(kobs_2d_data)==1
+                kobs_2d_data = kobs_2d_data[0]
+                this_camns = kobs_2d_data[0::2]
+                this_camn_idxs = kobs_2d_data[1::2]
+
+                this_use_idxs = use_idxs[frames==kframe]
+
+                d2d = data2d.readCoordinates( this_use_idxs )
+                for this_camn,this_camn_idx in zip(this_camns,this_camn_idxs):
+                    this_idxs_tmp = numpy.nonzero(d2d['camn'] == this_camn)[0]
+                    this_camn_d2d = d2d[d2d['camn'] == this_camn]
+                    found = False
+                    for this_row in this_camn_d2d: # XXX could be sped up
+                        if this_row['frame_pt_idx'] == this_camn_idx:
+                            found = True
+                            break
+                    if not found:
+                        if 1:
+                            print 'WARNING:point not found in data -- 3D data starts before 2D I guess.'
+                            continue
+                        else:
+                            raise RuntimeError('point not found in data!?')
+                    this_cam_id = camn2cam_id[this_camn]
+                    xys = xys_by_cam_id.setdefault( this_cam_id, ([],[]) )
+                    xys[0].append( this_row['x'] )
+                    xys[1].append( this_row['y'] )
+
+
+            for obj_id in xys_by_obj_id:
+                xys_by_cam_id = xys_by_obj_id[obj_id]
+                for cam_id, (xs,ys) in xys_by_cam_id.iteritems():
+                    ax = self.subplot_by_cam_id[cam_id]
+                    ax.plot(xs,ys,'x-',label='obs: %d'%obj_id)
+                    ax.text(xs[0],ys[0],'%d:'%(obj_id,))
+                    ax.text(xs[-1],ys[-1],':%d'%(obj_id,))
+
 
         results.close()
         if opened_kresults:
