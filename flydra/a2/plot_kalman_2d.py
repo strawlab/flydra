@@ -234,6 +234,24 @@ current list of 2D points
                 kresults = PT.openFile(kalman_filename,mode='r')
                 opened_kresults = True
 
+            # copied from plot_timeseries_2d_3d.py
+            ca = core_analysis.get_global_CachingAnalyzer()
+            (xxobj_ids, xxuse_obj_ids, xxis_mat_file, xxdata_file,
+             extra) = ca.initial_file_load(kalman_filename)
+            fps = extra['frames_per_second']
+            dynamic_model_name = None
+            if dynamic_model_name is None:
+                dynamic_model_name = extra.get('dynamic_model_name',None)
+                if dynamic_model_name is None:
+                    dynamic_model_name = dynamic_models.DEFAULT_MODEL
+                    warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
+                else:
+                    print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+                if dynamic_model_name.startswith('EKF '):
+                    dynamic_model_name = dynamic_model_name[4:]
+                print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+
+
         if hasattr(results.root,'images'):
             img_table = results.root.images
         else:
@@ -517,6 +535,34 @@ current list of 2D points
                     ax.text(xs[0],ys[0],'%d:'%(obj_id,))
                     ax.text(xs[-1],ys[-1],':%d'%(obj_id,))
 
+        if 1:
+            # do for core_analysis smoothed (or not) data
+
+            for obj_id in xxuse_obj_ids:
+                try:
+                    rows = ca.load_data( obj_id, kalman_filename,
+                                         use_kalman_smoothing=True,
+                                         frames_per_second=fps,
+                                         dynamic_model_name=dynamic_model_name)
+                except core_analysis.NotEnoughDataToSmoothError:
+                    warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
+                if frame_start is not None:
+                    c1 = rows['frame'] >= frame_start
+                else:
+                    c1 = np.ones((len(rows),),dtype=np.bool)
+                if frame_stop is not None:
+                    c2 = rows['frame'] <= frame_stop
+                else:
+                    c2 = np.ones((len(rows),),dtype=np.bool)
+                valid = c1 & c2
+                rows = rows[valid]
+                if len(rows)>1:
+                    X3d = np.array((rows['x'], rows['y'], rows['z'], np.ones_like(rows['z']))).T
+
+                for cam_id in self.subplot_by_cam_id.keys():
+                    ax = self.subplot_by_cam_id[cam_id]
+                    newx,newy=self.reconstructor.find2d(cam_id,X3d,distorted=True)
+                    ax.plot(newx,newy,'-',label='k: %d'%obj_id)
 
         results.close()
         if opened_kresults:
