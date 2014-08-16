@@ -7,11 +7,11 @@ class WaterInterface:
 
     If water is ever not at z=0, this will be the place to implement it.
     '''
-    def __init__(self,water_roots_eps):
+    def __init__(self,refractive_index,water_roots_eps):
         # values for air and water from
         # http://en.wikipedia.org/wiki/Refraction
         self.n1 = 1.0003
-        self.n2 = 1.3330
+        self.n2 = refractive_index
         self.water_roots_eps = water_roots_eps
 
 def view_points_in_water( reconstructor, cam_id, pts3d, water, distorted=True ):

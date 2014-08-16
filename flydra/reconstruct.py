@@ -21,6 +21,8 @@ from optparse import OptionParser
 R2D = 180.0/np.pi
 D2R = np.pi/180.0
 
+DEFAULT_WATER_REFRACTIVE_INDEX=1.3330
+
 WARN_CALIB_DIFF = False
 
 L_i = nx.array([0,0,0,1,3,2])
@@ -985,16 +987,20 @@ def Reconstructor_from_xml(elem):
         elif child.tag == 'minimum_eccentricity':
             minimum_eccentricity = float(child.text)
         elif child.tag == 'water':
-            if hasattr(water,'text'):
+            refractive_index = None
+            if hasattr(child,'text'):
                 if child.text is not None:
                     if len(child.text.strip())!=0:
-                        raise NotImplementedError('loading water from xml not supported')
+                        refractive_index = float(child.text)
+            if refractive_index is None:
+                refractive_index=DEFAULT_WATER_REFRACTIVE_INDEX
             has_water = True
         else:
             raise ValueError('unknown tag: %s'%child.tag)
     r = Reconstructor(sccs,minimum_eccentricity=minimum_eccentricity)
     if has_water:
-        wateri = water.WaterInterface(WATER_ROOTS_EPS)
+        wateri = water.WaterInterface(refractive_index=refractive_index,
+                                      water_roots_eps=WATER_ROOTS_EPS)
         r.add_water(wateri)
     return r
 
@@ -1106,7 +1112,8 @@ class Reconstructor:
                     ri = results.root.calibration.refractive_interfaces[:]
                     assert len(ri)==1
                     row = ri[0]
-                    wateri = water.WaterInterface(WATER_ROOTS_EPS)
+                    wateri = water.WaterInterface(refractive_index=row['n2'],
+                                                  water_roots_eps=WATER_ROOTS_EPS)
                     assert row['n1']==wateri.n1
                     assert row['n2']==wateri.n2
                     assert row['plane_normal_x'] == 0
@@ -1801,6 +1808,7 @@ class Reconstructor:
             me_elem.text = repr(self.minimum_eccentricity)
         if self.wateri is not None:
             water_elem = ET.SubElement(elem,"water")
+            water_elem.text = repr(self.wateri.n2)
 
 def test_sba():
     import flydra.generate_fake_calibration as gfc
