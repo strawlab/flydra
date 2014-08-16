@@ -2,6 +2,8 @@ import flydra.reconstruct as reconstruct
 import pkg_resources
 import numpy as np
 import pymvg
+from pymvg.camera_model import CameraModel
+from pymvg.multi_camera_system import MultiCameraSystem
 
 sample_cal = pkg_resources.resource_filename('flydra.a2',
                                              'sample_calibration.xml')
@@ -42,7 +44,7 @@ def test_pymvg():
         assert np.allclose(tri1, tri2)
 
 def test_distortion():
-    base = pymvg.CameraModel.load_camera_default()
+    base = CameraModel.load_camera_default()
     lookat = np.array( (0.0, 0.0, 0.0) )
     up = np.array( (0.0, 0.0, 1.0) )
 
@@ -50,12 +52,12 @@ def test_distortion():
     cams.append(  base.get_view_camera(eye=np.array((1.0,0.0,1.0)),lookat=lookat,up=up) )
 
     distortion1 = np.array( [0.2, 0.3, 0.1, 0.1, 0.1] )
-    cam_wide = pymvg.CameraModel.load_camera_simple(name='cam_wide',
-                                                    fov_x_degrees=90,
-                                                    eye=np.array((-1.0,-1.0,0.7)),
-                                                    lookat=lookat,
-                                                    distortion_coefficients=distortion1,
-                                                    )
+    cam_wide = CameraModel.load_camera_simple(name='cam_wide',
+                                              fov_x_degrees=90,
+                                              eye=np.array((-1.0,-1.0,0.7)),
+                                              lookat=lookat,
+                                              distortion_coefficients=distortion1,
+                                              )
     cams.append(cam_wide)
 
     cam_ids = []
@@ -63,7 +65,7 @@ def test_distortion():
         cams[i].name = 'cam%02d'%i
         cam_ids.append(cams[i].name)
 
-    cam_system = pymvg.MultiCameraSystem(cams)
+    cam_system = MultiCameraSystem(cams)
     R = reconstruct.Reconstructor.from_pymvg(cam_system)
     for cam_id in cam_ids:
         nl_params = R.get_intrinsic_nonlinear(cam_id)

@@ -6,7 +6,8 @@ import pprint
 
 import numpy as np
 
-import pymvg
+from pymvg.camera_model import CameraModel
+from pymvg.multi_camera_system import MultiCameraSystem
 
 import flydra.offline_data_save
 from flydra.kalman.kalmanize import kalmanize
@@ -32,7 +33,7 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False):
 
     pts = np.hstack( (x[:,np.newaxis], y[:,np.newaxis], z[:,np.newaxis] ) )
 
-    base = pymvg.CameraModel.load_camera_default()
+    base = CameraModel.load_camera_default()
 
     lookat = np.array( (0.0, 0.0, 0.0) )
     up = np.array( (0.0, 0.0, 1.0) )
@@ -43,7 +44,7 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False):
     cams.append(  base.get_view_camera(eye=np.array((0,0.3,1.0)),lookat=lookat,up=up) )
 
     distortion1 = np.array( [0.2, 0.3, 0.1, 0.1, 0.1] )
-    cam_wide = pymvg.CameraModel.load_camera_simple(name='cam_wide',
+    cam_wide = CameraModel.load_camera_simple(name='cam_wide',
                                                     fov_x_degrees=90,
                                                     eye=np.array((-1.0,-1.0,0.7)),
                                                     lookat=lookat,
@@ -54,13 +55,14 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False):
     for i in range(len(cams)):
         cams[i].name = 'cam%02d'%i
 
-    cam_system = pymvg.MultiCameraSystem(cams)
+    cam_system = MultiCameraSystem(cams)
 
     # ------------
     # calculate 2d points for each camera
     reconstructor = Reconstructor.from_pymvg(cam_system)
     if with_water:
-        wateri = water.WaterInterface()
+        wateri = water.WaterInterface(refractive_index=1.3330,
+                                      water_roots_eps=1e-7)
         reconstructor.add_water(wateri)
 
     data2d = {'2d_pos_by_cam_ids':{},
