@@ -48,11 +48,11 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False, with_distort
     else:
         distortion1 = np.zeros((5,))
     cam_wide = CameraModel.load_camera_simple(name='cam_wide',
-                                                    fov_x_degrees=90,
-                                                    eye=np.array((-1.0,-1.0,0.7)),
-                                                    lookat=lookat,
-                                                    distortion_coefficients=distortion1,
-                                                    )
+                                              fov_x_degrees=90,
+                                              eye=np.array((-1.0,-1.0,0.7)),
+                                              lookat=lookat,
+                                              distortion_coefficients=distortion1,
+                                              )
     cams.append(cam_wide)
 
     for i in range(len(cams)):
