@@ -1550,7 +1550,7 @@ class Reconstructor:
                     raise ValueError('requesting 3D line coordinates, but no 2D line coordinates given')
             else:
                 if undistort:
-                    raise ValueError('Undistoring line coords not implemneted')
+                    raise ValueError('Undistoring line coords not implemented')
                 # get shape information from each view of a blob:
                 x,y,area,slope,eccentricity, p1,p2,p3,p4 = value_tuple
                 have_line_coords = True
