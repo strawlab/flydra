@@ -1204,7 +1204,7 @@ class Reconstructor:
                 self.Res[cam_id] = res
                 self._helper[cam_id] = reconstruct_utils.ReconstructHelper(
                     K[0,0], K[1,1], K[0,2], K[1,2],
-                    nlparams[0], nlparams[1], nlparams[2], nlparams[3])
+                    nlparams[0], nlparams[1], nlparams[2], nlparams[3], k3=nlparams[4])
 
         elif self.cal_source_type=='SingleCameraCalibration instances':
             # find instance

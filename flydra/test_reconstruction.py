@@ -135,6 +135,9 @@ def check_offline_reconstruction(with_water=False,
                                             reconstructor=D['reconstructor'],
                                             eccentricity=D['eccentricity'],
                                             )
+        d1 = D['reconstructor'].get_intrinsic_nonlinear('cam03')
+        d2 = flydra.reconstruct.Reconstructor(data2d_fname).get_intrinsic_nonlinear('cam03')
+        assert np.allclose(d1,d2)
 
         data3d_fname = tempfile.mktemp(suffix='-data3d.h5')
         kalmanize(data2d_fname,
