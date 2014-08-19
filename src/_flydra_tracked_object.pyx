@@ -677,9 +677,14 @@ cdef class TrackedObject:
             # keep 3D "observation" because we need to save 2d observations
             position_MLE = numpy.nan*numpy.ones( (3,))
         elif len(cam_ids_and_points2d)>=2:
-            position_MLE, Lcoords = self.reconstructor.find3d(
-                cam_ids_and_points2d, return_line_coords = True,
-                orientation_consensus=self.orientation_consensus)
+            if self.reconstructor.wateri is not None:
+                # do not attempt this if we have refractive boundary
+                # keep 3D "observation" because we need to save 2d observations
+                position_MLE = numpy.nan*numpy.ones( (3,))
+            else:
+                position_MLE, Lcoords = self.reconstructor.find3d(
+                    cam_ids_and_points2d, return_line_coords = True,
+                    orientation_consensus=self.orientation_consensus)
         else:
             position_MLE = None
         return (position_MLE, Lcoords, used_camns_and_idxs,
