@@ -297,7 +297,7 @@ class KalmanSaver:
                       list_of_pos+[this_idxs]+list_of_lines)
         obs_recarray = numpy.rec.fromarrays(
             array_list, names = self.h5_obs_names)
-        if 1:
+        if 0:
             # End tracking at last non-nan observation (must be > 1
             # camera for final points).
             idx = numpy.nonzero(~numpy.isnan(MLE_position))[0][-1]

@@ -183,6 +183,7 @@ def check_offline_reconstruction(with_water=False,
                 # file does not exist?
                 pass
 
+    assert my_rows['x'].shape == D['x'].shape
     mean_error = np.mean(np.sqrt((D['x']-x_actual)**2 +
                                  (D['y']-y_actual)**2 +
                                  (D['z']-z_actual)**2))
