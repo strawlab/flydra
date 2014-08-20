@@ -40,6 +40,7 @@ def calculate_reprojection_errors(h5_filename=None,
            'frame':[],
            'obj_id':[],
            'dist':[],
+           'z':[],
            }
 
     with openFileSafe( h5_filename, mode='r' ) as h5:
@@ -122,6 +123,7 @@ def calculate_reprojection_errors(h5_filename=None,
                     out['frame'].append(framenumber)
                     out['obj_id'].append(obj_id)
                     out['dist'].append(dist)
+                    out['z'].append( X3d[2] )
 
     # convert to numpy arrays
     for k in out:

@@ -234,6 +234,24 @@ current list of 2D points
                 kresults = PT.openFile(kalman_filename,mode='r')
                 opened_kresults = True
 
+            # copied from plot_timeseries_2d_3d.py
+            ca = core_analysis.get_global_CachingAnalyzer()
+            (xxobj_ids, xxuse_obj_ids, xxis_mat_file, xxdata_file,
+             extra) = ca.initial_file_load(kalman_filename)
+            fps = extra['frames_per_second']
+            dynamic_model_name = None
+            if dynamic_model_name is None:
+                dynamic_model_name = extra.get('dynamic_model_name',None)
+                if dynamic_model_name is None:
+                    dynamic_model_name = dynamic_models.DEFAULT_MODEL
+                    warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
+                else:
+                    print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+                if dynamic_model_name.startswith('EKF '):
+                    dynamic_model_name = dynamic_model_name[4:]
+                print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+
+
         if hasattr(results.root,'images'):
             img_table = results.root.images
         else:
@@ -273,11 +291,6 @@ current list of 2D points
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
 
         data2d = results.root.data2d_distorted # make sure we have 2d data table
-
-        debugADS = False
-        if debugADS:
-            for row in data2d.where(data2d.cols.frame==11900):
-                print '%d: %s'%(row.nrow,str(row))
 
         print 'reading frames...'
         frames = data2d.read(field='frame')
@@ -447,113 +460,109 @@ current list of 2D points
         if kalman_filename is None:
             return
 
-        # Do same as above for Kalman-filtered data
-
-        kobs = kresults.root.ML_estimates
-        kframes = kobs.read(field='frame')
-        if frame_start is not None:
-            k_after_start = numpy.nonzero( kframes>=frame_start )[0]
-            #k_after_start = kobs.readCoordinates(idxs)
-            #k_after_start = kobs.getWhereList(
-            #    'frame>=frame_start')
-        else:
-            k_after_start = None
-        if frame_stop is not None:
-            k_before_stop = numpy.nonzero( kframes<=frame_stop )[0]
-            #k_before_stop = kobs.readCoordinates(idxs)
-            #k_before_stop = kobs.getWhereList(
-            #    'frame<=frame_stop')
-        else:
-            k_before_stop = None
-
-        if k_after_start is not None and k_before_stop is not None:
-            k_use_idxs = numpy.intersect1d(k_after_start,k_before_stop)
-        elif k_after_start is not None:
-            k_use_idxs = k_after_start
-        elif k_before_stop is not None:
-            k_use_idxs = k_before_stop
-        else:
-            k_use_idxs = numpy.arange(kobs.nrows)
-
-        obj_ids = kobs.read(field='obj_id')[k_use_idxs]
-        #obj_ids = kobs.readCoordinates( k_use_idxs,
-        #                                field='obj_id')
-        obs_2d_idxs = kobs.read(field='obs_2d_idx')[k_use_idxs]
-        #obs_2d_idxs = kobs.readCoordinates( k_use_idxs,
-        #                                    field='obs_2d_idx')
-        kframes = kframes[k_use_idxs]#kobs.readCoordinates( k_use_idxs,
-                                      # field='frame')
-
-        kobs_2d = kresults.root.ML_estimates_2d_idxs
-        xys_by_obj_id = {}
-        for obj_id,kframe,obs_2d_idx in zip(obj_ids,kframes,obs_2d_idxs):
-            if obj_only is not None:
-                if obj_id not in obj_only:
-                    continue
-
-            obs_2d_idx_find = int(obs_2d_idx) # XXX grr, why can't pytables do this?
-            obj_id_save = int(obj_id) # convert from possible numpy scalar
-            xys_by_cam_id = xys_by_obj_id.setdefault( obj_id_save, {})
-            kobs_2d_data = kobs_2d.read( start=obs_2d_idx_find,
-                                         stop=obs_2d_idx_find+1 )
-            assert len(kobs_2d_data)==1
-            kobs_2d_data = kobs_2d_data[0]
-            this_camns = kobs_2d_data[0::2]
-            this_camn_idxs = kobs_2d_data[1::2]
-
-            this_use_idxs = use_idxs[frames==kframe]
-            if debugADS:
-                print
-                print kframe,'==============='
-                print 'this_use_idxs', this_use_idxs
-
-            try:
-                d2d = data2d.readCoordinates( this_use_idxs )
-            except:
-                print repr(this_use_idxs)
-                print type(this_use_idxs)
-                print this_use_idxs.dtype
-                raise
-            if debugADS:
-                print 'd2d -=--=--=--=--=-'
-                for row in d2d:
-                    print row
-            for this_camn,this_camn_idx in zip(this_camns,this_camn_idxs):
-                this_idxs_tmp = numpy.nonzero(d2d['camn'] == this_camn)[0]
-                this_camn_d2d = d2d[d2d['camn'] == this_camn]
-                found = False
-                for this_row in this_camn_d2d: # XXX could be sped up
-                    if this_row['frame_pt_idx'] == this_camn_idx:
-                        found = True
-                        break
-                if not found:
-                    if 1:
-                        print 'WARNING:point not found in data -- 3D data starts before 2D I guess.'
-                        continue
-                    else:
-                        raise RuntimeError('point not found in data!?')
-                #this_row = this_camn_d2d[this_camn_idx]
-                this_cam_id = camn2cam_id[this_camn]
-                xys = xys_by_cam_id.setdefault( this_cam_id, ([],[]) )
-                xys[0].append( this_row['x'] )
-                xys[1].append( this_row['y'] )
-
-        for obj_id in xys_by_obj_id:
-            xys_by_cam_id = xys_by_obj_id[obj_id]
-            for cam_id, (xs,ys) in xys_by_cam_id.iteritems():
-                ax = self.subplot_by_cam_id[cam_id]
-                if 0:
-                    ax.plot(xs,ys,label='obs: %d'%obj_id)
-                else:
-                    ax.plot(xs,ys,'x-',label='obs: %d'%obj_id)
-                ax.text(xs[0],ys[0],'%d:'%(obj_id,))
-                ax.text(xs[-1],ys[-1],':%d'%(obj_id,))
-
         if 0:
-            for cam_id in self.subplot_by_cam_id.keys():
-                ax = self.subplot_by_cam_id[cam_id]
-                ax.legend()
-        print 'note: could/should also plot re-projection of Kalman filtered/smoothed data'
+            # Do same as above for Kalman-filtered data
+
+            kobs = kresults.root.ML_estimates
+            kframes = kobs.read(field='frame')
+            if frame_start is not None:
+                k_after_start = numpy.nonzero( kframes>=frame_start )[0]
+            else:
+                k_after_start = None
+            if frame_stop is not None:
+                k_before_stop = numpy.nonzero( kframes<=frame_stop )[0]
+            else:
+                k_before_stop = None
+
+            if k_after_start is not None and k_before_stop is not None:
+                k_use_idxs = numpy.intersect1d(k_after_start,k_before_stop)
+            elif k_after_start is not None:
+                k_use_idxs = k_after_start
+            elif k_before_stop is not None:
+                k_use_idxs = k_before_stop
+            else:
+                k_use_idxs = numpy.arange(kobs.nrows)
+
+            obj_ids = kobs.read(field='obj_id')[k_use_idxs]
+            obs_2d_idxs = kobs.read(field='obs_2d_idx')[k_use_idxs]
+            kframes = kframes[k_use_idxs]
+
+            kobs_2d = kresults.root.ML_estimates_2d_idxs
+            xys_by_obj_id = {}
+            for obj_id,kframe,obs_2d_idx in zip(obj_ids,kframes,obs_2d_idxs):
+                if obj_only is not None:
+                    if obj_id not in obj_only:
+                        continue
+
+                obs_2d_idx_find = int(obs_2d_idx) # XXX grr, why can't pytables do this?
+                obj_id_save = int(obj_id) # convert from possible numpy scalar
+                xys_by_cam_id = xys_by_obj_id.setdefault( obj_id_save, {})
+                kobs_2d_data = kobs_2d.read( start=obs_2d_idx_find,
+                                             stop=obs_2d_idx_find+1 )
+                assert len(kobs_2d_data)==1
+                kobs_2d_data = kobs_2d_data[0]
+                this_camns = kobs_2d_data[0::2]
+                this_camn_idxs = kobs_2d_data[1::2]
+
+                this_use_idxs = use_idxs[frames==kframe]
+
+                d2d = data2d.readCoordinates( this_use_idxs )
+                for this_camn,this_camn_idx in zip(this_camns,this_camn_idxs):
+                    this_idxs_tmp = numpy.nonzero(d2d['camn'] == this_camn)[0]
+                    this_camn_d2d = d2d[d2d['camn'] == this_camn]
+                    found = False
+                    for this_row in this_camn_d2d: # XXX could be sped up
+                        if this_row['frame_pt_idx'] == this_camn_idx:
+                            found = True
+                            break
+                    if not found:
+                        if 1:
+                            print 'WARNING:point not found in data -- 3D data starts before 2D I guess.'
+                            continue
+                        else:
+                            raise RuntimeError('point not found in data!?')
+                    this_cam_id = camn2cam_id[this_camn]
+                    xys = xys_by_cam_id.setdefault( this_cam_id, ([],[]) )
+                    xys[0].append( this_row['x'] )
+                    xys[1].append( this_row['y'] )
+
+
+            for obj_id in xys_by_obj_id:
+                xys_by_cam_id = xys_by_obj_id[obj_id]
+                for cam_id, (xs,ys) in xys_by_cam_id.iteritems():
+                    ax = self.subplot_by_cam_id[cam_id]
+                    ax.plot(xs,ys,'x-',label='obs: %d'%obj_id)
+                    ax.text(xs[0],ys[0],'%d:'%(obj_id,))
+                    ax.text(xs[-1],ys[-1],':%d'%(obj_id,))
+
+        if 1:
+            # do for core_analysis smoothed (or not) data
+
+            for obj_id in xxuse_obj_ids:
+                try:
+                    rows = ca.load_data( obj_id, kalman_filename,
+                                         use_kalman_smoothing=True,
+                                         frames_per_second=fps,
+                                         dynamic_model_name=dynamic_model_name)
+                except core_analysis.NotEnoughDataToSmoothError:
+                    warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
+                if frame_start is not None:
+                    c1 = rows['frame'] >= frame_start
+                else:
+                    c1 = np.ones((len(rows),),dtype=np.bool)
+                if frame_stop is not None:
+                    c2 = rows['frame'] <= frame_stop
+                else:
+                    c2 = np.ones((len(rows),),dtype=np.bool)
+                valid = c1 & c2
+                rows = rows[valid]
+                if len(rows)>1:
+                    X3d = np.array((rows['x'], rows['y'], rows['z'], np.ones_like(rows['z']))).T
+
+                for cam_id in self.subplot_by_cam_id.keys():
+                    ax = self.subplot_by_cam_id[cam_id]
+                    newx,newy=self.reconstructor.find2d(cam_id,X3d,distorted=True)
+                    ax.plot(newx,newy,'-',label='k: %d'%obj_id)
 
         results.close()
         if opened_kresults:
@@ -573,7 +582,7 @@ def main():
                       metavar="KALMANFILE")
 
     parser.add_option("-r", "--reconstructor", dest="reconstructor_path", type='string',
-                      help="calibration/reconstructor path (if not specified, defaults to FILE)",
+                      help="calibration/reconstructor path (if not specified, defaults to KALMANFILE)",
                       metavar="RECONSTRUCTOR")
 
     parser.add_option("--start", type="int",

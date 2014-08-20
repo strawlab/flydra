@@ -6,7 +6,8 @@ import pprint
 
 import numpy as np
 
-import pymvg
+from pymvg.camera_model import CameraModel
+from pymvg.multi_camera_system import MultiCameraSystem
 
 import flydra.offline_data_save
 from flydra.kalman.kalmanize import kalmanize
@@ -21,7 +22,7 @@ CAM_HOSTNAME = 'localhost'
 SPINUP_DURATION = 0.2
 MAX_MEAN_ERROR = 0.002
 
-def setup_data(with_water=False, fps=120.0, with_orientation=False):
+def setup_data(with_water=False, fps=120.0, with_orientation=False, with_distortion=True):
     # generate fake trajectory
     dt = 1/fps
     t = np.arange(0.0, 1.0, dt)
@@ -32,7 +33,7 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False):
 
     pts = np.hstack( (x[:,np.newaxis], y[:,np.newaxis], z[:,np.newaxis] ) )
 
-    base = pymvg.CameraModel.load_camera_default()
+    base = CameraModel.load_camera_default()
 
     lookat = np.array( (0.0, 0.0, 0.0) )
     up = np.array( (0.0, 0.0, 1.0) )
@@ -42,25 +43,29 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False):
     cams.append(  base.get_view_camera(eye=np.array((1.2,3.4,5.6)),lookat=lookat,up=up) )
     cams.append(  base.get_view_camera(eye=np.array((0,0.3,1.0)),lookat=lookat,up=up) )
 
-    distortion1 = np.array( [0.2, 0.3, 0.1, 0.1, 0.1] )
-    cam_wide = pymvg.CameraModel.load_camera_simple(name='cam_wide',
-                                                    fov_x_degrees=90,
-                                                    eye=np.array((-1.0,-1.0,0.7)),
-                                                    lookat=lookat,
-                                                    distortion_coefficients=distortion1,
-                                                    )
+    if with_distortion:
+        distortion1 = np.array( [0.2, 0.3, 0.1, 0.1, 0.1] )
+    else:
+        distortion1 = np.zeros((5,))
+    cam_wide = CameraModel.load_camera_simple(name='cam_wide',
+                                              fov_x_degrees=90,
+                                              eye=np.array((-1.0,-1.0,0.7)),
+                                              lookat=lookat,
+                                              distortion_coefficients=distortion1,
+                                              )
     cams.append(cam_wide)
 
     for i in range(len(cams)):
         cams[i].name = 'cam%02d'%i
 
-    cam_system = pymvg.MultiCameraSystem(cams)
+    cam_system = MultiCameraSystem(cams)
 
     # ------------
     # calculate 2d points for each camera
     reconstructor = Reconstructor.from_pymvg(cam_system)
     if with_water:
-        wateri = water.WaterInterface()
+        wateri = water.WaterInterface(refractive_index=1.3330,
+                                      water_roots_eps=1e-7)
         reconstructor.add_water(wateri)
 
     data2d = {'2d_pos_by_cam_ids':{},
@@ -103,15 +108,22 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False):
     return result
 
 def test_offline_reconstruction():
+    fps=120.0
     for use_kalman_smoothing in [False, True]:
         for with_orientation in [False, True]:
             for with_water in [False, True]:
-                yield check_offline_reconstruction, with_water, use_kalman_smoothing, with_orientation
+                for with_distortion in [False,True]:
+                    yield check_offline_reconstruction, with_water, use_kalman_smoothing, with_orientation, fps, with_distortion
 
-def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, with_orientation=False, fps=120.0):
+def check_offline_reconstruction(with_water=False,
+                                 use_kalman_smoothing=False,
+                                 with_orientation=False,
+                                 fps=120.0,
+                                 with_distortion=True):
     D = setup_data( fps=fps,
                     with_water=with_water,
                     with_orientation=with_orientation,
+                    with_distortion=with_distortion,
                     )
 
     data2d_fname = tempfile.mktemp(suffix='-data2d.h5')
@@ -123,6 +135,9 @@ def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, w
                                             reconstructor=D['reconstructor'],
                                             eccentricity=D['eccentricity'],
                                             )
+        d1 = D['reconstructor'].get_intrinsic_nonlinear('cam03')
+        d2 = flydra.reconstruct.Reconstructor(data2d_fname).get_intrinsic_nonlinear('cam03')
+        assert np.allclose(d1,d2)
 
         data3d_fname = tempfile.mktemp(suffix='-data3d.h5')
         kalmanize(data2d_fname,
@@ -168,6 +183,7 @@ def check_offline_reconstruction(with_water=False, use_kalman_smoothing=False, w
                 # file does not exist?
                 pass
 
+    assert my_rows['x'].shape == D['x'].shape
     mean_error = np.mean(np.sqrt((D['x']-x_actual)**2 +
                                  (D['y']-y_actual)**2 +
                                  (D['z']-z_actual)**2))
@@ -204,7 +220,7 @@ class FakeMainBrain:
         return False
 
 def test_online_reconstruction():
-    for with_water in [False]:#, True]:
+    for with_water in [False, True]:
         for with_orientation in [False]:#,True]:
             yield check_online_reconstruction, with_water, with_orientation
 
@@ -212,10 +228,12 @@ def check_online_reconstruction(with_water=False,
                                 with_orientation=False,
                                 fps=120.0,
                                 multithreaded=True,
+                                with_distortion=True,
                                 ):
     D = setup_data( fps=fps,
                     with_water=with_water,
                     with_orientation=with_orientation,
+                    with_distortion=with_distortion,
                     )
 
     time_lock = threading.Lock()
