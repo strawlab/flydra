@@ -1508,7 +1508,10 @@ class Reconstructor:
         return self._helper
 
     def find3d(self, cam_ids_and_points2d, return_X_coords = True,
-               return_line_coords = True, orientation_consensus = 0, undistort = False):
+               return_line_coords = True, orientation_consensus = 0,
+               undistort = False,
+               simulate_via_tracking_dynamic_model=None,
+               ):
         """Find 3D coordinate using all data given
 
         Implements a linear triangulation method to find a 3D
@@ -1523,8 +1526,101 @@ class Reconstructor:
         This function can optionally undistort points.
 
         """
+        global STRICT_WATER
+        if simulate_via_tracking_dynamic_model is not None:
+            # simulate via tracking uses flydra tracking framework to
+            # iteratively attempt to find location
+            assert return_X_coords == True
+            assert return_line_coords == False
+
+            # get original 3D guess (disable strict water check)
+            orig_strict = STRICT_WATER
+            STRICT_WATER = 'no warn'
+            try:
+                start_guess = self.find3d( cam_ids_and_points2d,
+                                           return_X_coords = return_X_coords,
+                                           return_line_coords = return_line_coords,
+                                           )
+            finally:
+                 STRICT_WATER = orig_strict
+
+            import flydra.kalman.flydra_tracker
+            import _fastgeom as geom
+            frame = 0
+            tro = flydra.kalman.flydra_tracker.TrackedObject(
+                self,
+                0,
+                frame,
+                start_guess,
+                None,
+                [],
+                [],
+                kalman_model=simulate_via_tracking_dynamic_model,
+                disable_image_stat_gating=True,
+                )
+
+            # Create data structures as used by TrackedObject. Ohh,
+            # this is so ugly. Sniff. :(
+
+            camn2cam_id = {}
+            cam_id2camn = {}
+            data_dict = {}
+            next_camn = 0
+            for cam_id, pt2d in cam_ids_and_points2d:
+                if cam_id not in cam_id2camn:
+                    cam_id2camn[cam_id] = next_camn
+                    camn2cam_id[next_camn] = cam_id
+                    next_camn += 1
+                camn = cam_id2camn[cam_id]
+                x_undistorted,y_undistorted = self.undistort( cam_id, pt2d )
+                rise=np.nan
+                run=np.nan
+                area=100.0
+                slope=np.nan
+                eccentricity=10.0
+                (p1, p2, p3, p4,
+                 ray0, ray1, ray2, ray3, ray4, ray5) = \
+                 do_3d_operations_on_2d_point(self._helper,
+                                              x_undistorted,y_undistorted,
+                                              self.pmat_inv[cam_id],
+                                              self.get_camera_center(cam_id),
+                                              pt2d[0],pt2d[1],
+                                              rise, run )
+                frame_pt_idx = 0
+                line_found=False
+                cur_val=None
+                mean_val=None
+                sumsqf_val=None
+                pt_undistorted = (x_undistorted,y_undistorted,
+                                  area,slope,eccentricity,
+                                  p1,p2,p3,p4, line_found,
+                                  frame_pt_idx, cur_val, mean_val, sumsqf_val)
+
+                pluecker_hz = (ray0, ray1, ray2, ray3, ray4, ray5)
+                projected_line=geom.line_from_HZline(pluecker_hz)
+                data_dict[camn] = [ (pt_undistorted, projected_line) ]
+
+            delta_dist = 1.0
+            eps = 1e-3
+            max_count = 100
+            while delta_dist > eps:
+                if frame > max_count:
+                    warnings.warn('exceeded max count (delta_dist: %f)'%delta_dist)
+                    break
+                frame += 1
+                tro.calculate_a_posteriori_estimate(frame,data_dict,
+                                                    camn2cam_id)
+                vals = tro.xhats
+                last_two = vals[-2:]
+                if len(last_two)==2:
+                    prev, cur = last_two
+                    delta_dist = np.sqrt(np.sum((prev[:3]-cur[:3])**2))
+            return cur[:3]
+
         if self.wateri is not None:
-            if STRICT_WATER:
+            if STRICT_WATER=='no warn':
+                pass
+            elif STRICT_WATER:
                 raise NotImplementedError('no find3d() implemented with refraction')
             else:
                 warnings.warn('reconstruct find3d() done without '
