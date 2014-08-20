@@ -155,7 +155,8 @@ def doit(filename=None,
 
     M = align.build_xform(s,R,t)
     r2 = recon.get_aligned_copy(M)
-    wateri = water.WaterInterface(WATER_ROOTS_EPS)
+    wateri = water.WaterInterface(refractive_index=1.3330, ### Hack by Max pleas change 
+        water_roots_eps=1e-7)
     r2.add_water(wateri)
 
     dst = os.path.splitext(filename)[0] + '-water-aligned.xml'
