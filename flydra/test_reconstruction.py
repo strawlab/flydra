@@ -22,17 +22,7 @@ CAM_HOSTNAME = 'localhost'
 SPINUP_DURATION = 0.2
 MAX_MEAN_ERROR = 0.002
 
-def setup_data(with_water=False, fps=120.0, with_orientation=False, with_distortion=True):
-    # generate fake trajectory
-    dt = 1/fps
-    t = np.arange(0.0, 1.0, dt)
-
-    x = 0.2*np.cos(t*0.9)
-    y = 0.3*np.sin(t*0.7)
-    z = 0.1*np.sin(t*0.13) - 0.12
-
-    pts = np.hstack( (x[:,np.newaxis], y[:,np.newaxis], z[:,np.newaxis] ) )
-
+def _get_cams(with_distortion):
     base = CameraModel.load_camera_default()
 
     lookat = np.array( (0.0, 0.0, 0.0) )
@@ -59,10 +49,31 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False, with_distort
         cams[i].name = 'cam%02d'%i
 
     cam_system = MultiCameraSystem(cams)
+    reconstructor = Reconstructor.from_pymvg(cam_system)
+    result = dict(cams = cams,
+                  cam_system = cam_system,
+                  reconstructor = reconstructor,
+                  )
+    return result
+
+def setup_data(with_water=False, fps=120.0, with_orientation=False, with_distortion=True):
+    tmp=_get_cams(with_distortion=with_distortion)
+    cams = tmp['cams']
+    cam_system = tmp['cam_system']
+    reconstructor = tmp['reconstructor']
+
+    # generate fake trajectory
+    dt = 1/fps
+    t = np.arange(0.0, 1.0, dt)
+
+    x = 0.2*np.cos(t*0.9)
+    y = 0.3*np.sin(t*0.7)
+    z = 0.1*np.sin(t*0.13) - 0.12
+
+    pts = np.hstack( (x[:,np.newaxis], y[:,np.newaxis], z[:,np.newaxis] ) )
 
     # ------------
     # calculate 2d points for each camera
-    reconstructor = Reconstructor.from_pymvg(cam_system)
     if with_water:
         wateri = water.WaterInterface(refractive_index=1.3330,
                                       water_roots_eps=1e-7)
