@@ -14,7 +14,8 @@ from flydra.kalman.kalmanize import kalmanize
 from flydra.a2.calculate_reprojection_errors import calculate_reprojection_errors
 import flydra.water as water
 import flydra.a2.core_analysis as core_analysis
-from flydra.reconstruct import Reconstructor
+from flydra.reconstruct import Reconstructor, DEFAULT_WATER_REFRACTIVE_INDEX
+
 from flydra.main_brain.coordinate_receiver import CoordinateProcessor
 
 MB_HOSTNAME = 'localhost'
@@ -75,7 +76,7 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False, with_distort
     # ------------
     # calculate 2d points for each camera
     if with_water:
-        wateri = water.WaterInterface(refractive_index=1.3330,
+        wateri = water.WaterInterface(refractive_index=DEFAULT_WATER_REFRACTIVE_INDEX,
                                       water_roots_eps=1e-7)
         reconstructor.add_water(wateri)
 
