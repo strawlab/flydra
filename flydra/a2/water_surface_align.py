@@ -3,7 +3,7 @@ from optparse import OptionParser
 import numpy as np
 import flydra.a2.core_analysis as core_analysis
 import flydra.align as align
-from flydra.reconstruct import Reconstructor
+from flydra.reconstruct import Reconstructor, DEFAULT_WATER_REFRACTIVE_INDEX
 import flydra.water as water
 import ransac
 import cgtypes # cgkit 1.x
@@ -155,7 +155,8 @@ def doit(filename=None,
 
     M = align.build_xform(s,R,t)
     r2 = recon.get_aligned_copy(M)
-    wateri = water.WaterInterface(WATER_ROOTS_EPS)
+    wateri = water.WaterInterface(refractive_index=DEFAULT_WATER_REFRACTIVE_INDEX,
+                                  water_roots_eps=WATER_ROOTS_EPS)
     r2.add_water(wateri)
 
     dst = os.path.splitext(filename)[0] + '-water-aligned.xml'
