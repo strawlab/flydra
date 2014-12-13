@@ -233,13 +233,14 @@ class FakeMainBrain:
 
 def test_online_reconstruction():
     for with_water in [False, True]:
-        for with_orientation in [False]:#,True]:
-            yield check_online_reconstruction, with_water, with_orientation
+        for with_orientation in [False,True]:
+            for multithreaded in [True, False]:
+                yield check_online_reconstruction, with_water, with_orientation, multithreaded
 
 def check_online_reconstruction(with_water=False,
                                 with_orientation=False,
-                                fps=120.0,
                                 multithreaded=True,
+                                fps=120.0,
                                 with_distortion=True,
                                 ):
     D = setup_data( fps=fps,
