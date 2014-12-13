@@ -2,16 +2,11 @@ from pylab import *
 from matplotlib.collections import LineCollection
 from matplotlib.patches import Rectangle
 
-#from numarray.ieeespecial import nan, getnan
-
 from numpy import nan
 import math, time
 
-##import numarray as nx
-##import numarray.mlab as mlab
-
 import numpy as nx
-import numpy.numarray.mlab as mlab
+import numpy as np
 
 import flydra.reconstruct as reconstruct
 import cgtypes # cgkit 1.x
@@ -254,8 +249,8 @@ def do_it(results,
     framediff = frame[1:]-frame[:-1]
     Pdiff = P[1:,:]-P[:-1,:]
     Pdiff_dist = nx.sqrt(nx.sum(Pdiff**2,axis=1))
-    mean_Pdiff_dist = mlab.mean(Pdiff_dist)
-    std_Pdiff_dist = mlab.std(Pdiff_dist)
+    mean_Pdiff_dist = np.mean(Pdiff_dist)
+    std_Pdiff_dist = np.std(Pdiff_dist)
     newframe = [ frame[0] ]
     newP = [ P[0,:] ]
     newline3d = [ line3d[0,:] ]
