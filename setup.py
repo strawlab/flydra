@@ -61,13 +61,19 @@ ext_modules.append(Extension(name='_reconstruct_utils',
                              sources=['src/_reconstruct_utils.pyx']))
 
 ext_modules.append(Extension(name='_pmat_jacobian',
-                             sources=['src/_pmat_jacobian.pyx']))
+                             sources=['src/_pmat_jacobian.pyx'],
+                             include_dirs=[np.get_include()],
+                         ))
 
 ext_modules.append(Extension(name='_pmat_jacobian_water',
-                             sources=['src/_pmat_jacobian_water.pyx']))
+                             sources=['src/_pmat_jacobian_water.pyx'],
+                             include_dirs=[np.get_include()],
+                         ))
 
 ext_modules.append(Extension(name='_flydra_tracked_object',
-                             sources=['src/_flydra_tracked_object.pyx']))
+                             sources=['src/_flydra_tracked_object.pyx'],
+                             include_dirs=[np.get_include()],
+                         ))
 
 ext_modules.append(Extension(name='_mahalanobis',
                              sources=['src/_mahalanobis.pyx']))
