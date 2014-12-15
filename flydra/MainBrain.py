@@ -745,6 +745,10 @@ class MainBrain(object):
         if self.is_saving_data():
             raise RuntimeError('will not (re)synchronize while saving data')
 
+        del self.coord_processor._synchronized_cameras[:]
+        msg = ros_flydra.msg.ListOfStrings()
+        msg.data = self._synchronized_cameras
+        self.coord_processor.sync_cam_pub.publish(msg)
         self._is_synchronizing = True
 
         assert self.block_triggerbox_activity == False

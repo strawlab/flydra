@@ -113,6 +113,9 @@ class CoordinateProcessor(threading.Thread):
         self.max_N_hypothesis_test = max_N_hypothesis_test
 
         self._synchronized_cameras = []
+        self.sync_cam_pub = rospy.Publisher("~synchronized_cameras",
+                                            ros_flydra.msg.ListOfStrings,
+                                            latch=True)
 
         self.save_profiling_data = save_profiling_data
         if self.save_profiling_data:
@@ -401,10 +404,13 @@ class CoordinateProcessor(threading.Thread):
                 self.frame_offsets[cam_id] = framenumber
                 did_frame_offset_change = True
                 self._synchronized_cameras.append( cam_id )
+                msg = ros_flydra.msg.ListOfStrings()
+                msg.data = self._synchronized_cameras
+                self.sync_cam_pub.publish(msg)
+
                 if len(self._synchronized_cameras)==len(self.cam_ids):
                     # success, done synchronizing all cameras
                     self.main_brain._is_synchronizing = False
-                    del self._synchronized_cameras[:]
         else:
             if this_interval > flydra.common_variables.sync_duration:
                 LOG.warn('long IFI not during intended synchronization detected')
