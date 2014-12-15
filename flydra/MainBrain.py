@@ -36,7 +36,7 @@ roslib.load_manifest('triggerbox')
 import rospy
 import std_srvs.srv
 import std_msgs.msg
-from ros_flydra.msg import FlydraError
+from ros_flydra.msg import FlydraError, CameraList
 import ros_flydra.srv
 import ros_flydra.cv2_bridge
 
@@ -745,6 +745,10 @@ class MainBrain(object):
         if self.is_saving_data():
             raise RuntimeError('will not (re)synchronize while saving data')
 
+        del self.coord_processor._synchronized_cameras[:]
+        msg = CameraList()
+        msg.cameras = self._synchronized_cameras
+        self.coord_processor.sync_cam_pub.publish(msg)
         self._is_synchronizing = True
 
         assert self.block_triggerbox_activity == False
