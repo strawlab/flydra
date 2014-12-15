@@ -112,6 +112,8 @@ class CoordinateProcessor(threading.Thread):
         self.max_reconstruction_latency_sec = max_reconstruction_latency_sec
         self.max_N_hypothesis_test = max_N_hypothesis_test
 
+        self._synchronized_cameras = []
+
         self.save_profiling_data = save_profiling_data
         if self.save_profiling_data:
             self.data_dict_queue = []
@@ -381,13 +383,31 @@ class CoordinateProcessor(threading.Thread):
 
     def register_frame(self, cam_id, framenumber):
         frame_timestamp = time.time()
-        last_frame_timestamp = self.last_frame_times.get(cam_id,-np.inf)
+        try:
+            last_frame_timestamp = self.last_frame_times[cam_id]
+        except KeyError:
+            # very first frame from this cam_id
+            self.frame_offsets[cam_id] = framenumber
+            corrected_framenumber = framenumber-self.frame_offsets[cam_id]
+            self.last_frame_times[cam_id] = frame_timestamp
+            did_frame_offset_change = True
+            return corrected_framenumber, did_frame_offset_change
+
         this_interval = frame_timestamp-last_frame_timestamp
 
         did_frame_offset_change = False
-        if this_interval > flydra.common_variables.sync_duration:
-            self.frame_offsets[cam_id] = framenumber
-            did_frame_offset_change = True
+        if self.main_brain._is_synchronizing:
+            if this_interval > flydra.common_variables.sync_duration:
+                self.frame_offsets[cam_id] = framenumber
+                did_frame_offset_change = True
+                self._synchronized_cameras.append( cam_id )
+                if len(self._synchronized_cameras)==len(self.cam_ids):
+                    # success, done synchronizing all cameras
+                    self.main_brain._is_synchronizing = False
+                    del self._synchronized_cameras[:]
+        else:
+            if this_interval > flydra.common_variables.sync_duration:
+                LOG.warn('long IFI not during intended synchronization detected')
 
         self.last_frame_times[cam_id] = frame_timestamp
 

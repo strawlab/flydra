@@ -228,6 +228,7 @@ class FakeMainBrain:
         self.trigger_device = trigger_device
         self.remote_api = FakeRemoteApi()
         self.counts = {}
+        self._is_synchronizing = False
     def is_saving_data(self):
         return False
 

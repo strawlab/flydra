@@ -503,6 +503,8 @@ class MainBrain(object):
         self.debug_level = threading.Event()
         self.show_overall_latency = threading.Event()
 
+        self._is_synchronizing = False
+
         #we support in or out of process trigger boxes
         if self.config['triggerbox_hardware_device']:
             #in process
@@ -742,6 +744,8 @@ class MainBrain(object):
     def do_synchronization(self,new_fps=None):
         if self.is_saving_data():
             raise RuntimeError('will not (re)synchronize while saving data')
+
+        self._is_synchronizing = True
 
         assert self.block_triggerbox_activity == False
 
