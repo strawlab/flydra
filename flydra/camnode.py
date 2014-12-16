@@ -1785,14 +1785,17 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
 
         #prefer trigger (which is a string) to trigger_mode (which is a number)
         _, trigger = _get_param_with_fallback("trigger", self.ROS_PROPERTIES["trigger"])
-        _, trigger_mode = _get_param_with_fallback("trigger_mode", self.ROS_PROPERTIES["trigger_mode"])
-        trigger_mode_number = self._trigger_mode_numbers_from_name.get(trigger, trigger_mode)
+        if trigger is None:
+            _, trigger_mode = _get_param_with_fallback("trigger_mode", self.ROS_PROPERTIES["trigger_mode"])
+            trigger_mode_number = trigger_mode
+        else:
+            trigger_mode_number = self._trigger_mode_numbers_from_name[trigger]
 
         if trigger_mode_number < 0:
             LOG.info("trigger_mode number not set or correct (%s), setting camera to max framerate" % trigger_mode_number)
             cam_iface.Camera.set_framerate(self, 999)
         else:
-            LOG.info("setting trigger_mode number = %s" % trigger_mode_number)
+            LOG.info("setting trigger_mode number = %s (trigger=%s)" %(trigger_mode_number,trigger))
             cam_iface.Camera.set_trigger_mode_number(self, trigger_mode_number)
 
     def set_camera_property(self, prop_num, prop_value, auto):
