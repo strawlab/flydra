@@ -234,8 +234,8 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
         # data association parameters
 
         # birth model
-        hypothesis_test_max_acceptable_error=5.0,
-        min_dist_to_believe_new_meters=0.02, # 2cm
+        hypothesis_test_max_acceptable_error=5.0, # Big Fish 5    Smallfish 5
+        min_dist_to_believe_new_meters=0.05, # Big Fish 0.05   Smallfish 0.02
         min_dist_to_believe_new_sigma=10.0,
 
         initial_position_covariance_estimate=1e-3,
@@ -243,7 +243,7 @@ def create_dynamic_model_dict(dt=None,disable_warning=False):
 
         # death model
         max_variance_dist_meters=0.125,
-        max_frames_skipped=10,
+        max_frames_skipped=30,
 
         # kalman filter parameters
         Q=Q,
