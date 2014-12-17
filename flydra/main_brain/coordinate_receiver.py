@@ -32,7 +32,7 @@ roslib.load_manifest('rospy')
 roslib.load_manifest('ros_flydra')
 import rospy
 import std_msgs.msg
-from ros_flydra.msg import flydra_mainbrain_super_packet
+from ros_flydra.msg import flydra_mainbrain_super_packet, CameraList
 from ros_flydra.msg import flydra_mainbrain_packet, flydra_object, FlydraError
 from geometry_msgs.msg import Point, Vector3
 
@@ -114,7 +114,7 @@ class CoordinateProcessor(threading.Thread):
 
         self._synchronized_cameras = []
         self.sync_cam_pub = rospy.Publisher("~synchronized_cameras",
-                                            ros_flydra.msg.ListOfStrings,
+                                            CameraList,
                                             latch=True)
 
         self.save_profiling_data = save_profiling_data
@@ -404,8 +404,8 @@ class CoordinateProcessor(threading.Thread):
                 self.frame_offsets[cam_id] = framenumber
                 did_frame_offset_change = True
                 self._synchronized_cameras.append( cam_id )
-                msg = ros_flydra.msg.ListOfStrings()
-                msg.data = self._synchronized_cameras
+                msg = CameraList()
+                msg.cameras = self._synchronized_cameras
                 self.sync_cam_pub.publish(msg)
 
                 if len(self._synchronized_cameras)==len(self.cam_ids):
