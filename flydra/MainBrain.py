@@ -508,7 +508,6 @@ class MainBrain(object):
             #in process
             self.trigger_device =  TriggerboxHost(
                     device=self.config['triggerbox_hardware_device'],
-                    write_channel_name=None, channel_name=None,
                     ros_topic_base=self.config['triggerbox_namespace'])
         else:
             #out of process
