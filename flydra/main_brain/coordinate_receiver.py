@@ -384,6 +384,15 @@ class CoordinateProcessor(threading.Thread):
         #image to put in the h5 file
         self.main_brain.remote_api.external_request_image_async(cam_id)
 
+    def _publish_list_of_synced_cameras(self):
+        msg = CameraList()
+        msg.cameras = self._synchronized_cameras
+        self.sync_cam_pub.publish(msg)
+
+    def delete_list_of_synced_cameras(self):
+        del self._synchronized_cameras[:]
+        self._publish_list_of_synced_cameras()
+
     def register_frame(self, cam_id, framenumber):
         frame_timestamp = time.time()
         try:
@@ -404,9 +413,7 @@ class CoordinateProcessor(threading.Thread):
                 self.frame_offsets[cam_id] = framenumber
                 did_frame_offset_change = True
                 self._synchronized_cameras.append( cam_id )
-                msg = CameraList()
-                msg.cameras = self._synchronized_cameras
-                self.sync_cam_pub.publish(msg)
+                self._publish_list_of_synced_cameras()
 
                 if len(self._synchronized_cameras)==len(self.cam_ids):
                     # success, done synchronizing all cameras
