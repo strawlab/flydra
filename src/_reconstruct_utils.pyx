@@ -296,7 +296,7 @@ cdef class ReconstructHelper:
 cdef int gave_water_warning
 gave_water_warning = 0
 
-def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
+def hypothesis_testing_algorithm__find_best_3d( object recon, object found_data_dict,
                                                 double ACCEPTABLE_DISTANCE_PIXELS,
                                                 int debug=0, int max_n_cams=5,
                                                 int with_water = 0):
@@ -347,7 +347,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
 
         # do we have incoming data?
         try:
-            value_tuple = d2[cam_id]
+            value_tuple = found_data_dict[cam_id]
         except KeyError:
             bad_cam_ids.append( cam_id )
             continue # don't build this row
@@ -454,7 +454,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object d2,
     # calculate line3d
     P = []
     for cam_id in cam_ids_used:
-        x,y,area,slope,eccentricity, p1,p2,p3,p4 = d2[cam_id]
+        x,y,area,slope,eccentricity, p1,p2,p3,p4 = found_data_dict[cam_id]
         if eccentricity > MINIMUM_ECCENTRICITY and not numpy.isnan(p1):
                 P.append( (p1,p2,p3,p4) )
     if len(P) < 2:
