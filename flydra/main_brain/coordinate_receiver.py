@@ -472,119 +472,116 @@ class CoordinateProcessor(threading.Thread):
 
         buf_data = incoming_2d_data
 
-        if 1:
-            new_data_framenumbers = set()
+        new_data_framenumbers = set()
 
-            with self.all_data_lock:
-                deferred_2d_data = []
-                if 1:
-                    if 1:
-                        header = buf_data[:header_size]
-                        assert len(header) == header_size
-                        # this raw_timestamp is the remote camera's timestamp (?? from the driver, not the host clock??)
-                        (cam_id, raw_timestamp, camn_received_time, raw_framenumber,
-                         n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
+        with self.all_data_lock:
+            deferred_2d_data = []
+            header = buf_data[:header_size]
+            assert len(header) == header_size
+            # this raw_timestamp is the remote camera's timestamp (?? from the driver, not the host clock??)
+            (cam_id, raw_timestamp, camn_received_time, raw_framenumber,
+             n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
 
-                        cam_idx = self.cam_ids.index(cam_id)
-                        absolute_cam_no = self.absolute_cam_nos[cam_idx]
+            cam_idx = self.cam_ids.index(cam_id)
+            absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
-                        points_in_pluecker_coords_meters = []
-                        points_undistorted = []
-                        points_distorted = []
+            points_in_pluecker_coords_meters = []
+            points_undistorted = []
+            points_distorted = []
 
-                        assert len(buf_data)==(header_size + n_pts*pt_size)
+            assert len(buf_data)==(header_size + n_pts*pt_size)
 
-                        predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip[cam_idx] + 1
-                        if raw_framenumber<predicted_framenumber:
-                            LOG.fatal('cam_id %s'%cam_id)
-                            LOG.fatal('raw_framenumber %s'%raw_framenumber)
-                            LOG.fatal('n_frames_skipped %s'%n_frames_skipped)
-                            LOG.fatal('predicted_framenumber %s'%predicted_framenumber)
-                            LOG.fatal('self.last_framenumbers_skip[cam_idx] %s'%self.last_framenumbers_skip[cam_idx])
-                            raise RuntimeError('got framenumber already received or skipped!')
-                        elif raw_framenumber>predicted_framenumber:
-                            if not self.last_framenumbers_skip[cam_idx]==-1:
-                                # this is not the first frame
-                                # probably because network buffer filled up before we emptied it
-                                LOG.warn('frame data loss %s' % cam_id)
-                                self.main_brain.queue_error_ros_msgs.put( FlydraError(FlydraError.FRAME_DATA_LOSS,cam_id) )
+            predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip[cam_idx] + 1
+            if raw_framenumber<predicted_framenumber:
+                LOG.fatal('cam_id %s'%cam_id)
+                LOG.fatal('raw_framenumber %s'%raw_framenumber)
+                LOG.fatal('n_frames_skipped %s'%n_frames_skipped)
+                LOG.fatal('predicted_framenumber %s'%predicted_framenumber)
+                LOG.fatal('self.last_framenumbers_skip[cam_idx] %s'%self.last_framenumbers_skip[cam_idx])
+                raise RuntimeError('got framenumber already received or skipped!')
+            elif raw_framenumber>predicted_framenumber:
+                if not self.last_framenumbers_skip[cam_idx]==-1:
+                    # this is not the first frame
+                    # probably because network buffer filled up before we emptied it
+                    LOG.warn('frame data loss %s' % cam_id)
+                    self.main_brain.queue_error_ros_msgs.put( FlydraError(FlydraError.FRAME_DATA_LOSS,cam_id) )
 
-                            if ATTEMPT_DATA_RECOVERY:
-                                if not self.last_framenumbers_skip[cam_idx]==-1:
-                                    # this is not the first frame
-                                    missing_frame_numbers = range(
-                                        self.last_framenumbers_skip[cam_idx]+1,
-                                        raw_framenumber)
+                if ATTEMPT_DATA_RECOVERY:
+                    if not self.last_framenumbers_skip[cam_idx]==-1:
+                        # this is not the first frame
+                        missing_frame_numbers = range(
+                            self.last_framenumbers_skip[cam_idx]+1,
+                            raw_framenumber)
 
-                                    with self.request_data_lock:
-                                        tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
+                        with self.request_data_lock:
+                            tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
 
-                                    tmp_framenumber_offset = self.frame_offsets[cam_id]
-                                    tmp_queue.put( (cam_id,  tmp_framenumber_offset, missing_frame_numbers) )
-                                    del tmp_framenumber_offset
-                                    del tmp_queue # drop reference to queue
-                                    del missing_frame_numbers
+                        tmp_framenumber_offset = self.frame_offsets[cam_id]
+                        tmp_queue.put( (cam_id,  tmp_framenumber_offset, missing_frame_numbers) )
+                        del tmp_framenumber_offset
+                        del tmp_queue # drop reference to queue
+                        del missing_frame_numbers
 
-                        self.last_framenumbers_skip[cam_idx]=raw_framenumber
-                        start=header_size
-                        if n_pts:
-                            # valid points
-                            for frame_pt_idx in range(n_pts):
-                                end=start+pt_size
-                                (x_distorted,y_distorted,area,slope,eccentricity,
-                                 p1,p2,p3,p4,line_found,slope_found,
-                                 x_undistorted,y_undistorted,
-                                 ray_valid,
-                                 ray0, ray1, ray2, ray3, ray4, ray5, # pluecker coords from cam center to detected point
-                                 cur_val, mean_val, sumsqf_val,
-                                 )= struct.unpack(pt_fmt,buf_data[start:end])
-                                # nan cannot get sent across network in platform-independent way
-                                if not line_found:
-                                    p1,p2,p3,p4 = nan,nan,nan,nan
-                                if slope == near_inf:
-                                    slope = inf
-                                if eccentricity == near_inf:
-                                    eccentricity = inf
-                                if not slope_found:
-                                    slope = nan
+            self.last_framenumbers_skip[cam_idx]=raw_framenumber
+            start=header_size
+            if n_pts:
+                # valid points
+                for frame_pt_idx in range(n_pts):
+                    end=start+pt_size
+                    (x_distorted,y_distorted,area,slope,eccentricity,
+                     p1,p2,p3,p4,line_found,slope_found,
+                     x_undistorted,y_undistorted,
+                     ray_valid,
+                     ray0, ray1, ray2, ray3, ray4, ray5, # pluecker coords from cam center to detected point
+                     cur_val, mean_val, sumsqf_val,
+                     )= struct.unpack(pt_fmt,buf_data[start:end])
+                    # nan cannot get sent across network in platform-independent way
+                    if not line_found:
+                        p1,p2,p3,p4 = nan,nan,nan,nan
+                    if slope == near_inf:
+                        slope = inf
+                    if eccentricity == near_inf:
+                        eccentricity = inf
+                    if not slope_found:
+                        slope = nan
 
-                                # Keep in sync with kalmanize.py and data_descriptions.py
-                                pt_undistorted = (x_undistorted,y_undistorted,
-                                                  area,slope,eccentricity,
-                                                  p1,p2,p3,p4, line_found, frame_pt_idx,
-                                                  cur_val, mean_val, sumsqf_val)
-                                pt_distorted = (x_distorted,y_distorted,
-                                                area,slope,eccentricity,
-                                                p1,p2,p3,p4, line_found, frame_pt_idx,
-                                                cur_val, mean_val, sumsqf_val)
-                                if ray_valid:
-                                    points_in_pluecker_coords_meters.append( (pt_undistorted,
-                                                                              geom.line_from_HZline((ray0,ray1,
-                                                                                                            ray2,ray3,
-                                                                                                            ray4,ray5))
-                                                                              ))
-                                points_undistorted.append( pt_undistorted )
-                                points_distorted.append( pt_distorted )
-                                start=end
-                        else:
-                            # no points found
-                            end = start
-                            # append non-point to allow correlation of
-                            # timestamps with frame number
-                            points_distorted.append( no_point_tuple )
-                            points_undistorted.append( no_point_tuple )
+                    # Keep in sync with kalmanize.py and data_descriptions.py
+                    pt_undistorted = (x_undistorted,y_undistorted,
+                                      area,slope,eccentricity,
+                                      p1,p2,p3,p4, line_found, frame_pt_idx,
+                                      cur_val, mean_val, sumsqf_val)
+                    pt_distorted = (x_distorted,y_distorted,
+                                    area,slope,eccentricity,
+                                    p1,p2,p3,p4, line_found, frame_pt_idx,
+                                    cur_val, mean_val, sumsqf_val)
+                    if ray_valid:
+                        points_in_pluecker_coords_meters.append( (pt_undistorted,
+                                                                  geom.line_from_HZline((ray0,ray1,
+                                                                                                ray2,ray3,
+                                                                                                ray4,ray5))
+                                                                  ))
+                    points_undistorted.append( pt_undistorted )
+                    points_distorted.append( pt_distorted )
+                    start=end
+            else:
+                # no points found
+                end = start
+                # append non-point to allow correlation of
+                # timestamps with frame number
+                points_distorted.append( no_point_tuple )
+                points_undistorted.append( no_point_tuple )
 
-                        self._process_parsed_data(cam_idx,
-                                                  camn_received_time,
-                                                  absolute_cam_no,
-                                                  n_pts,
-                                                  cam_id, raw_framenumber,
-                                                  new_data_framenumbers,
-                                                  points_in_pluecker_coords_meters,
-                                                  points_distorted,
-                                                  points_undistorted,
-                                                  deferred_2d_data,
-                                                  )
+            self._process_parsed_data(cam_idx,
+                                      camn_received_time,
+                                      absolute_cam_no,
+                                      n_pts,
+                                      cam_id, raw_framenumber,
+                                      new_data_framenumbers,
+                                      points_in_pluecker_coords_meters,
+                                      points_distorted,
+                                      points_undistorted,
+                                      deferred_2d_data,
+                                      )
     def _process_parsed_data(self, cam_idx,
                              camn_received_time,
                              absolute_cam_no,
