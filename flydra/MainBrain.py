@@ -156,7 +156,7 @@ class TimestampEchoReceiver(threading.Thread):
                 start_timestamp, remote_timestamp, stop_timestamp = srs
                 clock_diff_msec = abs(remote_timestamp-start_timestamp)*1e3
                 if clock_diff_msec > 1:
-                    self.main_brain.queue_error_ros_msgs.put( 
+                    self.main_brain.queue_error_ros_msgs.put(
                                             FlydraError(
                                                 FlydraError.CLOCK_DIFF,
                                                 "%s/%f" % (remote_hostname,clock_diff_msec)) )
@@ -1096,7 +1096,7 @@ class MainBrain(object):
         # send params over to realtime coords thread
         self.coord_processor.set_new_tracker(kalman_model=dynamic_model)
 
-        self.config['kalman_model'] = kalman_model_name 
+        self.config['kalman_model'] = kalman_model_name
         self.save_config()
 
     def __del__(self):
