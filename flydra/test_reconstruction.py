@@ -6,6 +6,8 @@ import pprint
 
 import numpy as np
 
+import flydra.camera_feature_point_pb2  # compiled from 'camera_feature_point.proto'
+
 from pymvg.camera_model import CameraModel
 from pymvg.multi_camera_system import MultiCameraSystem
 
@@ -18,6 +20,7 @@ import flydra.flydra_socket as flydra_socket
 from flydra.reconstruct import Reconstructor, DEFAULT_WATER_REFRACTIVE_INDEX
 
 from flydra.main_brain.coordinate_receiver import CoordinateProcessor
+from flydra.timestamp import to_pb2_time
 
 MB_HOSTNAME = 'localhost'
 SPINUP_DURATION = 0.2
@@ -296,8 +299,6 @@ def check_online_reconstruction(with_water=False,
         orig_kill_all_trackers = coord_processor.tracker.kill_all_trackers
         coord_processor.tracker.kill_all_trackers = no_op
 
-    header_fmt = flydra.common_variables.recv_pt_header_fmt
-    pt_fmt = flydra.common_variables.recv_pt_fmt
 
     data2d=D['data2d']
     orig_timestamps = data2d.pop('t')
@@ -310,14 +311,6 @@ def check_online_reconstruction(with_water=False,
         line_found = False
         slope_found = False
     cur_val, mean_val, sumsqf_val = (100.0, 2.0, 3.0)
-
-    centers = {}
-    sccs = {}
-    for cam_id in data2d['2d_pos_by_cam_ids']:
-        sccs[cam_id] = R.get_SingleCameraCalibration(cam_id)
-        cc = R.get_camera_center(cam_id)[:,0]
-        cc = np.array([cc[0],cc[1],cc[2],1.0])
-        centers[cam_id] = cc
 
     dt = 1.0/fps
     time.sleep(SPINUP_DURATION)
@@ -334,7 +327,6 @@ def check_online_reconstruction(with_water=False,
             time_dict[framenumber]=timestamp
 
         for cam_id in data2d['2d_pos_by_cam_ids']:
-            scc = sccs[cam_id]
             camn_received_time = timestamp
             pt_x,pt_y = data2d['2d_pos_by_cam_ids'][cam_id][framenumber]
             slope = data2d['2d_slope_by_cam_ids'][cam_id][framenumber]
@@ -346,25 +338,33 @@ def check_online_reconstruction(with_water=False,
                 run = 1.0
                 rise = slope
 
-            cc = centers[cam_id]
-            if 0 <= pt_x < scc.res[0] and 0 <= pt_y < scc.res[1]:
+            im_width, im_height = R.get_resolution(cam_id)
+            if 0 <= pt_x < im_width and 0 <= pt_y < im_height:
                 n_pts = 1
             else:
                 n_pts = 0
             n_frames_skipped = 0
-            header = (cam_id,timestamp, camn_received_time, framenumber,
-                      n_pts,n_frames_skipped)
-            header_buf = struct.pack(header_fmt,*header)
+            point_list = flydra.camera_feature_point_pb2.PointList()
+            point_list.cam_id = cam_id
+            to_pb2_time(point_list.timestamp,timestamp)
+            to_pb2_time(point_list.cam_received_timestamp,camn_received_time)
+            point_list.frame=framenumber
+            point_list.n_frames_skipped=n_frames_skipped
+
             if n_pts:
                 assert n_pts==1
-                pt = (pt_x,pt_y,area,slope,D['eccentricity'],
-                      slope_found,
-                      cur_val, mean_val, sumsqf_val,
-                      )
-                pt_buf = struct.pack(pt_fmt,*pt)
-            else:
-                pt_buf = ''
-            buf = header_buf + pt_buf
+                this_point = point_list.points.add()
+                this_point.pt_x = float(pt_x)
+                this_point.pt_y = float(pt_y)
+                this_point.area = float(area)
+                this_point.slope = float(slope)
+                this_point.eccentricity = float(D['eccentricity'])
+                this_point.slope_found = slope_found
+                this_point.cur_val = int(cur_val)
+                this_point.mean_val = float(mean_val)
+                this_point.sumsqf_val = float(sumsqf_val)
+
+            buf = point_list.SerializeToString()
 
             if multithreaded:
                 sender.send(buf)

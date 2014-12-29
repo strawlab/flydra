@@ -1,0 +1,30 @@
+// camera_feature_point.proto
+package camera_feature_point_proto;
+
+message Timestamp {
+  // This is a one-to-one representation of a ROS timestamp. See
+  // http://wiki.ros.org/roscpp/Overview/Time
+  optional int32 sec = 1;
+  optional int32 nsec = 2;
+}
+
+message Point {
+  optional float pt_x = 1;
+  optional float pt_y = 2;
+  optional float area = 3;
+  optional float slope = 4;
+  optional float eccentricity = 5;
+  optional bool slope_found = 6;
+  optional int32 cur_val = 9;
+  optional float mean_val = 10;
+  optional float sumsqf_val = 11;
+}
+
+message PointList {
+  optional bytes cam_id = 1;
+  optional Timestamp timestamp = 2; // the remote camera's timestamp (?? from the driver, not the host clock??)
+  optional Timestamp cam_received_timestamp = 3; // from the camnode process query of host clock upon finishing processing of this point
+  optional int64 frame = 4; // raw framenumber, not adjusted for synchronization offset
+  optional uint32 n_frames_skipped = 5;
+  repeated Point points = 6;
+}

@@ -59,6 +59,9 @@ import motmot.ufmf.ufmf as ufmf
 import motmot.realtime_image_analysis.slow
 
 import flydra.flydra_socket as flydra_socket
+from flydra.timestamp import to_pb2_time
+import flydra.camera_feature_point_pb2
+
 #import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
 
@@ -442,8 +445,6 @@ class ProcessCamClass(rospy.SubscribeListener):
             self.coord_socket = flydra_socket.get_dummy_sender()
         else:
             self.coord_socket = flydra_socket.get_sender_from_address( coord_receiver_address )
-        if len(cam_id) > (flydra.common_variables.cam_id_count-1):
-            raise ValueError('cam_id %r is too long'%cam_id)
         self.cam_id = cam_id
         self.log_message_queue = log_message_queue
 
@@ -953,16 +954,28 @@ class ProcessCamClass(rospy.SubscribeListener):
                     self.realtime_analyzer.clear_threshold = (
                         self.clear_threshold_shared.get_nowait() )
 
-                data = struct.pack(flydra.common_variables.recv_pt_header_fmt,
-                                   self.cam_id,
-                                   timestamp,cam_received_time,
-                                   framenumber,len(points),n_frames_skipped)
+                point_list = flydra.camera_feature_point_pb2.PointList()
+                point_list.cam_id = self.cam_id
+                to_pb2_time(point_list.timestamp,timestamp)
+                to_pb2_time(point_list.cam_received_timestamp,cam_received_time)
+                point_list.frame=framenumber
+                point_list.n_frames_skipped=n_frames_skipped
                 for point_tuple in points:
-                    try:
-                        data = data + struct.pack(flydra.common_variables.recv_pt_fmt,*point_tuple)
-                    except:
-                        LOG.warn('error-causing data: %s' % (point_tuple,))
-                        raise
+
+                    this_point = point_list.points.add()
+
+                    (this_point.pt_x,
+                     this_point.pt_y,
+                     this_point.area,
+                     this_point.slope,
+                     this_point.eccentricity,
+                     this_point.slope_found,
+                     this_point.cur_val,
+                     this_point.mean_val,
+                     this_point.sumsqf_val) = point_tuple
+
+                data = point_list.SerializeToString()
+
                 if 0:
                     local_processing_time = (time.time()-cam_received_time)*1e3
                     LOG.debug('local_processing_time % 3.1f'%local_processing_time)
