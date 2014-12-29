@@ -368,14 +368,6 @@ class MainBrain(object):
                 with cam_lock:
                     cam['commands']['clear_bg']=None
 
-        def external_set_cal( self, cam_id, pmat, intlin, intnonlin):
-            with self.cam_info_lock:
-                cam = self.cam_info[cam_id]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['cal']= pmat, intlin, intnonlin
-                    cam['is_calibrated'] = True
-
         # ================================================================
         #
         # Methods called remotely from cameras
@@ -406,7 +398,6 @@ class MainBrain(object):
                                          'fqdn':fqdn,
                                          'ip':cam_ip,
                                          'camnode_ros_name':camnode_ros_name,
-                                         'is_calibrated':False, # has 3D calibration been sent yet?
                                          }
             self.no_cams_connected.clear()
             with self.changed_cam_lock:
@@ -537,7 +528,6 @@ class MainBrain(object):
         self._ip_addrs_by_cam_id = {}
         self.set_new_camera_callback(self.IncreaseCamCounter)
         self.set_new_camera_callback(self.SendExpectedFPS)
-        self.set_new_camera_callback(self.SendCalibration)
         self.set_old_camera_callback(self.DecreaseCamCounter)
 
         self.last_saved_data_time = 0.0
@@ -782,16 +772,6 @@ class MainBrain(object):
 
     def SendExpectedFPS(self,cam_id,scalar_control_info,fqdn):
         self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.trigger_device.get_frames_per_second() )
-
-    def SendCalibration(self,cam_id,scalar_control_info,fqdn):
-        if self.reconstructor is not None and cam_id in self.reconstructor.get_cam_ids():
-            pmat = self.reconstructor.get_pmat(cam_id)
-            intlin = self.reconstructor.get_intrinsic_linear(cam_id)
-            intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
-            self.remote_api.external_set_cal( cam_id,
-                                              np.array(pmat).tolist(),
-                                              np.array(intlin).tolist(),
-                                              np.array(intnonlin).tolist())
 
     def DecreaseCamCounter(self,cam_id):
         try:
@@ -1072,13 +1052,6 @@ class MainBrain(object):
 
             self.coord_processor.set_reconstructor(self.reconstructor)
 
-            for cam_id in calib_cam_ids:
-                pmat = self.reconstructor.get_pmat(cam_id)
-                intlin = self.reconstructor.get_intrinsic_linear(cam_id)
-                intnonlin = self.reconstructor.get_intrinsic_nonlinear(cam_id)
-                if cam_id in connected_cam_ids:
-                    self.remote_api.external_set_cal( cam_id, pmat, intlin, intnonlin )
-
             self.pub_calib_file.publish(dirname)
             self.config['camera_calibration'] = dirname
             self.save_config()
@@ -1092,9 +1065,6 @@ class MainBrain(object):
         self.reconstructor = None
 
         self.coord_processor.set_reconstructor(self.reconstructor)
-
-        for cam_id in cam_ids:
-            self.remote_api.external_set_cal( cam_id, None, None, None )
 
         self.save_config()
 

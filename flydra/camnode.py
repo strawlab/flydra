@@ -2656,8 +2656,6 @@ class AppState(object):
                 small_saver.start_recording(small_filebasename=small_filebasename)
             elif key == 'stop_small_recording':
                 small_saver.stop_recording()
-            elif key == 'cal':
-                LOG.warn('setting calibration, even though it is not needed.')
             else:
                 raise ValueError('unknown key "%s"'%key)
 
