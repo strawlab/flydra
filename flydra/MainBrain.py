@@ -391,7 +391,7 @@ class MainBrain(object):
             fqdn = cam_hostname
 
             LOG.info("REGISTER NEW CAMERA %s on %s @ ros node %s" % (cam_guid,fqdn,camnode_ros_name))
-            cam2mainbrain_data_port = self.main_brain.coord_processor.connect(cam_guid,fqdn)
+            self.main_brain.coord_processor.connect(cam_guid,fqdn)
 
             with self.cam_info_lock:
                 if cam_guid in self.cam_info:
@@ -404,13 +404,11 @@ class MainBrain(object):
                                          'fqdn':fqdn,
                                          'ip':cam_ip,
                                          'camnode_ros_name':camnode_ros_name,
-                                         'cam2mainbrain_data_port':cam2mainbrain_data_port,
                                          'is_calibrated':False, # has 3D calibration been sent yet?
                                          }
             self.no_cams_connected.clear()
             with self.changed_cam_lock:
                 self.new_cam_ids.append(cam_guid)
-            return cam2mainbrain_data_port
 
         def set_image(self,cam_id,coord_and_image):
             """set most recent image (caller: remote camera)"""
@@ -466,11 +464,6 @@ class MainBrain(object):
                     cmds = cam['commands']
                     cam['commands'] = {}
             return cmds
-
-        def get_cam2mainbrain_port(self,cam_id):
-            """Send port number to which camera should send realtime data"""
-            cam2mainbrain_data_port = self.main_brain.coord_processor.get_cam2mainbrain_data_port(cam_id)
-            return cam2mainbrain_data_port
 
         def log_message(self,cam_id,host_timestamp,message):
             mainbrain_timestamp = time.time()
@@ -715,11 +708,12 @@ class MainBrain(object):
                             cam_hostname,
                             cam_ip):
         scalar_control_info = json.loads( scalar_control_info_json.data )
-        port = self.remote_api.register_new_camera(cam_guid=cam_guid.data,
-                                                   scalar_control_info=scalar_control_info,
-                                                   camnode_ros_name=camnode_ros_name.data,
-                                                   cam_hostname=cam_hostname.data,
-                                                   cam_ip=cam_ip.data)
+        self.remote_api.register_new_camera(cam_guid=cam_guid.data,
+                                            scalar_control_info=scalar_control_info,
+                                            camnode_ros_name=camnode_ros_name.data,
+                                            cam_hostname=cam_hostname.data,
+                                            cam_ip=cam_ip.data)
+        port = self.coord_processor.get_listen_port()
         return [std_msgs.msg.Int32(port)]
 
     def get_and_clear_commands(self,cam_id):

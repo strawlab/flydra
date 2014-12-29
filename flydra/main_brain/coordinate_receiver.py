@@ -124,7 +124,6 @@ class CoordinateProcessor(threading.Thread):
             self.data_dict_queue = []
 
         self.cam_ids = []
-        self.cam2mainbrain_data_ports = []
         self.absolute_cam_nos = [] # a.k.a. "camn"
         self.frame_offsets = {}
         self.last_frame_times = {}
@@ -204,15 +203,11 @@ class CoordinateProcessor(threading.Thread):
 
         threading.Thread.__init__(self,name='CoordinateProcessor')
 
+    def get_listen_port(self):
+        return self.listen_port
+
     def mainbrain_is_attempting_synchronizing(self):
         self.ever_synchronized = True
-
-    def get_cam2mainbrain_data_port(self,cam_id):
-        # called from Remote-API thread
-        with self.all_data_lock:
-            i = self.cam_ids.index( cam_id )
-            cam2mainbrain_data_port = self.cam2mainbrain_data_ports[i]
-        return cam2mainbrain_data_port
 
     def get_general_cam_info(self):
         with self.all_data_lock:
@@ -311,8 +306,6 @@ class CoordinateProcessor(threading.Thread):
         with self.all_data_lock:
             self.cam_ids.append(cam_id)
 
-            self.cam2mainbrain_data_ports.append( self.listen_port )
-
             # find absolute_cam_no
             self.max_absolute_cam_nos += 1
             absolute_cam_no = self.max_absolute_cam_nos
@@ -325,14 +318,12 @@ class CoordinateProcessor(threading.Thread):
             self.last_framenumbers_delay.append(-1) # arbitrary impossible number
             self.last_framenumbers_skip.append(-1) # arbitrary impossible number
             self.general_save_info[cam_id] = {'absolute_cam_no':absolute_cam_no}
-        return self.listen_port
 
     def disconnect(self,cam_id):
         # called from Remote-API thread on camera disconnect
         cam_idx = self.cam_ids.index( cam_id )
         with self.all_data_lock:
             del self.cam_ids[cam_idx]
-            del self.cam2mainbrain_data_ports[cam_idx]
             del self.absolute_cam_nos[cam_idx]
             del self.last_timestamps[cam_idx]
             del self.last_framenumbers_delay[cam_idx]

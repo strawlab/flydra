@@ -277,11 +277,10 @@ def check_online_reconstruction(with_water=False,
     coord_processor.tp._queue.put('junk') # allow blocking call to finish
     coord_processor.tp.join()
 
-    ports = {}
     R = D['reconstructor']
     for cam_id in R.cam_ids:
-        port = coord_processor.connect(cam_id,CAM_HOSTNAME)
-        ports[cam_id] = port
+        coord_processor.connect(cam_id,CAM_HOSTNAME)
+    port = coord_processor.get_listen_port()
 
     coord_processor.set_reconstructor(R)
     model = flydra.kalman.dynamic_models.get_kalman_model(name=D['dynamic_model_name'],dt=(1.0/fps))
@@ -381,7 +380,6 @@ def check_online_reconstruction(with_water=False,
             buf = header_buf + pt_buf
 
             if multithreaded:
-                port = ports[cam_id]
                 sender.sendto(buf,(MB_HOSTNAME,port))
             else:
                 coord_processor.process_data(buf)
