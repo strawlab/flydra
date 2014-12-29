@@ -357,19 +357,8 @@ def check_online_reconstruction(with_water=False,
             header_buf = struct.pack(header_fmt,*header)
             if n_pts:
                 assert n_pts==1
-                x_undistorted,y_undistorted = R.undistort(cam_id,(pt_x,pt_y))
-
-                (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
-                 ray5) = flydra.reconstruct.do_3d_operations_on_2d_point(
-                    scc.helper,x_undistorted,y_undistorted,
-                    scc.pmat_inv,
-                    cc,
-                    pt_x,pt_y,
-                    rise, run)
-
                 pt = (pt_x,pt_y,area,slope,D['eccentricity'],
-                      p1,p2,p3,p4,line_found,slope_found,
-                      x_undistorted,y_undistorted,
+                      slope_found,
                       cur_val, mean_val, sumsqf_val,
                       )
                 pt_buf = struct.pack(pt_fmt,*pt)

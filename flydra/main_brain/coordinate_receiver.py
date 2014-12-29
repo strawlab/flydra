@@ -534,13 +534,10 @@ class CoordinateProcessor(threading.Thread):
                 for frame_pt_idx in range(n_pts):
                     end=start+pt_size
                     (x_distorted,y_distorted,area,slope,eccentricity,
-                     p1,p2,p3,p4,line_found,slope_found,
-                     x_undistorted,y_undistorted,
+                     slope_found,
                      cur_val, mean_val, sumsqf_val,
                      )= struct.unpack(pt_fmt,buf_data[start:end])
                     # nan cannot get sent across network in platform-independent way
-                    if not line_found:
-                        p1,p2,p3,p4 = nan,nan,nan,nan
 
                     if slope == near_inf:
                         slope = inf
@@ -562,6 +559,7 @@ class CoordinateProcessor(threading.Thread):
                         run = nan
                         rise = nan
 
+                    x_undistorted,y_undistorted = scc.helper.undistort( x_distorted,y_distorted )
                     (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
                      ray5) = flydra.reconstruct.do_3d_operations_on_2d_point(
                         scc.helper,x_undistorted,y_undistorted,
