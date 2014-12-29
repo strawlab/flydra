@@ -36,7 +36,7 @@ NAUGHTY_BUT_FAST = False
 #DISABLE_ALL_PROCESSING = True
 DISABLE_ALL_PROCESSING = False
 
-near_inf = 9.999999e20
+from flydra.common_variables import near_inf
 
 bright_non_gaussian_cutoff = 255
 bright_non_gaussian_replacement = 5

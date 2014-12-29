@@ -7,7 +7,7 @@ import flydra.reconstruct_utils as ru
 import numpy
 import numpy as np
 from numpy import nan, inf
-near_inf = 9.999999e20
+from flydra.common_variables import near_inf
 import Queue
 
 pytables_filt = numpy.asarray
