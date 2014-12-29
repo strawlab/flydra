@@ -309,7 +309,6 @@ def check_online_reconstruction(with_water=False,
     else:
         line_found = False
         slope_found = False
-    ray_valid = True
     cur_val, mean_val, sumsqf_val = (100.0, 2.0, 3.0)
 
     centers = {}
@@ -371,8 +370,6 @@ def check_online_reconstruction(with_water=False,
                 pt = (pt_x,pt_y,area,slope,D['eccentricity'],
                       p1,p2,p3,p4,line_found,slope_found,
                       x_undistorted,y_undistorted,
-                      ray_valid,
-                      ray0, ray1, ray2, ray3, ray4, ray5, # pluecker coords from cam center to detected point
                       cur_val, mean_val, sumsqf_val,
                       )
                 pt_buf = struct.pack(pt_fmt,*pt)

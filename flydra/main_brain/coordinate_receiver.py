@@ -482,6 +482,11 @@ class CoordinateProcessor(threading.Thread):
             (cam_id, raw_timestamp, camn_received_time, raw_framenumber,
              n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
 
+            R = self.reconstructor
+            scc = R.get_SingleCameraCalibration(cam_id)
+            cc = R.get_camera_center(cam_id)[:,0]
+            cc = np.array([cc[0],cc[1],cc[2],1.0])
+
             cam_idx = self.cam_ids.index(cam_id)
             absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
@@ -531,19 +536,40 @@ class CoordinateProcessor(threading.Thread):
                     (x_distorted,y_distorted,area,slope,eccentricity,
                      p1,p2,p3,p4,line_found,slope_found,
                      x_undistorted,y_undistorted,
-                     ray_valid,
-                     ray0, ray1, ray2, ray3, ray4, ray5, # pluecker coords from cam center to detected point
                      cur_val, mean_val, sumsqf_val,
                      )= struct.unpack(pt_fmt,buf_data[start:end])
                     # nan cannot get sent across network in platform-independent way
                     if not line_found:
                         p1,p2,p3,p4 = nan,nan,nan,nan
+
                     if slope == near_inf:
                         slope = inf
                     if eccentricity == near_inf:
                         eccentricity = inf
                     if not slope_found:
                         slope = nan
+
+                    line_found = slope_found
+
+                    if slope_found:
+                        if np.isinf(slope):
+                            run = 0.0
+                            rise = 1.0
+                        else:
+                            run = 1.0
+                            rise = slope
+                    else:
+                        run = nan
+                        rise = nan
+
+                    (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
+                     ray5) = flydra.reconstruct.do_3d_operations_on_2d_point(
+                        scc.helper,x_undistorted,y_undistorted,
+                        scc.pmat_inv,
+                        cc,
+                        x_distorted,y_distorted,
+                        rise, run)
+                    ray_valid = not np.isnan(ray0)
 
                     # Keep in sync with kalmanize.py and data_descriptions.py
                     pt_undistorted = (x_undistorted,y_undistorted,

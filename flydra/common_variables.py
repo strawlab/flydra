@@ -11,7 +11,7 @@ timestamp_echo_gatherer_port = 9993 # on MainBrain
 timestamp_echo_fmt2 = '<dd'
 
 cam_id_count = 30
-recv_pt_fmt = '<dddddddddBBddBddddddBdd'
+recv_pt_fmt = '<dddddddddBBddBdd'
 recv_pt_header_fmt = '<%dpddliI'%(cam_id_count,)
 
 emulated_camera_control = 9645
