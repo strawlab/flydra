@@ -8,7 +8,7 @@ from flydra.timestamp import from_protobuf_time
 import numpy
 import numpy as np
 
-import flydra.camera_feature_point_pb2  # compiled from 'camera_feature_point.proto'
+import camera_feature_point_proto  # compiled from 'camera_feature_point.proto'
 
 from numpy import nan, inf
 from flydra.common_variables import near_inf
@@ -481,8 +481,7 @@ class CoordinateProcessor(threading.Thread):
         with self.all_data_lock:
             deferred_2d_data = []
 
-            # this raw_timestamp is the remote camera's timestamp (?? from the driver, not the host clock??)
-            msg = flydra.camera_feature_point_pb2.PointList()
+            msg = camera_feature_point_proto.PointList()
             msg.ParseFromString( incoming_2d_data )
 
             cam_idx = self.cam_ids.index(msg.cam_id)

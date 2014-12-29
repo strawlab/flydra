@@ -91,6 +91,10 @@ ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
                              include_dirs=[np.get_include()],
                              ))
 
+ext_modules.append(Extension(name="camera_feature_point_proto",
+                             sources=["src/protobuf/camera_feature_point.cc", "src/protobuf/camera_feature_point.pb.cc"],
+                             libraries=['protobuf']))
+
 setup(name='flydra',
       version=version,
       author='Andrew Straw',

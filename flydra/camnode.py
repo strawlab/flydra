@@ -59,8 +59,8 @@ import motmot.ufmf.ufmf as ufmf
 import motmot.realtime_image_analysis.slow
 
 import flydra.flydra_socket as flydra_socket
-from flydra.timestamp import to_pb2_time
-import flydra.camera_feature_point_pb2
+from flydra.timestamp import to_proto_time
+import camera_feature_point_proto  # compiled from 'camera_feature_point.proto'
 
 #import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
@@ -954,15 +954,17 @@ class ProcessCamClass(rospy.SubscribeListener):
                     self.realtime_analyzer.clear_threshold = (
                         self.clear_threshold_shared.get_nowait() )
 
-                point_list = flydra.camera_feature_point_pb2.PointList()
+                point_list = camera_feature_point_proto.PointList()
                 point_list.cam_id = self.cam_id
-                to_pb2_time(point_list.timestamp,timestamp)
-                to_pb2_time(point_list.cam_received_timestamp,cam_received_time)
+                point_list.timestamp = to_proto_time(timestamp)
+                point_list.cam_received_timestamp= to_proto_time(cam_received_time)
                 point_list.frame=framenumber
                 point_list.n_frames_skipped=n_frames_skipped
+
+                this_points = []
                 for point_tuple in points:
 
-                    this_point = point_list.points.add()
+                    this_point = camera_feature_point_proto.Point()
 
                     (this_point.pt_x,
                      this_point.pt_y,
@@ -974,6 +976,7 @@ class ProcessCamClass(rospy.SubscribeListener):
                      this_point.mean_val,
                      this_point.sumsqf_val) = point_tuple
 
+                point_list.points = this_points
                 data = point_list.SerializeToString()
 
                 if 0:

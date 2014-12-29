@@ -6,7 +6,7 @@ import pprint
 
 import numpy as np
 
-import flydra.camera_feature_point_pb2  # compiled from 'camera_feature_point.proto'
+import camera_feature_point_proto  # compiled from 'camera_feature_point.proto'
 
 from pymvg.camera_model import CameraModel
 from pymvg.multi_camera_system import MultiCameraSystem
@@ -20,7 +20,7 @@ import flydra.flydra_socket as flydra_socket
 from flydra.reconstruct import Reconstructor, DEFAULT_WATER_REFRACTIVE_INDEX
 
 from flydra.main_brain.coordinate_receiver import CoordinateProcessor
-from flydra.timestamp import to_pb2_time
+from flydra.timestamp import to_proto_time
 
 MB_HOSTNAME = 'localhost'
 SPINUP_DURATION = 0.2
@@ -344,16 +344,17 @@ def check_online_reconstruction(with_water=False,
             else:
                 n_pts = 0
             n_frames_skipped = 0
-            point_list = flydra.camera_feature_point_pb2.PointList()
+            point_list = camera_feature_point_proto.PointList()
             point_list.cam_id = cam_id
-            to_pb2_time(point_list.timestamp,timestamp)
-            to_pb2_time(point_list.cam_received_timestamp,camn_received_time)
+            point_list.timestamp = to_proto_time(timestamp)
+            point_list.cam_received_timestamp= to_proto_time(camn_received_time)
             point_list.frame=framenumber
             point_list.n_frames_skipped=n_frames_skipped
 
             if n_pts:
                 assert n_pts==1
-                this_point = point_list.points.add()
+
+                this_point = camera_feature_point_proto.Point()
                 this_point.pt_x = float(pt_x)
                 this_point.pt_y = float(pt_y)
                 this_point.area = float(area)
@@ -363,6 +364,10 @@ def check_online_reconstruction(with_water=False,
                 this_point.cur_val = int(cur_val)
                 this_point.mean_val = float(mean_val)
                 this_point.sumsqf_val = float(sumsqf_val)
+
+                point_list.points = [this_point]
+            else:
+                point_list.points = []
 
             buf = point_list.SerializeToString()
 
