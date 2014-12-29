@@ -201,7 +201,6 @@ class CoordinateProcessor(threading.Thread):
         self.timestamp_check_dict = {}
         self.realtime_kalman_coord_dict = collections.defaultdict(dict)
         self.oldest_timestamp_by_corrected_framenumber = {}
-        self.buf_data = ''
 
         threading.Thread.__init__(self,name='CoordinateProcessor')
 
@@ -471,7 +470,7 @@ class CoordinateProcessor(threading.Thread):
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
 
-        buf_data = self.buf_data
+        buf_data = incoming_2d_data
 
         if 1:
             new_data_framenumbers = set()
@@ -479,13 +478,9 @@ class CoordinateProcessor(threading.Thread):
             with self.all_data_lock:
                 deferred_2d_data = []
                 if 1:
-                    buf_data += incoming_2d_data
-
-                    while len(buf_data):
+                    if 1:
                         header = buf_data[:header_size]
-                        if len(header) != header_size:
-                            # incomplete header buffer
-                            break
+                        assert len(header) == header_size
                         # this raw_timestamp is the remote camera's timestamp (?? from the driver, not the host clock??)
                         (cam_id, raw_timestamp, camn_received_time, raw_framenumber,
                          n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
@@ -496,9 +491,9 @@ class CoordinateProcessor(threading.Thread):
                         points_in_pluecker_coords_meters = []
                         points_undistorted = []
                         points_distorted = []
-                        if len(buf_data) < header_size + n_pts*pt_size:
-                            # incomplete point info
-                            break
+
+                        assert len(buf_data)==(header_size + n_pts*pt_size)
+
                         predicted_framenumber = n_frames_skipped + self.last_framenumbers_skip[cam_idx] + 1
                         if raw_framenumber<predicted_framenumber:
                             LOG.fatal('cam_id %s'%cam_id)
@@ -578,7 +573,6 @@ class CoordinateProcessor(threading.Thread):
                             # timestamps with frame number
                             points_distorted.append( no_point_tuple )
                             points_undistorted.append( no_point_tuple )
-                        buf_data = buf_data[end:]
 
                         self._process_parsed_data(cam_idx,
                                                   camn_received_time,
