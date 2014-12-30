@@ -87,11 +87,11 @@ class Stimulus(object):
     ... </stimxml>"""
     >>> root=ET.fromstring(stimulus_file_contents)
     >>> stim=Stimulus(root)
-    >>> import matplotlib
-    >>> matplotlib.use("Agg") # for running without X display
-    >>> import matplotlib.pyplot as pyplot
-    >>> ax=pyplot.subplot(1,1,1)
-    >>> stim.plot_stim(ax,SimpleOrthographicXYProjection())
+    >>> #import matplotlib
+    >>> #matplotlib.use("Agg") # for running without X display
+    >>> #import matplotlib.pyplot as pyplot
+    >>> #ax=pyplot.subplot(1,1,1)
+    >>> #stim.plot_stim(ax,SimpleOrthographicXYProjection())
     >>> #pyplot.show()
     '''
 
