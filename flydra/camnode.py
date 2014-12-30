@@ -54,6 +54,7 @@ import json
 
 import contextlib
 
+import pkg_resources # needed to run motmot namespace packages
 import motmot.ufmf.ufmf as ufmf
 import motmot.realtime_image_analysis.slow
 
