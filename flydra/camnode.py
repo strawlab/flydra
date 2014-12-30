@@ -2308,6 +2308,8 @@ class AppState(object):
                 cam2mainbrain_port = self.main_brain.register_new_camera(cam_guid,
                                                                          scalar_control_info,
                                                                          camnode_ros_name = rospy.get_name())
+                cam2mainbrain_port = int(cam2mainbrain_port)
+                assert(cam2mainbrain_port>0)
 
                 ##################################################################
                 #
