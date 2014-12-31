@@ -391,7 +391,7 @@ class MainBrain(object):
             fqdn = cam_hostname
 
             LOG.info("REGISTER NEW CAMERA %s on %s @ ros node %s" % (cam_guid,fqdn,camnode_ros_name))
-            self.main_brain.coord_processor.connect(cam_guid,fqdn)
+            self.main_brain.coord_processor.connect(cam_guid)
 
             with self.cam_info_lock:
                 if cam_guid in self.cam_info:

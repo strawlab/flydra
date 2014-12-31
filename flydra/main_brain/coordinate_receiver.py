@@ -299,7 +299,7 @@ class CoordinateProcessor(threading.Thread):
         if self.debug_level.isSet():
             LOG.debug('killing obj_id %d:'%tracked_object.obj_id)
 
-    def connect(self,cam_id,cam_hostname):
+    def connect(self,cam_id):
         # called from Remote-API thread on camera connect
         assert not self.main_brain.is_saving_data()
 

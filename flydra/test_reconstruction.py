@@ -19,7 +19,6 @@ from flydra.reconstruct import Reconstructor, DEFAULT_WATER_REFRACTIVE_INDEX
 from flydra.main_brain.coordinate_receiver import CoordinateProcessor
 
 MB_HOSTNAME = 'localhost'
-CAM_HOSTNAME = 'localhost'
 SPINUP_DURATION = 0.2
 MAX_MEAN_ERROR = 0.002
 
@@ -279,7 +278,7 @@ def check_online_reconstruction(with_water=False,
 
     R = D['reconstructor']
     for cam_id in R.cam_ids:
-        coord_processor.connect(cam_id,CAM_HOSTNAME)
+        coord_processor.connect(cam_id)
     port = coord_processor.get_listen_port()
 
     coord_processor.set_reconstructor(R)
