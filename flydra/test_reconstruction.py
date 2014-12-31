@@ -279,7 +279,7 @@ def check_online_reconstruction(with_water=False,
     R = D['reconstructor']
     for cam_id in R.cam_ids:
         coord_processor.connect(cam_id)
-    port = coord_processor.get_listen_port()
+    addr = coord_processor.get_listen_address()
 
     coord_processor.set_reconstructor(R)
     model = flydra.kalman.dynamic_models.get_kalman_model(name=D['dynamic_model_name'],dt=(1.0/fps))
@@ -379,7 +379,7 @@ def check_online_reconstruction(with_water=False,
             buf = header_buf + pt_buf
 
             if multithreaded:
-                sender.sendto(buf,(MB_HOSTNAME,port))
+                sender.sendto(buf,addr)
             else:
                 coord_processor.process_data(buf)
 

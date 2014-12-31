@@ -73,7 +73,8 @@ import std_msgs.msg
 
 import ros_flydra.cv2_bridge
 import ros_flydra.srv
-from ros_flydra.srv import MainBrainGetVersion, MainBrainRegisterNewCamera
+from ros_flydra.srv import MainBrainGetVersion, \
+    MainBrainRegisterNewCamera, MainBrainGetListenAddress
 import rospy
 
 if BENCHMARK:
@@ -165,6 +166,9 @@ class ROSMainBrain:
         rospy.wait_for_service('/flydra_mainbrain/register_new_camera')
         self._register_new_camera = rospy.ServiceProxy('/flydra_mainbrain/register_new_camera',
                                                        MainBrainRegisterNewCamera)
+        rospy.wait_for_service('/flydra_mainbrain/get_listen_address')
+        self._get_listen_address = rospy.ServiceProxy('/flydra_mainbrain/get_listen_address',
+                                                       MainBrainGetListenAddress)
         rospy.wait_for_service('/flydra_mainbrain/get_and_clear_commands')
         self._get_and_clear_commands = rospy.ServiceProxy('/flydra_mainbrain/get_and_clear_commands',
                                                           ros_flydra.srv.MainBrainGetAndClearCommands)
@@ -193,8 +197,17 @@ class ROSMainBrain:
         req.cam_hostname = std_msgs.msg.String(hostname)
         req.cam_ip = std_msgs.msg.String(my_ip)
 
-        response = self._register_new_camera(req)
-        return response.port.data
+        self._register_new_camera(req)
+
+    def get_listen_address(self):
+        req = ros_flydra.srv.MainBrainGetListenAddressRequest()
+        response = self._get_listen_address(req)
+        result = json.loads(response.listen_address_json.data)
+        if isinstance(result, list):
+            # Cast to tuple. json likes to return list, but
+            # socket.socket wants tuple.
+            result = tuple(result)
+        return result
 
     def get_and_clear_commands(self, cam_id):
         req = ros_flydra.srv.MainBrainGetAndClearCommandsRequest()
@@ -383,7 +396,7 @@ def get_free_buffer_from_pool(pool):
 
 class ProcessCamClass(rospy.SubscribeListener):
     def __init__(self,
-                 cam2mainbrain_port=None,
+                 coord_receiver_address=None,
                  cam_id=None,
                  log_message_queue=None,
                  max_num_points=None,
@@ -436,7 +449,7 @@ class ProcessCamClass(rospy.SubscribeListener):
             self.shortest_IFI = 1.0/framerate
         else:
             self.shortest_IFI = numpy.inf
-        self.cam2mainbrain_port = cam2mainbrain_port
+        self.coord_receiver_address = coord_receiver_address
         if len(cam_id) > (flydra.common_variables.cam_id_count-1):
             raise ValueError('cam_id %r is too long'%cam_id)
         self.cam_id = cam_id
@@ -1050,7 +1063,7 @@ class ProcessCamClass(rospy.SubscribeListener):
                     LOG.debug('local_processing_time % 3.1f'%local_processing_time)
 
                 try:
-                    coord_socket.sendto(data,(self.main_brain_ipaddr,self.cam2mainbrain_port))
+                    coord_socket.sendto(data,self.coord_receiver_address)
                 except socket.error:
                     LOG.warn('WARNING: ignoring error: %s' % traceback.format_exc())
 
@@ -2306,11 +2319,11 @@ class AppState(object):
 
                 # register self with remote server
                 cam_guid = self.all_cam_ids[cam_no]
-                cam2mainbrain_port = self.main_brain.register_new_camera(cam_guid,
-                                                                         scalar_control_info,
-                                                                         camnode_ros_name = rospy.get_name())
-                cam2mainbrain_port = int(cam2mainbrain_port)
-                assert(cam2mainbrain_port>0)
+                self.main_brain.register_new_camera(
+                    cam_guid,
+                    scalar_control_info,
+                    camnode_ros_name = rospy.get_name())
+                coord_receiver_address = self.main_brain.get_listen_address()
 
                 ##################################################################
                 #
@@ -2332,7 +2345,7 @@ class AppState(object):
                         t = b+h-1
                         lbrt = l,b,r,t
                         cam_processor = ProcessCamClass(
-                            cam2mainbrain_port=cam2mainbrain_port,
+                            coord_receiver_address=coord_receiver_address,
                             cam_id=cam_guid,
                             log_message_queue=self.log_message_queue,
                             max_num_points=options.num_points,

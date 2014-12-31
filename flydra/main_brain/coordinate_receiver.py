@@ -165,7 +165,7 @@ class CoordinateProcessor(threading.Thread):
 
 
         self.listen_socket = sockobj
-        _,self.listen_port = sockobj.getsockname()
+        self.listen_address = sockobj.getsockname()
 
         self.queue_realtime_ros_packets = Queue.Queue()
         self.tp = RealtimeROSSenderThread(
@@ -203,8 +203,8 @@ class CoordinateProcessor(threading.Thread):
 
         threading.Thread.__init__(self,name='CoordinateProcessor')
 
-    def get_listen_port(self):
-        return self.listen_port
+    def get_listen_address(self):
+        return self.listen_address
 
     def mainbrain_is_attempting_synchronizing(self):
         self.ever_synchronized = True

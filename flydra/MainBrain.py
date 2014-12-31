@@ -195,6 +195,7 @@ class MainBrain(object):
 
         get_version=(ros_flydra.srv.MainBrainGetVersion),
         register_new_camera=(ros_flydra.srv.MainBrainRegisterNewCamera),
+        get_listen_address=(ros_flydra.srv.MainBrainGetListenAddress),
         get_and_clear_commands=(ros_flydra.srv.MainBrainGetAndClearCommands),
         set_image=(ros_flydra.srv.MainBrainSetImage),
         receive_missing_data=(ros_flydra.srv.MainBrainReceiveMissingData),
@@ -409,6 +410,9 @@ class MainBrain(object):
             self.no_cams_connected.clear()
             with self.changed_cam_lock:
                 self.new_cam_ids.append(cam_guid)
+
+        def get_listen_addr(self):
+            return self.main_brain.coord_processor.get_listen_address()
 
         def set_image(self,cam_id,coord_and_image):
             """set most recent image (caller: remote camera)"""
@@ -713,8 +717,12 @@ class MainBrain(object):
                                             camnode_ros_name=camnode_ros_name.data,
                                             cam_hostname=cam_hostname.data,
                                             cam_ip=cam_ip.data)
-        port = self.coord_processor.get_listen_port()
-        return [std_msgs.msg.Int32(port)]
+        return [std_msgs.msg.Int32(-1)]
+
+    def get_listen_address(self):
+        listen_addr = self.remote_api.get_listen_addr()
+        listen_addr_json = json.dumps( listen_addr )
+        return std_msgs.msg.String(listen_addr_json),
 
     def get_and_clear_commands(self,cam_id):
         cmds = self.remote_api.get_and_clear_commands(cam_id.data)
