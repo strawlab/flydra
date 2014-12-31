@@ -8,6 +8,7 @@ import numpy
 import numpy as np
 from numpy import nan, inf
 from flydra.common_variables import near_inf
+import flydra.flydra_socket as flydra_socket
 import Queue
 
 pytables_filt = numpy.asarray
@@ -154,18 +155,11 @@ class CoordinateProcessor(threading.Thread):
 
         self.general_save_info = {}
 
-        sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        socket_timeout = True
-        if socket_timeout:
-            timeout_sec = 0 # in seconds
-            timeout_usec = 500000 # in microseconds
-            timeval=struct.pack("LL", timeout_sec, timeout_usec)
-            sockobj.setsockopt(socket.SOL_SOCKET, socket.SO_RCVTIMEO, timeval)
-        sockobj.bind((self.hostname, 0))
 
 
-        self.listen_socket = sockobj
-        self.listen_address = sockobj.getsockname()
+        addr = (self.hostname,0)
+        self.listen_socket = flydra_socket.UDPReceiver(addr)
+        self.listen_address = self.listen_socket.getsockname()
 
         self.queue_realtime_ros_packets = Queue.Queue()
         self.tp = RealtimeROSSenderThread(
@@ -435,7 +429,7 @@ class CoordinateProcessor(threading.Thread):
         self.main_brain.trigger_device.wait_for_estimate()
         while not self.quit_event.isSet():
             try:
-                incoming_2d_data, _ = self.listen_socket.recvfrom(4096)
+                incoming_2d_data = self.listen_socket.recv()
             except socket.error as err:
                 if err.errno == 11:
                     # no data ready. try again (after checking if we should quit).

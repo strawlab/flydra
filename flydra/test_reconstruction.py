@@ -14,6 +14,7 @@ from flydra.kalman.kalmanize import kalmanize
 from flydra.a2.calculate_reprojection_errors import calculate_reprojection_errors
 import flydra.water as water
 import flydra.a2.core_analysis as core_analysis
+import flydra.flydra_socket as flydra_socket
 from flydra.reconstruct import Reconstructor, DEFAULT_WATER_REFRACTIVE_INDEX
 
 from flydra.main_brain.coordinate_receiver import CoordinateProcessor
@@ -280,6 +281,7 @@ def check_online_reconstruction(with_water=False,
     for cam_id in R.cam_ids:
         coord_processor.connect(cam_id)
     addr = coord_processor.get_listen_address()
+    sender = flydra_socket.get_sender_from_address( addr )
 
     coord_processor.set_reconstructor(R)
     model = flydra.kalman.dynamic_models.get_kalman_model(name=D['dynamic_model_name'],dt=(1.0/fps))
@@ -299,7 +301,6 @@ def check_online_reconstruction(with_water=False,
     data2d=D['data2d']
     orig_timestamps = data2d.pop('t')
 
-    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     area = 1.0
     if D['eccentricity']:
         line_found = True
@@ -379,7 +380,7 @@ def check_online_reconstruction(with_water=False,
             buf = header_buf + pt_buf
 
             if multithreaded:
-                sender.sendto(buf,addr)
+                sender.send(buf)
             else:
                 coord_processor.process_data(buf)
 

@@ -58,6 +58,7 @@ import pkg_resources # needed to run motmot namespace packages
 import motmot.ufmf.ufmf as ufmf
 import motmot.realtime_image_analysis.slow
 
+import flydra.flydra_socket as flydra_socket
 #import flydra.debuglock
 #DebugLock = flydra.debuglock.DebugLock
 
@@ -244,14 +245,6 @@ class ROSMainBrain:
         req = ros_flydra.srv.MainBrainCloseCameraRequest()
         req.cam_id = std_msgs.msg.String(cam_id)
         self._close_camera(req)
-
-class DummySocket:
-    def __init__(self,*args,**kw):
-        self.connect = self.noop
-        self.send = self.noop
-        self.sendto = self.noop
-    def noop(self,*args,**kw):
-        return
 
 import flydra.common_variables
 
@@ -449,7 +442,11 @@ class ProcessCamClass(rospy.SubscribeListener):
             self.shortest_IFI = 1.0/framerate
         else:
             self.shortest_IFI = numpy.inf
-        self.coord_receiver_address = coord_receiver_address
+
+        if self.benchmark:
+            self.coord_socket = flydra_socket.get_dummy_sender()
+        else:
+            self.coord_socket = flydra_socket.get_sender_from_address( coord_receiver_address )
         if len(cam_id) > (flydra.common_variables.cam_id_count-1):
             raise ValueError('cam_id %r is too long'%cam_id)
         self.cam_id = cam_id
@@ -717,11 +714,6 @@ class ProcessCamClass(rospy.SubscribeListener):
 
 #        hw_roi_frame = fi8ufactory( cur_fisize )
 #        self._hw_roi_frame = hw_roi_frame # make accessible to other code
-
-        if self.benchmark:
-            coord_socket = DummySocket()
-        else:
-            coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         old_ts = time.time()
         old_fn = None
@@ -1063,7 +1055,7 @@ class ProcessCamClass(rospy.SubscribeListener):
                     LOG.debug('local_processing_time % 3.1f'%local_processing_time)
 
                 try:
-                    coord_socket.sendto(data,self.coord_receiver_address)
+                    self.coord_socket.send(data)
                 except socket.error:
                     LOG.warn('WARNING: ignoring error: %s' % traceback.format_exc())
 
