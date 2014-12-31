@@ -2,7 +2,7 @@
 """Get Flydra Latency.
 
 Usage:
-  flydra_analysis_show_latency FILENAME [options]
+  get_2D_image_latency_plot.py FILENAME [options]
 
 Options:
   -h --help     Show this screen.
