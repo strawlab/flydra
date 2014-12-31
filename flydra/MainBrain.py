@@ -385,7 +385,7 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def register_new_camera(self,cam_guid,scalar_control_info,camnode_ros_name,cam_hostname,cam_ip):
+        def register_new_cam(self,cam_guid,scalar_control_info,camnode_ros_name,cam_hostname,cam_ip):
             """register new camera (caller: remote camera)"""
 
             assert camnode_ros_name is not None
@@ -712,11 +712,11 @@ class MainBrain(object):
                             cam_hostname,
                             cam_ip):
         scalar_control_info = json.loads( scalar_control_info_json.data )
-        self.remote_api.register_new_camera(cam_guid=cam_guid.data,
-                                            scalar_control_info=scalar_control_info,
-                                            camnode_ros_name=camnode_ros_name.data,
-                                            cam_hostname=cam_hostname.data,
-                                            cam_ip=cam_ip.data)
+        self.remote_api.register_new_cam(cam_guid=cam_guid.data,
+                                         scalar_control_info=scalar_control_info,
+                                         camnode_ros_name=camnode_ros_name.data,
+                                         cam_hostname=cam_hostname.data,
+                                         cam_ip=cam_ip.data)
         return [std_msgs.msg.Int32(-1)]
 
     def get_listen_address(self):
