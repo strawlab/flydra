@@ -212,6 +212,7 @@ class MainBrain(object):
         save_data_dir='~/FLYDRA',
         save_movie_dir='~/FLYDRA_MOVIES',
         camera_calibration='',
+        use_unix_domain_sockets=False,
     )
 
 
@@ -583,6 +584,7 @@ class MainBrain(object):
                                    max_reconstruction_latency_sec=self.config['max_reconstruction_latency_sec'],
                                    max_N_hypothesis_test=self.config['max_N_hypothesis_test'],
                                    hostname=self.hostname,
+                                   use_unix_domain_sockets=self.config['use_unix_domain_sockets'],
                                    )
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()

@@ -104,6 +104,7 @@ class CoordinateProcessor(threading.Thread):
                  max_reconstruction_latency_sec,
                  max_N_hypothesis_test,
                  hostname,
+                 use_unix_domain_sockets,
                  ):
         self.did_quit_successfully = False
         self.hostname = hostname
@@ -155,10 +156,21 @@ class CoordinateProcessor(threading.Thread):
 
         self.general_save_info = {}
 
+        self.to_unlink = []
 
-
-        addr = (self.hostname,0)
-        self.listen_socket = flydra_socket.UDPReceiver(addr)
+        if use_unix_domain_sockets:
+            addr = '/tmp/flydra_coordinate_receiver.' + str(os.getpid())
+            try:
+                os.remove(addr)
+            except OSError as err:
+                if err.errno!=2: # Missing file is OK.
+                    raise
+            self.listen_socket = flydra_socket.UnixDomainDatagramReceiver(addr)
+            self.to_unlink.append(addr)
+        else:
+            addr = (self.hostname,0)
+            self.listen_socket = flydra_socket.UDPReceiver(addr)
+        LOG.info("coordinate receiver listening at %r"%self.listen_socket)
         self.listen_address = self.listen_socket.getsockname()
 
         self.queue_realtime_ros_packets = Queue.Queue()
@@ -443,6 +455,9 @@ class CoordinateProcessor(threading.Thread):
         with self.tracker_lock:
             if self.tracker is not None:
                 self.tracker.kill_all_trackers() # save (if necessary) all old data
+
+        for fname in self.to_unlink:
+            os.remove( fname )
 
         self.did_quit_successfully = True
 

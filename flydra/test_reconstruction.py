@@ -266,6 +266,7 @@ def check_online_reconstruction(with_water=False,
                                           max_reconstruction_latency_sec=0.3,
                                           max_N_hypothesis_test=3,
                                           hostname=MB_HOSTNAME,
+                                          use_unix_domain_sockets=True,
                                           )
     if multithreaded:
         coord_processor.daemon = True
