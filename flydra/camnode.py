@@ -1054,10 +1054,7 @@ class ProcessCamClass(rospy.SubscribeListener):
                     local_processing_time = (time.time()-cam_received_time)*1e3
                     LOG.debug('local_processing_time % 3.1f'%local_processing_time)
 
-                try:
-                    self.coord_socket.send(data)
-                except socket.error:
-                    LOG.warn('WARNING: ignoring error: %s' % traceback.format_exc())
+                self.coord_socket.send(data)
 
                 if 0 and self.new_roi.isSet():
                     with self.new_roi_data_lock:
