@@ -3,13 +3,17 @@ import roslib.packages
 import roslib.rosenv
 
 roslib.load_manifest('rospy')
+roslib.load_manifest('rosgraph')
 import rospy
 import rospy.names
+import rosgraph.masterapi
 
 import os.path
 import string
 import sys
 import errno
+from urlparse import urlparse
+import socket
 
 class Log:
     to_console = True
@@ -116,3 +120,29 @@ def decode_url(url, required=False):
 
     return url
 
+def get_node_ip_addr( node_name ):
+    ID = rospy.get_name() # my own name
+    master = rosgraph.masterapi.Master(ID)
+
+    # Get URI of other node's XMLRPC server.
+    uri = master.lookupNode( node_name )
+
+    # Parse the URI to find the hostname of the server.
+    x = urlparse(uri)
+    if ':' in x.netloc:
+        name = x.netloc[ : x.netloc.index(':') ]
+    else:
+        name = x.netloc
+
+    # Convert the hostname to IP address.
+    try:
+        ipaddr = socket.gethostbyname(name)
+    except socket.gaierror:
+        raise RuntimeError('host %r not found' % name)
+
+    # Ensure that the IP address is valid.
+    try:
+        socket.inet_aton(ipaddr)
+    except socket.error:
+        raise RuntimeError('IP address %s not valid' % ipaddr)
+    return ipaddr

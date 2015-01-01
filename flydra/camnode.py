@@ -2314,6 +2314,22 @@ class AppState(object):
                     camnode_ros_name = rospy.get_name())
                 coord_receiver_address = self.main_brain.get_listen_address()
 
+                # get mainbrain's address
+                if flydra_socket.is_udp_addr( coord_receiver_address ):
+                    addr_host, addr_port = coord_receiver_address
+
+                    if addr_host == '0.0.0.0':
+                        # Clients cannot connect to '0.0.0.0' - get
+                        # real IP from ROS.
+                        addr_host = flydra.rosutils.get_node_ip_addr( '/flydra_mainbrain' )
+                        coord_receiver_address = addr_host, port
+
+                    # Ensure addr_host is an IP address (not DNS name).
+                    try:
+                        socket.inet_aton(attr_host)
+                    except socket.error:
+                        raise RuntimeError('Mainbrain ip address %s not valid' % addr_host )
+
                 ##################################################################
                 #
                 # Processing chains
