@@ -397,7 +397,6 @@ class ProcessCamClass(rospy.SubscribeListener):
                  bg_frame_interval=None,
                  bg_frame_alpha=None,
                  cam_no=-1,
-                 main_brain_ipaddr=None,
                  mask_image=None,
                  diff_threshold_shared=None,
                  clear_threshold_shared=None,
@@ -437,7 +436,6 @@ class ProcessCamClass(rospy.SubscribeListener):
         self.benchmark = benchmark
         self.options = options
         self.globals = globals
-        self.main_brain_ipaddr = main_brain_ipaddr
         if framerate is not None:
             self.shortest_IFI = 1.0/framerate
         else:
@@ -1978,18 +1976,8 @@ class AppState(object):
         self.options = options
         self._real_quit_function = None
 
-        #Performance of the coordinate processor thread is critical. The time
-        #taken to perform DNS lookups is non-trivial (i.e. 2ms x ncameras x 100Hz)
-        #so can cause the camnode to fall behind mainbrain and never catch up. Ensure
-        #that communication is done using ip addresses, and check that these are valid
-        try:
-            self.main_brain_ipaddr = socket.gethostbyname(options.main_brain)
-        except socket.gaierror:
-            raise RuntimeError('Mainbrain host %s not found' % options.main_brain)
-        try:
-            socket.inet_aton(self.main_brain_ipaddr)
-        except socket.error:
-            raise RuntimeError('Mainbrain ip address %s not valid' % self.main_brain_ipaddr)
+        if options.main_brain is not None:
+            LOG.warn('Option --main-brain is deprecated and will be ignored.')
 
         self.log_message_queue = Queue.Queue()
 
@@ -2358,7 +2346,6 @@ class AppState(object):
                             bg_frame_interval=options.background_frame_interval,
                             bg_frame_alpha=options.background_frame_alpha,
                             cam_no=cam_no,
-                            main_brain_ipaddr=self.main_brain_ipaddr,
                             mask_image=mask,
                             diff_threshold_shared=diff_threshold_shared,
                             clear_threshold_shared=clear_threshold_shared,
@@ -2836,8 +2823,8 @@ def parse_args_and_run(benchmark, cmdline_args):
     defaults = get_app_defaults()
     parser.set_defaults(**defaults)
 
-    parser.add_option("--main-brain", type='string',
-                      help="hostname of mainbrain")
+    parser.add_option("--main-brain", type='string', default=None,
+                      help="This argument does nothing. Present only for backwards compatibility.")
     parser.add_option("--n-sigma", type='float',
                       help=("criterion used to determine if a pixel is significantly "
                             "different than the mean [default: %default]"))
