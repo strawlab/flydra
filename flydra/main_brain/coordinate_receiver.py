@@ -252,6 +252,14 @@ class CoordinateProcessor(threading.Thread):
         with self.all_data_lock:
             self.reconstructor = r
 
+        R = self.reconstructor
+        self.cached_calibration_by_cam_id = {}
+        for cam_id in R.cam_ids:
+            scc = R.get_SingleCameraCalibration(cam_id)
+            cc = R.get_camera_center(cam_id)[:,0]
+            cc = np.array([cc[0],cc[1],cc[2],1.0])
+            self.cached_calibration_by_cam_id[cam_id] = scc, cc
+
         if r is None:
             return
 
@@ -482,11 +490,6 @@ class CoordinateProcessor(threading.Thread):
             (cam_id, raw_timestamp, camn_received_time, raw_framenumber,
              n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
 
-            R = self.reconstructor
-            scc = R.get_SingleCameraCalibration(cam_id)
-            cc = R.get_camera_center(cam_id)[:,0]
-            cc = np.array([cc[0],cc[1],cc[2],1.0])
-
             cam_idx = self.cam_ids.index(cam_id)
             absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
@@ -559,6 +562,7 @@ class CoordinateProcessor(threading.Thread):
                         run = nan
                         rise = nan
 
+                    scc, cc = self.cached_calibration_by_cam_id[cam_id]
                     x_undistorted,y_undistorted = scc.helper.undistort( x_distorted,y_distorted )
                     (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
                      ray5) = flydra.reconstruct.do_3d_operations_on_2d_point(
