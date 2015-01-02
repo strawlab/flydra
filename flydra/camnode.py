@@ -82,11 +82,8 @@ if BENCHMARK:
     class NonExistantError(Exception):
         pass
     ConnectionClosedError = NonExistantError
-import flydra.reconstruct_utils as reconstruct_utils
-import flydra.reconstruct
 import flydra.version
 import flydra.rosutils
-from flydra.reconstruct import do_3d_operations_on_2d_point
 
 import camnode_utils
 import motmot.FastImage.FastImage as FastImage
@@ -489,9 +486,6 @@ class ProcessCamClass(rospy.SubscribeListener):
         self.realtime_analyzer.diff_threshold = self.diff_threshold_shared.get_nowait()
         self.realtime_analyzer.clear_threshold = self.clear_threshold_shared.get_nowait()
 
-        self._hlper = None
-        self._pmat = None
-
         self._chain = camnode_utils.ChainLink()
         self._initial_image_dict = initial_image_dict
 
@@ -512,48 +506,6 @@ class ProcessCamClass(rospy.SubscribeListener):
             self.new_roi.set()
     roi = property( get_roi, set_roi )
 
-    def get_pmat(self):
-        return self._pmat
-    def set_pmat(self,value):
-        if value is None:
-            self._pmat = None
-            self._camera_center = None
-            self._pmat_inv = None
-            return
-
-        self._pmat = numpy.asarray(value)
-
-        P = self._pmat
-        determinant = numpy.dual.det
-        r_ = numpy.r_
-
-        # find camera center in 3D world coordinates
-        col0_asrow = P[nx.newaxis,:,0]
-        col1_asrow = P[nx.newaxis,:,1]
-        col2_asrow = P[nx.newaxis,:,2]
-        col3_asrow = P[nx.newaxis,:,3]
-        X = determinant(  r_[ col1_asrow, col2_asrow, col3_asrow ] )
-        Y = -determinant( r_[ col0_asrow, col2_asrow, col3_asrow ] )
-        Z = determinant(  r_[ col0_asrow, col1_asrow, col3_asrow ] )
-        T = -determinant( r_[ col0_asrow, col1_asrow, col2_asrow ] )
-
-        self._camera_center = nx.array( [ X/T, Y/T, Z/T, 1.0 ] )
-        self._pmat_inv = numpy.dual.pinv(self._pmat)
-
-    def make_reconstruct_helper(self, intlin, intnonlin):
-        if intlin is None and intnonlin is None:
-            self._hlper = None
-            return
-
-        fc1 = intlin[0,0]
-        fc2 = intlin[1,1]
-        cc1 = intlin[0,2]
-        cc2 = intlin[1,2]
-        k1, k2, p1, p2, k3 = intnonlin
-
-        self._hlper = reconstruct_utils.ReconstructHelper(
-            fc1, fc2, cc1, cc2, k1, k2, p1, p2, k3=k3 )
-
     def _convert_to_wire_order(self, xpoints, hw_roi_frame, running_mean_im, sumsqf ):
         """the images passed in are already in roi coords, as are index_x and index_y.
         convert to values for sending.
@@ -573,58 +525,21 @@ class ProcessCamClass(rospy.SubscribeListener):
             mean_val = float(running_mean_im[index_y, index_x])
             sumsqf_val = float(sumsqf[index_y, index_x])
 
-            if numpy.isnan(slope):
-                run = rise = numpy.nan
-                line_found = False
-            else:
-                line_found = True
-                if numpy.isinf(slope):
-                    run = 0
-                    rise = 1
-                else:
-                    run = 1
-                    #slope = rise/run
-                    rise = slope
-
-            ray_valid = False
-            if self._hlper is not None:
-                x0u, y0u = self._hlper.undistort( x0_abs, y0_abs )
-                # (If we have self._hlper _pmat_inv, we can assume we have
-                # self._pmat_inv and sef._camera_center.)
-                (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4,
-                 ray5) = do_3d_operations_on_2d_point(self._hlper,x0u,y0u,
-                                                      self._pmat_inv,
-                                                      self._camera_center,
-                                                      x0_abs, y0_abs,
-                                                      rise, run)
-                ray_valid = True
-            else:
-                x0u = x0_abs # fake undistorted data
-                y0u = y0_abs
-
-            if not ray_valid:
-                p1,p2,p3,p4 = -1, -1, -1, -1 # sentinel value (will be converted to nan)
-                (ray0, ray1, ray2, ray3, ray4, ray5) = (0,0,0, 0,0,0)
-
-            slope_found = True
-            if numpy.isnan(slope):
+            slope_found = not numpy.isnan(slope)
+            if slope_found==False:
                 # prevent nan going across network
-                slope_found = False
                 slope = 0.0
+            elif numpy.isinf(slope):
+                # prevent inf going across network
+                slope = near_inf
 
             if numpy.isinf(eccentricity):
+                # prevent inf going across network
                 eccentricity = near_inf
-
-            if numpy.isinf(slope):
-                slope = near_inf
 
             # see flydra.common_variables.recv_pt_fmt struct definition:
             pt = (x0_abs, y0_abs, area, slope, eccentricity,
-                  p1, p2, p3, p4, line_found, slope_found,
-                  x0u, y0u,
-                  ray_valid,
-                  ray0, ray1, ray2, ray3, ray4, ray5,
-                  cur_val, mean_val, sumsqf_val)
+                  slope_found, cur_val, mean_val, sumsqf_val)
             points.append( pt )
         return points
 
@@ -2741,17 +2656,6 @@ class AppState(object):
                 small_saver.start_recording(small_filebasename=small_filebasename)
             elif key == 'stop_small_recording':
                 small_saver.stop_recording()
-            elif key == 'cal':
-                LOG.info('setting calibration')
-                pmat, intlin, intnonlin = cmds[key]
-                pmat = np.array(pmat)
-                intlin = np.array(intlin)
-                intnonlin = np.array(intnonlin)
-
-                # XXX TODO: FIXME: thread crossing bug
-                # these three should always be done together in this order:
-                cam_processor.set_pmat( pmat )
-                cam_processor.make_reconstruct_helper(intlin, intnonlin) # let grab thread make one
             else:
                 raise ValueError('unknown key "%s"'%key)
 
