@@ -2,6 +2,7 @@ from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
 from Cython.Build import cythonize
 import sys
+from build_fast_protobuf import make_fast_protobuf_extension
 
 # Set this to true to compile the extensions that depend on FastImage.
 # Those are not strictly necessary for running some of the analysis tools.
@@ -91,9 +92,9 @@ ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
                              include_dirs=[np.get_include()],
                              ))
 
-ext_modules.append(Extension(name="camera_feature_point_proto",
-                             sources=["src/protobuf/camera_feature_point.cc", "src/protobuf/camera_feature_point.pb.cc"],
-                             libraries=['protobuf']))
+ext_modules.append( make_fast_protobuf_extension( name="camera_feature_point_proto",
+                                                  sources=['flydra/camera_feature_point.proto'],
+                                                  libraries=['protobuf'] ) )
 
 setup(name='flydra',
       version=version,

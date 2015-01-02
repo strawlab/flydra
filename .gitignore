@@ -9,3 +9,6 @@ srv_gen
 flydra/camnode_colors.c
 flydra.egg-info
 flydra/a2/fastfinder_help.c
+protobuf_sources/camera_feature_point.cc
+protobuf_sources/camera_feature_point.pb.cc
+protobuf_sources/camera_feature_point.pb.h
