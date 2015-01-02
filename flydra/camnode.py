@@ -2225,11 +2225,11 @@ class AppState(object):
                         # Clients cannot connect to '0.0.0.0' - get
                         # real IP from ROS.
                         addr_host = flydra.rosutils.get_node_ip_addr( '/flydra_mainbrain' )
-                        coord_receiver_address = addr_host, port
+                        coord_receiver_address = addr_host, addr_port
 
                     # Ensure addr_host is an IP address (not DNS name).
                     try:
-                        socket.inet_aton(attr_host)
+                        socket.inet_aton(addr_host)
                     except socket.error:
                         raise RuntimeError('Mainbrain ip address %s not valid' % addr_host )
 
