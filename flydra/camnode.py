@@ -184,8 +184,8 @@ class ROSMainBrain:
         return self._get_version().version.data
 
     def register_new_camera(self, cam_guid, scalar_control_info, camnode_ros_name):
-        hostname = socket.gethostname()
-        my_ip = socket.gethostbyname(hostname)
+        hostname = flydra.rosutils.get_node_hostname( camnode_ros_name )
+        my_addrinfo = flydra_socket.make_addrinfo( host=flydra_socket.get_bind_address() )
 
         req = ros_flydra.srv.MainBrainRegisterNewCameraRequest()
 
@@ -193,8 +193,6 @@ class ROSMainBrain:
         req.scalar_control_info_json = std_msgs.msg.String(json.dumps(scalar_control_info))
         req.camnode_ros_name = std_msgs.msg.String(camnode_ros_name)
         req.cam_hostname = std_msgs.msg.String(hostname)
-        req.cam_ip = std_msgs.msg.String(my_ip)
-
         self._register_new_camera(req)
 
     def get_listen_address(self):
@@ -386,7 +384,7 @@ def get_free_buffer_from_pool(pool):
 
 class ProcessCamClass(rospy.SubscribeListener):
     def __init__(self,
-                 coord_receiver_address=None,
+                 coord_receiver_addrinfo=None,
                  cam_id=None,
                  log_message_queue=None,
                  max_num_points=None,
@@ -441,7 +439,7 @@ class ProcessCamClass(rospy.SubscribeListener):
         if self.benchmark:
             self.coord_socket = flydra_socket.get_dummy_sender()
         else:
-            self.coord_socket = flydra_socket.get_sender_from_address( coord_receiver_address )
+            self.coord_socket = flydra_socket.FlydraTransportSender( coord_receiver_addrinfo )
         if len(cam_id) > (flydra.common_variables.cam_id_count-1):
             raise ValueError('cam_id %r is too long'%cam_id)
         self.cam_id = cam_id
@@ -2215,23 +2213,19 @@ class AppState(object):
                     cam_guid,
                     scalar_control_info,
                     camnode_ros_name = rospy.get_name())
-                coord_receiver_address = self.main_brain.get_listen_address()
 
-                # get mainbrain's address
-                if flydra_socket.is_udp_addr( coord_receiver_address ):
-                    addr_host, addr_port = coord_receiver_address
+                # get mainbrain's addrinfo
+                _addr = self.main_brain.get_listen_address()
+                coord_receiver_addrinfo = flydra_socket.make_addrinfo(
+                    **_addr)
 
-                    if addr_host == '0.0.0.0':
+                if not coord_receiver_addrinfo.is_unix_domain_socket():
+                    if coord_receiver_addrinfo.host == '0.0.0.0':
                         # Clients cannot connect to '0.0.0.0' - get
                         # real IP from ROS.
-                        addr_host = flydra.rosutils.get_node_ip_addr( '/flydra_mainbrain' )
-                        coord_receiver_address = addr_host, addr_port
-
-                    # Ensure addr_host is an IP address (not DNS name).
-                    try:
-                        socket.inet_aton(addr_host)
-                    except socket.error:
-                        raise RuntimeError('Mainbrain ip address %s not valid' % addr_host )
+                        mainbrain_hostname = flydra.rosutils.get_node_hostname(
+                            '/flydra_mainbrain' )
+                        coord_receiver_addrinfo.host = mainbrain_hostname
 
                 ##################################################################
                 #
@@ -2253,7 +2247,7 @@ class AppState(object):
                         t = b+h-1
                         lbrt = l,b,r,t
                         cam_processor = ProcessCamClass(
-                            coord_receiver_address=coord_receiver_address,
+                            coord_receiver_addrinfo=coord_receiver_addrinfo,
                             cam_id=cam_guid,
                             log_message_queue=self.log_message_queue,
                             max_num_points=options.num_points,
@@ -2661,8 +2655,7 @@ class AppState(object):
 
 def get_app_defaults():
     #some defaults are per camera node, other per flydra instance
-    flydra_defaults = dict(
-                       main_brain = socket.gethostname())
+    flydra_defaults = dict()
 
     for k,v in flydra_defaults.items():
         flydra_defaults[k] = rospy.get_param('/flydra/%s' % k, v)

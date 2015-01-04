@@ -19,7 +19,6 @@ from flydra.reconstruct import Reconstructor, DEFAULT_WATER_REFRACTIVE_INDEX
 
 from flydra.main_brain.coordinate_receiver import CoordinateProcessor
 
-MB_HOSTNAME = 'localhost'
 SPINUP_DURATION = 0.2
 MAX_MEAN_ERROR = 0.002
 
@@ -223,7 +222,6 @@ class FakeRemoteApi():
 
 class FakeMainBrain:
     def __init__(self,trigger_device):
-        self.hostname = MB_HOSTNAME
         self.queue_error_ros_msgs = Queue.Queue()
         self.trigger_device = trigger_device
         self.remote_api = FakeRemoteApi()
@@ -265,7 +263,6 @@ def check_online_reconstruction(with_water=False,
                                           show_sync_errors=False,
                                           max_reconstruction_latency_sec=0.3,
                                           max_N_hypothesis_test=3,
-                                          hostname=MB_HOSTNAME,
                                           use_unix_domain_sockets=True,
                                           )
     if multithreaded:
@@ -282,7 +279,8 @@ def check_online_reconstruction(with_water=False,
     for cam_id in R.cam_ids:
         coord_processor.connect(cam_id)
     addr = coord_processor.get_listen_address()
-    sender = flydra_socket.get_sender_from_address( addr )
+    addrinfo = flydra_socket.make_addrinfo(**addr)
+    sender = flydra_socket.FlydraTransportSender( addrinfo )
 
     coord_processor.set_reconstructor(R)
     model = flydra.kalman.dynamic_models.get_kalman_model(name=D['dynamic_model_name'],dt=(1.0/fps))
