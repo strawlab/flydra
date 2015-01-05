@@ -483,8 +483,11 @@ class MainBrain(object):
 
     # main MainBrain class
 
-    def __init__(self,save_profiling_data=False, show_sync_errors=True):
+    def __init__(self,server=None, save_profiling_data=False, show_sync_errors=True):
         global main_brain_keeper
+
+        if server is not None:
+            LOG.warn("deprecated 'server' argument given.")
 
         LOG.info('ros node name "%s"' % rospy.get_name())
 
