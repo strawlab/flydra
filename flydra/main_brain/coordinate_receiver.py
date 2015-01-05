@@ -2,6 +2,7 @@ from __future__ import with_statement, division
 import threading, time, socket, select, os, copy, struct
 import warnings
 import collections
+import errno
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 import numpy
@@ -161,7 +162,7 @@ class CoordinateProcessor(threading.Thread):
             try:
                 os.remove(addr)
             except OSError as err:
-                if err.errno!=2: # Missing file is OK.
+                if err.errno!=errno.ENOENT: # Missing file is OK.
                     raise
             addrinfo = flydra_socket.make_addrinfo( filename=addr )
             self.to_unlink.append(addr)
