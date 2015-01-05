@@ -121,8 +121,7 @@ class TimestampEchoReceiver(threading.Thread):
         port = flydra.common_variables.timestamp_echo_gatherer_port # my port
         addrinfo = flydra_socket.make_addrinfo(host=flydra_socket.get_bind_address(),
                                                port=port)
-        timestamp_echo_gatherer=flydra_socket.FlydraTransportReceiver(addrinfo,
-                                                                      socket_timeout=False)
+        timestamp_echo_gatherer=flydra_socket.FlydraTransportReceiver(addrinfo)
         addrinfo = timestamp_echo_gatherer.get_listen_addrinfo()
         LOG.info('MainBrain TimestampEchoReceiver binding %s'%(addrinfo.to_dict(),))
 

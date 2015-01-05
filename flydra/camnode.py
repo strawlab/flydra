@@ -262,8 +262,6 @@ def TimestampEcho(timestamp_echo_receiver):
         except socket.error as err:
             if err.errno == errno.EINTR: # interrupted system call
                 continue
-            elif err.errno in ( errno.EAGAIN, errno.EWOULDBLOCK): # timeout expired
-                continue
             else:
                 LOG.warn('TimestampEcho errno (the exception about to come) is %s'%errno.errorcode[err.errno])
             raise
@@ -2084,7 +2082,7 @@ class AppState(object):
             try:
                 timestamp_echo_receiver = flydra_socket.FlydraTransportReceiver(addrinfo)
             except socket.error as err:
-                if err.errno == 98:
+                if err.errno == errno.EADDRINUSE:
                     # Address already in use: probably another camnode, that's ok
                     pass
                 else:

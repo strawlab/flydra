@@ -168,7 +168,7 @@ class CoordinateProcessor(threading.Thread):
         else:
             addrinfo = flydra_socket.make_addrinfo( host=flydra_socket.get_bind_address(),
                                                     port=0)
-        self.listen_socket = flydra_socket.FlydraTransportReceiver(addrinfo)
+        self.listen_socket = flydra_socket.FlydraTransportReceiver(addrinfo,socket_timeout_seconds=0.5)
         self.listen_address = self.listen_socket.get_listen_addrinfo().to_dict()
         LOG.info("coordinate receiver listening at %r"%self.listen_address)
 
@@ -450,7 +450,7 @@ class CoordinateProcessor(threading.Thread):
             try:
                 incoming_2d_data = self.listen_socket.recv()
             except socket.error as err:
-                if err.errno == 11:
+                if err.errno == errno.EAGAIN:
                     # no data ready. try again (after checking if we should quit).
                     continue
                 else:

@@ -1,5 +1,6 @@
 import socket
 import struct
+import math
 
 # -----------------------------------------------------------------------
 
@@ -31,13 +32,13 @@ class DummySender:
 # -----------------------------------------------------------------------
 
 class FlydraTransportReceiver:
-    def __init__(self, addr, socket_timeout=True):
+    def __init__(self, addr, socket_timeout_seconds=None):
         assert isinstance( addr, AddrInfoBase )
         self._addr = addr
         self._sockobj = socket.socket(self._addr.family, socket.SOCK_DGRAM)
-        if socket_timeout:
-            timeout_sec = 0 # in seconds
-            timeout_usec = 500000 # in microseconds
+        if socket_timeout_seconds is not None:
+            timeout_sec = int(math.floor( socket_timeout_seconds ))
+            timeout_usec = int((socket_timeout_seconds-timeout_sec)*1e6)
             timeval=struct.pack("LL", timeout_sec, timeout_usec)
             self._sockobj.setsockopt(socket.SOL_SOCKET, socket.SO_RCVTIMEO, timeval)
         self._sockobj.bind(self._addr.sockaddr)
