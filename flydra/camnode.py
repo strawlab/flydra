@@ -187,8 +187,8 @@ class ROSMainBrain:
         return self._get_version().version.data
 
     def register_new_camera(self, cam_guid, scalar_control_info, camnode_ros_name):
-        hostname = socket.gethostname()
-        my_ip = socket.gethostbyname(hostname)
+        hostname = flydra.rosutils.get_node_hostname( camnode_ros_name )
+        my_addrinfo = flydra_socket.make_addrinfo( host=flydra_socket.get_bind_address() )
 
         req = ros_flydra.srv.MainBrainRegisterNewCameraRequest()
 
@@ -196,8 +196,6 @@ class ROSMainBrain:
         req.scalar_control_info_json = std_msgs.msg.String(json.dumps(scalar_control_info))
         req.camnode_ros_name = std_msgs.msg.String(camnode_ros_name)
         req.cam_hostname = std_msgs.msg.String(hostname)
-        req.cam_ip = std_msgs.msg.String(my_ip)
-
         self._register_new_camera(req)
 
     def get_listen_address(self):
@@ -255,33 +253,28 @@ if sys.platform == 'win32':
 else:
     time_func = time.time
 
-def TimestampEcho():
-    # create listening socket
-    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    hostname = ''
-    port = flydra.common_variables.timestamp_echo_listener_port
-    try:
-        sockobj.bind(( hostname, port))
-    except socket.error, err:
-        if err.args[0]==98:
-            warnings.warn('TimestampEcho not available because port in use')
-            return
+def TimestampEcho(timestamp_echo_receiver):
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
+    sender = None
     fmt = flydra.common_variables.timestamp_echo_fmt_diff
     while 1:
         try:
-            buf, (orig_host,orig_port) = sockobj.recvfrom(4096)
-        except socket.error, err:
-            if err.args[0] == errno.EINTR: # interrupted system call
+            buf, sender_sockaddr = timestamp_echo_receiver.recv(return_sender_sockaddr=True)
+        except socket.error as err:
+            if err.errno == errno.EINTR: # interrupted system call
                 continue
+            else:
+                LOG.warn('TimestampEcho errno (the exception about to come) is %s'%errno.errorcode[err.errno])
             raise
 
         if struct is None: # this line prevents bizarre interpreter shutdown errors
             return
 
         newbuf = buf + struct.pack( fmt, time.time() )
-        sender.sendto(newbuf,(orig_host,sendto_port))
+        if sender is None:
+            addrinfo = flydra_socket.make_addrinfo(host=sender_sockaddr[0],port=sendto_port)
+            sender = flydra_socket.FlydraTransportSender( addrinfo )
+        sender.send(newbuf)
 
 def stdout_write(x):
     while 1:
@@ -389,7 +382,7 @@ def get_free_buffer_from_pool(pool):
 
 class ProcessCamClass(rospy.SubscribeListener):
     def __init__(self,
-                 coord_receiver_address=None,
+                 coord_receiver_addrinfo=None,
                  cam_id=None,
                  log_message_queue=None,
                  max_num_points=None,
@@ -444,7 +437,7 @@ class ProcessCamClass(rospy.SubscribeListener):
         if self.benchmark:
             self.coord_socket = flydra_socket.get_dummy_sender()
         else:
-            self.coord_socket = flydra_socket.get_sender_from_address( coord_receiver_address )
+            self.coord_socket = flydra_socket.FlydraTransportSender( coord_receiver_addrinfo )
         self.cam_id = cam_id
         self.log_message_queue = log_message_queue
 
@@ -2097,10 +2090,27 @@ class AppState(object):
         #
         ##################################################################
 
+        timestamp_echo_receiver = None
         if (not benchmark) or (not FLYDRA_BT):
+            port = flydra.common_variables.timestamp_echo_listener_port
+            addrinfo = flydra_socket.make_addrinfo(host=flydra_socket.get_bind_address(),
+                                                   port=port)
+            try:
+                timestamp_echo_receiver = flydra_socket.FlydraTransportReceiver(addrinfo)
+            except socket.error as err:
+                if err.errno == errno.EADDRINUSE:
+                    # Address already in use: probably another camnode, that's ok
+                    pass
+                else:
+                    raise
+
+        if timestamp_echo_receiver is not None:
+            #timestamp_listen_addrinfo = timestamp_echo_receiver.get_listen_addrinfo()
+
             # run in single-thread for benchmark
             timestamp_echo_thread=threading.Thread(target=TimestampEcho,
-                                                   name='TimestampEcho')
+                                                   name='TimestampEcho',
+                                                   args=(timestamp_echo_receiver,))
             timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
             timestamp_echo_thread.start()
 
@@ -2230,24 +2240,21 @@ class AppState(object):
                 self.main_brain.register_new_camera(
                     cam_guid,
                     scalar_control_info,
-                    camnode_ros_name = rospy.get_name())
-                coord_receiver_address = self.main_brain.get_listen_address()
+                    camnode_ros_name = rospy.get_name(),
+                    )
 
-                # get mainbrain's address
-                if flydra_socket.is_udp_addr( coord_receiver_address ):
-                    addr_host, addr_port = coord_receiver_address
+                # get mainbrain's addrinfo
+                _addr = self.main_brain.get_listen_address()
+                coord_receiver_addrinfo = flydra_socket.make_addrinfo(
+                    **_addr)
 
-                    if addr_host == '0.0.0.0':
+                if not coord_receiver_addrinfo.is_unix_domain_socket():
+                    if coord_receiver_addrinfo.host == '0.0.0.0':
                         # Clients cannot connect to '0.0.0.0' - get
                         # real IP from ROS.
-                        addr_host = flydra.rosutils.get_node_ip_addr( '/flydra_mainbrain' )
-                        coord_receiver_address = addr_host, port
-
-                    # Ensure addr_host is an IP address (not DNS name).
-                    try:
-                        socket.inet_aton(attr_host)
-                    except socket.error:
-                        raise RuntimeError('Mainbrain ip address %s not valid' % addr_host )
+                        mainbrain_hostname = flydra.rosutils.get_node_hostname(
+                            '/flydra_mainbrain' )
+                        coord_receiver_addrinfo.host = mainbrain_hostname
 
                 ##################################################################
                 #
@@ -2269,7 +2276,7 @@ class AppState(object):
                         t = b+h-1
                         lbrt = l,b,r,t
                         cam_processor = ProcessCamClass(
-                            coord_receiver_address=coord_receiver_address,
+                            coord_receiver_addrinfo=coord_receiver_addrinfo,
                             cam_id=cam_guid,
                             log_message_queue=self.log_message_queue,
                             max_num_points=options.num_points,
@@ -2677,8 +2684,7 @@ class AppState(object):
 
 def get_app_defaults():
     #some defaults are per camera node, other per flydra instance
-    flydra_defaults = dict(
-                       main_brain = socket.gethostname())
+    flydra_defaults = dict()
 
     for k,v in flydra_defaults.items():
         flydra_defaults[k] = rospy.get_param('/flydra/%s' % k, v)

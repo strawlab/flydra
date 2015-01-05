@@ -2,6 +2,7 @@ from __future__ import with_statement, division
 import threading, time, socket, select, os, copy, struct
 import warnings
 import collections
+import errno
 import flydra.reconstruct
 import flydra.reconstruct_utils as ru
 from flydra.timestamp import from_protobuf_time
@@ -107,11 +108,9 @@ class CoordinateProcessor(threading.Thread):
                  show_overall_latency,
                  max_reconstruction_latency_sec,
                  max_N_hypothesis_test,
-                 hostname,
                  use_unix_domain_sockets,
                  ):
         self.did_quit_successfully = False
-        self.hostname = hostname
         self.main_brain = main_brain
         self.debug_level = debug_level
         self.show_overall_latency = show_overall_latency
@@ -167,15 +166,16 @@ class CoordinateProcessor(threading.Thread):
             try:
                 os.remove(addr)
             except OSError as err:
-                if err.errno!=2: # Missing file is OK.
+                if err.errno!=errno.ENOENT: # Missing file is OK.
                     raise
-            self.listen_socket = flydra_socket.UnixDomainDatagramReceiver(addr)
+            addrinfo = flydra_socket.make_addrinfo( filename=addr )
             self.to_unlink.append(addr)
         else:
-            addr = (self.hostname,0)
-            self.listen_socket = flydra_socket.UDPReceiver(addr)
-        LOG.info("coordinate receiver listening at %r"%self.listen_socket)
-        self.listen_address = self.listen_socket.getsockname()
+            addrinfo = flydra_socket.make_addrinfo( host=flydra_socket.get_bind_address(),
+                                                    port=0)
+        self.listen_socket = flydra_socket.FlydraTransportReceiver(addrinfo,socket_timeout_seconds=0.5)
+        self.listen_address = self.listen_socket.get_listen_addrinfo().to_dict()
+        LOG.info("coordinate receiver listening at %r"%self.listen_address)
 
         self.queue_realtime_ros_packets = Queue.Queue()
         self.tp = RealtimeROSSenderThread(
@@ -455,7 +455,7 @@ class CoordinateProcessor(threading.Thread):
             try:
                 incoming_2d_data = self.listen_socket.recv()
             except socket.error as err:
-                if err.errno == 11:
+                if err.errno == errno.EAGAIN:
                     # no data ready. try again (after checking if we should quit).
                     continue
                 else:

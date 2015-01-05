@@ -38,7 +38,7 @@ class Log:
                 _file.flush()
                 break
             except IOError, err:
-                if err.args[0] == errno.EINTR: 
+                if err.args[0] == errno.EINTR:
                     continue
 
     def info(self, x):
@@ -120,7 +120,7 @@ def decode_url(url, required=False):
 
     return url
 
-def get_node_ip_addr( node_name ):
+def get_node_hostname( node_name ):
     ID = rospy.get_name() # my own name
     master = rosgraph.masterapi.Master(ID)
 
@@ -129,20 +129,17 @@ def get_node_ip_addr( node_name ):
 
     # Parse the URI to find the hostname of the server.
     x = urlparse(uri)
-    if ':' in x.netloc:
-        name = x.netloc[ : x.netloc.index(':') ]
+    if '[' in x.netloc:
+        # must be IPv6 according to RFC3986
+        if not ']' in x.netloc:
+            raise ValueError('invalid IPv6 address')
+        start_idx = x.netloc.index('[')
+        stop_idx  = x.netloc.index(']')
+        assert stop_idx > start_idx
+        hostname = x.netloc[ start_idx+1 : stop_idx ]
+    elif ':' in x.netloc:
+        hostname = x.netloc[ : x.netloc.rindex(':') ]
     else:
-        name = x.netloc
+        hostname = x.netloc
 
-    # Convert the hostname to IP address.
-    try:
-        ipaddr = socket.gethostbyname(name)
-    except socket.gaierror:
-        raise RuntimeError('host %r not found' % name)
-
-    # Ensure that the IP address is valid.
-    try:
-        socket.inet_aton(ipaddr)
-    except socket.error:
-        raise RuntimeError('IP address %s not valid' % ipaddr)
-    return ipaddr
+    return hostname

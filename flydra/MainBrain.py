@@ -49,6 +49,7 @@ LOG = flydra.rosutils.Log(to_ros=True)
 MIN_KALMAN_OBSERVATIONS_TO_SAVE = 0 # how many data points are required before saving trajectory?
 
 import flydra.common_variables
+import flydra.flydra_socket as flydra_socket
 
 PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
 PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
@@ -117,22 +118,26 @@ class TimestampEchoReceiver(threading.Thread):
 
         timestamp_echo_fmt2 = flydra.common_variables.timestamp_echo_fmt2
 
-        timestamp_echo_gatherer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        port = flydra.common_variables.timestamp_echo_gatherer_port
-        rospy.loginfo('MainBrain TimestampEchoReceiver binding %s' % ( (self.main_brain.hostname, port), ))
-        timestamp_echo_gatherer.bind((self.main_brain.hostname, port))
+        port = flydra.common_variables.timestamp_echo_gatherer_port # my port
+        addrinfo = flydra_socket.make_addrinfo(host=flydra_socket.get_bind_address(),
+                                               port=port)
+        timestamp_echo_gatherer=flydra_socket.FlydraTransportReceiver(addrinfo)
+        addrinfo = timestamp_echo_gatherer.get_listen_addrinfo()
+        LOG.info('MainBrain TimestampEchoReceiver binding %s'%(addrinfo.to_dict(),))
 
         last_clock_diff_measurements = collections.defaultdict(list)
 
         while 1:
             try:
-                timestamp_echo_buf, (timestamp_echo_remote_ip,cam_port) = timestamp_echo_gatherer.recvfrom(4096)
+                timestamp_echo_buf, sender_sockaddr = \
+                    timestamp_echo_gatherer.recv(return_sender_sockaddr=True)
             except Exception as err:
                 LOG.warn('unknown Exception receiving timestamp echo data: %s' % err)
                 continue
             except:
                 LOG.warn('unknown error (non-Exception!) receiving timestamp echo data')
                 continue
+            (timestamp_echo_remote_ip,cam_port) = sender_sockaddr
 
             stop_timestamp = time.time()
 
@@ -262,9 +267,8 @@ class MainBrain(object):
                 with cam_lock:
                     scalar_control_info = copy.deepcopy(cam['scalar_control_info'])
                     fqdn = cam['fqdn']
-                    ip = cam['ip']
                     camnode_ros_name = cam['camnode_ros_name']
-            return scalar_control_info, fqdn, ip, camnode_ros_name
+            return scalar_control_info, fqdn, camnode_ros_name
 
         def external_get_image_fps_points(self, cam_id):
             ### XXX should extend to include lines
@@ -378,7 +382,7 @@ class MainBrain(object):
         #
         # ================================================================
 
-        def register_new_cam(self,cam_guid,scalar_control_info,camnode_ros_name,cam_hostname,cam_ip):
+        def register_new_cam(self,cam_guid,scalar_control_info,camnode_ros_name,cam_hostname):
             """register new camera (caller: remote camera)"""
 
             assert camnode_ros_name is not None
@@ -396,7 +400,6 @@ class MainBrain(object):
                                          'points_distorted':[], # 2D image points
                                          'scalar_control_info':scalar_control_info,
                                          'fqdn':fqdn,
-                                         'ip':cam_ip,
                                          'camnode_ros_name':camnode_ros_name,
                                          }
             self.no_cams_connected.clear()
@@ -480,11 +483,12 @@ class MainBrain(object):
 
     # main MainBrain class
 
-    def __init__(self,server=None,save_profiling_data=False, show_sync_errors=True):
+    def __init__(self,server=None, save_profiling_data=False, show_sync_errors=True):
         global main_brain_keeper
 
-        self.hostname = socket.gethostbyname(server)
-        LOG.info('running mainbrain at hostname "%s" (%s)' % (server,self.hostname))
+        if server is not None:
+            LOG.warn("deprecated 'server' argument given.")
+
         LOG.info('ros node name "%s"' % rospy.get_name())
 
         self.load_config()
@@ -521,12 +525,13 @@ class MainBrain(object):
         self.pending_requests = {}
         self.last_set_param_time = {}
 
-        self.outgoing_latency_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.cam_host_sockets = {}
 
         self.num_cams = 0
         self.MainBrain_cam_ids_copy = [] # keep a copy of all cam_ids connected
         self._ip_addrs_by_cam_id = {}
         self.set_new_camera_callback(self.IncreaseCamCounter)
+        self.set_new_camera_callback(self.AddTimestampEchoer)
         self.set_new_camera_callback(self.SendExpectedFPS)
         self.set_old_camera_callback(self.DecreaseCamCounter)
 
@@ -573,7 +578,6 @@ class MainBrain(object):
                                    show_sync_errors=show_sync_errors,
                                    max_reconstruction_latency_sec=self.config['max_reconstruction_latency_sec'],
                                    max_N_hypothesis_test=self.config['max_N_hypothesis_test'],
-                                   hostname=self.hostname,
                                    use_unix_domain_sockets=self.config['use_unix_domain_sockets'],
                                    )
         #self.coord_processor.setDaemon(True)
@@ -703,12 +707,13 @@ class MainBrain(object):
                             camnode_ros_name,
                             cam_hostname,
                             cam_ip):
+        if len(cam_ip.data)>0:
+            LOG.warn("'cam_ip' parameter set, even though it is deprecated")
         scalar_control_info = json.loads( scalar_control_info_json.data )
         self.remote_api.register_new_cam(cam_guid=cam_guid.data,
                                          scalar_control_info=scalar_control_info,
                                          camnode_ros_name=camnode_ros_name.data,
-                                         cam_hostname=cam_hostname.data,
-                                         cam_ip=cam_ip.data)
+                                         cam_hostname=cam_hostname.data)
         return [std_msgs.msg.Int32(-1)]
 
     def get_listen_address(self):
@@ -770,6 +775,12 @@ class MainBrain(object):
         self.MainBrain_cam_ids_copy.append( cam_id )
         self.pub_num_cams.publish(self.num_cams)
 
+    def AddTimestampEchoer(self,cam_id,scalar_control_info,fqdn):
+        if fqdn not in self.cam_host_sockets:
+            port = flydra.common_variables.timestamp_echo_listener_port
+            addrinfo = flydra_socket.make_addrinfo(host=fqdn,port=port)
+            self.cam_host_sockets[fqdn] = flydra_socket.FlydraTransportSender(addrinfo)
+
     def SendExpectedFPS(self,cam_id,scalar_control_info,fqdn):
         self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.trigger_device.get_frames_per_second() )
 
@@ -787,17 +798,17 @@ class MainBrain(object):
         return self.num_cams
 
     def get_scalarcontrolinfo(self, cam_id):
-        sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         return sci
 
     def get_widthheight(self, cam_id):
-        sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         w = sci['width']
         h = sci['height']
         return w,h
 
     def get_roi(self, cam_id):
-        sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+        sci, fqdn, camnode_ros_name = self.remote_api.external_get_info(cam_id)
         lbrt = sci['roi']
         return lbrt
 
@@ -805,7 +816,7 @@ class MainBrain(object):
         cam_ids = self.remote_api.external_get_cam_ids()
         all = {}
         for cam_id in cam_ids:
-            sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+            sci, fqdn, camnode_ros_name = self.remote_api.external_get_info(cam_id)
             all[cam_id] = sci
         return all
 
@@ -831,7 +842,7 @@ class MainBrain(object):
                 continue # inserted and then removed
             if self.is_saving_data():
                 raise RuntimeError("Cannot add new camera while saving data")
-            sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
+            sci, fqdn, camnode_ros_name = self.remote_api.external_get_info(cam_id)
             for new_cam_func in self._new_camera_functions:
                 new_cam_func(cam_id,sci,fqdn)
 
@@ -850,16 +861,9 @@ class MainBrain(object):
 
     def _check_latencies(self):
         timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
-        timestamp_echo_listener_port = flydra.common_variables.timestamp_echo_listener_port
-
-        for cam_id in self.MainBrain_cam_ids_copy:
-            if cam_id not in self._ip_addrs_by_cam_id:
-                sci, fqdn, ip, camnode_ros_name = self.remote_api.external_get_info(cam_id)
-                self._ip_addrs_by_cam_id[cam_id] = ip
-            else:
-                ip = self._ip_addrs_by_cam_id[cam_id]
+        for sock in self.cam_host_sockets.itervalues():
             buf = struct.pack( timestamp_echo_fmt1, time.time() )
-            self.outgoing_latency_UDP_socket.sendto(buf,(ip,timestamp_echo_listener_port))
+            sock.send(buf)
 
     def get_last_image_fps(self, cam_id):
         # XXX should extend to include lines
