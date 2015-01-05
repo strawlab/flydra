@@ -523,12 +523,13 @@ class MainBrain(object):
         self.pending_requests = {}
         self.last_set_param_time = {}
 
-        self.outgoing_latency_UDP_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.cam_host_sockets = {}
 
         self.num_cams = 0
         self.MainBrain_cam_ids_copy = [] # keep a copy of all cam_ids connected
         self._ip_addrs_by_cam_id = {}
         self.set_new_camera_callback(self.IncreaseCamCounter)
+        self.set_new_camera_callback(self.AddTimestampEchoer)
         self.set_new_camera_callback(self.SendExpectedFPS)
         self.set_old_camera_callback(self.DecreaseCamCounter)
 
@@ -772,6 +773,12 @@ class MainBrain(object):
         self.MainBrain_cam_ids_copy.append( cam_id )
         self.pub_num_cams.publish(self.num_cams)
 
+    def AddTimestampEchoer(self,cam_id,scalar_control_info,fqdn):
+        if fqdn not in self.cam_host_sockets:
+            port = flydra.common_variables.timestamp_echo_listener_port
+            addrinfo = flydra_socket.make_addrinfo(host=fqdn,port=port)
+            self.cam_host_sockets[fqdn] = flydra_socket.FlydraTransportSender(addrinfo)
+
     def SendExpectedFPS(self,cam_id,scalar_control_info,fqdn):
         self.send_set_camera_property( cam_id, 'expected_trigger_framerate', self.trigger_device.get_frames_per_second() )
 
@@ -852,19 +859,9 @@ class MainBrain(object):
 
     def _check_latencies(self):
         timestamp_echo_fmt1 = flydra.common_variables.timestamp_echo_fmt1
-        timestamp_echo_listener_port = flydra.common_variables.timestamp_echo_listener_port
-
-        for cam_id in self.MainBrain_cam_ids_copy:
-            if cam_id not in self._ip_addrs_by_cam_id:
-                sci, fqdn, camnode_ros_name = self.remote_api.external_get_info(cam_id)
-                addrinfo = flydra_socket.make_addrinfo(host=fqdn)
-                ip = addrinfo.sockaddr[0]
-                assert flydra_socket.does_host_require_DNS(ip)==False
-                self._ip_addrs_by_cam_id[cam_id] = ip
-            else:
-                ip = self._ip_addrs_by_cam_id[cam_id]
+        for sock in self.cam_host_sockets.itervalues():
             buf = struct.pack( timestamp_echo_fmt1, time.time() )
-            self.outgoing_latency_UDP_socket.sendto(buf,(ip,timestamp_echo_listener_port))
+            sock.send(buf)
 
     def get_last_image_fps(self, cam_id):
         # XXX should extend to include lines
