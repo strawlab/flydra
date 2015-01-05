@@ -251,10 +251,8 @@ else:
     time_func = time.time
 
 def TimestampEcho(timestamp_echo_receiver):
-    # create listening socket
-    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
+    sender = None
     fmt = flydra.common_variables.timestamp_echo_fmt_diff
     while 1:
         try:
@@ -270,8 +268,10 @@ def TimestampEcho(timestamp_echo_receiver):
             return
 
         newbuf = buf + struct.pack( fmt, time.time() )
-        orig_host = sender_sockaddr[0]
-        sender.sendto(newbuf,(orig_host,sendto_port))
+        if sender is None:
+            addrinfo = flydra_socket.make_addrinfo(host=sender_sockaddr[0],port=sendto_port)
+            sender = flydra_socket.FlydraTransportSender( addrinfo )
+        sender.send(newbuf)
 
 def stdout_write(x):
     while 1:
