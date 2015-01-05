@@ -250,32 +250,29 @@ if sys.platform == 'win32':
 else:
     time_func = time.time
 
-def TimestampEcho():
+def TimestampEcho(timestamp_echo_receiver):
     # create listening socket
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sockobj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    hostname = ''
-    port = flydra.common_variables.timestamp_echo_listener_port
-    try:
-        sockobj.bind(( hostname, port))
-    except socket.error, err:
-        if err.args[0]==98:
-            warnings.warn('TimestampEcho not available because port in use')
-            return
+
     sendto_port = flydra.common_variables.timestamp_echo_gatherer_port
     fmt = flydra.common_variables.timestamp_echo_fmt_diff
     while 1:
         try:
-            buf, (orig_host,orig_port) = sockobj.recvfrom(4096)
-        except socket.error, err:
-            if err.args[0] == errno.EINTR: # interrupted system call
+            buf, sender_sockaddr = timestamp_echo_receiver.recv(return_sender_sockaddr=True)
+        except socket.error as err:
+            if err.errno == errno.EINTR: # interrupted system call
                 continue
+            elif err.errno in ( errno.EAGAIN, errno.EWOULDBLOCK): # timeout expired
+                continue
+            else:
+                LOG.warn('TimestampEcho errno (the exception about to come) is %s'%errno.errorcode[err.errno])
             raise
 
         if struct is None: # this line prevents bizarre interpreter shutdown errors
             return
 
         newbuf = buf + struct.pack( fmt, time.time() )
+        orig_host = sender_sockaddr[0]
         sender.sendto(newbuf,(orig_host,sendto_port))
 
 def stdout_write(x):
@@ -2079,10 +2076,27 @@ class AppState(object):
         #
         ##################################################################
 
+        timestamp_echo_receiver = None
         if (not benchmark) or (not FLYDRA_BT):
+            port = flydra.common_variables.timestamp_echo_listener_port
+            addrinfo = flydra_socket.make_addrinfo(host=flydra_socket.get_bind_address(),
+                                                   port=port)
+            try:
+                timestamp_echo_receiver = flydra_socket.FlydraTransportReceiver(addrinfo)
+            except socket.error as err:
+                if err.errno == 98:
+                    # Address already in use: probably another camnode, that's ok
+                    pass
+                else:
+                    raise
+
+        if timestamp_echo_receiver is not None:
+            #timestamp_listen_addrinfo = timestamp_echo_receiver.get_listen_addrinfo()
+
             # run in single-thread for benchmark
             timestamp_echo_thread=threading.Thread(target=TimestampEcho,
-                                                   name='TimestampEcho')
+                                                   name='TimestampEcho',
+                                                   args=(timestamp_echo_receiver,))
             timestamp_echo_thread.setDaemon(True) # quit that thread if it's the only one left...
             timestamp_echo_thread.start()
 
@@ -2212,7 +2226,8 @@ class AppState(object):
                 self.main_brain.register_new_camera(
                     cam_guid,
                     scalar_control_info,
-                    camnode_ros_name = rospy.get_name())
+                    camnode_ros_name = rospy.get_name(),
+                    )
 
                 # get mainbrain's addrinfo
                 _addr = self.main_brain.get_listen_address()
