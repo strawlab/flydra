@@ -2232,14 +2232,6 @@ class AppState(object):
                 coord_receiver_addrinfo = flydra_socket.make_addrinfo(
                     **_addr)
 
-                if not coord_receiver_addrinfo.is_unix_domain_socket():
-                    if coord_receiver_addrinfo.host == '0.0.0.0':
-                        # Clients cannot connect to '0.0.0.0' - get
-                        # real IP from ROS.
-                        mainbrain_hostname = flydra.rosutils.get_node_hostname(
-                            '/flydra_mainbrain' )
-                        coord_receiver_addrinfo.host = mainbrain_hostname
-
                 ##################################################################
                 #
                 # Processing chains
