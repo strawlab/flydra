@@ -32,15 +32,27 @@ import unittest
 import pkg_resources
 from nose.plugins.attrib import attr as nose_attr # ubuntu: apt-get install python-nose
 
-def add_options_to_parser(parser):
-    parser.add_option("--velocity-weight-gain",default=0.5,type='float')
-    parser.add_option("--max-velocity-weight",default=0.9,type='float')
-    parser.add_option("--elevation-up-bias-degrees",default=45.0,type='float')
+def add_arguments_to_parser(parser):
+    return add_options_to_parser(parser,is_argparse=True)
 
-    parser.add_option("--min-ori-quality-required",default=None,type='float',
-                      help='minimum orientation quality required to emit 3D orientation info')
-    parser.add_option("--ori-quality-smooth-len",default=10,type='int',
-                      help='smoothing length of trajectory')
+def add_options_to_parser(parser,is_argparse=False):
+    if is_argparse:
+        _float = float
+        _int = int
+        add = parser.add_argument
+    else:
+        _float = 'float'
+        _int = 'int'
+        add = parser.add_option
+
+    add("--velocity-weight-gain",default=0.5,type=_float)
+    add("--max-velocity-weight",default=0.9,type=_float)
+    add("--elevation-up-bias-degrees",default=45.0,type=_float)
+    add("--min-ori-quality-required",default=None,type=_float,
+        help='minimum orientation quality required to emit 3D orientation info')
+    add("--ori-quality-smooth-len",default=10,type=_int,
+        help='smoothing length of trajectory')
+
 def get_options_kwargs(options):
     result = dict(velocity_weight_gain=options.velocity_weight_gain,
                   max_velocity_weight=options.max_velocity_weight,

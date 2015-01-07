@@ -6,7 +6,7 @@ if 1:
 import numpy
 import sys, os
 import flydra.a2.core_analysis as core_analysis
-from optparse import OptionParser
+import argparse
 import flydra.analysis.flydra_analysis_convert_to_mat
 import flydra.kalman.dynamic_models as dynamic_models
 import tables
@@ -281,41 +281,33 @@ def export_flydra_hdf5():
 
 def main(hdf5_only=False):
     # hdf5_only is to maintain backwards compatibility...
-    usage = '%prog FILE [options]'
-    parser = OptionParser(usage)
+    parser = argparse.ArgumentParser()
     if hdf5_only:
         dest_help = "filename of output .h5 file"
     else:
         dest_help = "filename of output .mat file"
-    parser.add_option("--dest-file", type='string', default=None,
+    parser.add_argument("file", type=str, default=None,
+                      help='input file')
+    parser.add_argument("--dest-file", type=str, default=None,
                       help=dest_help)
-    parser.add_option("--time-data", dest="file2d", type='string',
+    parser.add_argument("--time-data", dest="file2d", type=str,
                       help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
                       metavar="FILE2D")
-    parser.add_option("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
+    parser.add_argument("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
     if not hdf5_only:
-        parser.add_option("--hdf5",action='store_true',default=False,help='save output as .hdf5 file (not .mat)')
-    parser.add_option("--start-obj-id",default=None,type='int',help='last obj_id to save')
-    parser.add_option("--stop-obj-id",default=None,type='int',help='last obj_id to save')
-    parser.add_option("--obj-only", type="string")
-    parser.add_option("--stop",default=None,type='int',help='last obj_id to save (DEPRECATED)')
-    parser.add_option("--profile",action='store_true',dest='profile',default=False)
-    parser.add_option("--dynamic-model",
-                      type="string",
+        parser.add_argument("--hdf5",action='store_true',default=False,help='save output as .hdf5 file (not .mat)')
+    parser.add_argument("--start-obj-id",default=None,type=int,help='last obj_id to save')
+    parser.add_argument("--stop-obj-id",default=None,type=int,help='last obj_id to save')
+    parser.add_argument("--obj-only", type=str)
+    parser.add_argument("--stop",default=None,type=int,help='last obj_id to save (DEPRECATED)')
+    parser.add_argument("--profile",action='store_true',dest='profile',default=False)
+    parser.add_argument("--dynamic-model",
+                      type=str,
                       dest="dynamic_model",
                       default=None,
                       )
-    core_analysis.add_options_to_parser(parser)
-    (options, args) = parser.parse_args()
-
-    if len(args)>1:
-        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
-        parser.print_help()
-        return
-
-    if len(args)<1:
-        parser.print_help()
-        return
+    core_analysis.add_arguments_to_parser(parser)
+    options = parser.parse_args()
 
     if options.stop_obj_id is not None and options.stop is not None:
         raise ValueError('--stop and --stop-obj-id cannot both be set')
@@ -335,7 +327,7 @@ def main(hdf5_only=False):
     else:
         do_hdf5 = options.hdf5
 
-    infilename = args[0]
+    infilename = options.file
     if options.dest_file is None:
         if do_hdf5:
             # import h5py early so if we don't have it we know sooner rather than later.
