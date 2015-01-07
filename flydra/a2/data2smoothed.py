@@ -13,7 +13,6 @@ import tables
 import flydra.analysis.result_utils as result_utils
 import flydra.a2.utils as utils
 from flydra.a2.orientation_ekf_fitter import compute_ori_quality
-import progressbar
 import warnings
 
 def cam_id2hostname(cam_id, h52d):
@@ -30,15 +29,6 @@ def cam_id2hostname(cam_id, h52d):
         hostname = '_'.join(   cam_id.split('_')[:-1] )
     return hostname
 
-class StringWidget(progressbar.Widget):
-    def set_string(self,ts):
-        self.ts = ts
-    def update(self, pbar):
-        if hasattr(self,'ts'):
-            return self.ts
-        else:
-            return ''
-
 def convert(infilename,
             outfilename,
             frames_per_second=None,
@@ -50,6 +40,7 @@ def convert(infilename,
             obj_only=None,
             dynamic_model_name=None,
             hdf5=False,
+            show_progress=False,
             **kwargs):
     if start_obj_id is None:
         start_obj_id=-numpy.inf
@@ -216,17 +207,29 @@ def convert(infilename,
     allqualrows=[]
     failed_quality = False
 
-    string_widget = StringWidget()
-    objs_per_sec_widget = progressbar.FileTransferSpeed(unit='obj_ids ')
-    widgets=[string_widget, objs_per_sec_widget,
-             progressbar.Percentage(), progressbar.Bar(), progressbar.ETA()]
-    pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(obj_ids)).start()
+    if show_progress:
+        import progressbar
+        class StringWidget(progressbar.Widget):
+            def set_string(self,ts):
+                self.ts = ts
+            def update(self, pbar):
+                if hasattr(self,'ts'):
+                    return self.ts
+                else:
+                    return ''
+
+        string_widget = StringWidget()
+        objs_per_sec_widget = progressbar.FileTransferSpeed(unit='obj_ids ')
+        widgets=[string_widget, objs_per_sec_widget,
+                 progressbar.Percentage(), progressbar.Bar(), progressbar.ETA()]
+        pbar=progressbar.ProgressBar(widgets=widgets,maxval=len(obj_ids)).start()
 
     for i,obj_id in enumerate(obj_ids):
         if obj_id > stop_obj_id:
             break
-        string_widget.set_string( '[obj_id: % 5d]'%obj_id )
-        pbar.update(i)
+        if show_progress:
+            string_widget.set_string( '[obj_id: % 5d]'%obj_id )
+            pbar.update(i)
         try:
             rows = ca.load_data(obj_id,
                                 infilename,
@@ -252,7 +255,8 @@ def convert(infilename,
             allqualrows.append( qualrows )
         except ValueError:
             failed_quality = True
-    pbar.finish()
+    if show_progress:
+        pbar.finish()
 
     allrows = numpy.concatenate( allrows )
     if not failed_quality:
@@ -288,6 +292,9 @@ def main(hdf5_only=False):
         dest_help = "filename of output .mat file"
     parser.add_argument("file", type=str, default=None,
                       help='input file')
+    parser.add_argument("--progress", dest='show_progress',
+                        action='store_true', default=False,
+                        help='disable progressbar on console')
     parser.add_argument("--dest-file", type=str, default=None,
                       help=dest_help)
     parser.add_argument("--time-data", dest="file2d", type=str,
@@ -353,6 +360,7 @@ def main(hdf5_only=False):
                 dynamic_model_name=options.dynamic_model,
                 return_smoothed_directions = True,
                 hdf5 = do_hdf5,
+                show_progress = options.show_progress,
                 **kwargs)''',
                         globals(), locals(), out_stats_filename)
 
@@ -366,6 +374,7 @@ def main(hdf5_only=False):
                 dynamic_model_name=options.dynamic_model,
                 return_smoothed_directions = True,
                 hdf5 = do_hdf5,
+                show_progress = options.show_progress,
                 **kwargs)
 
 if __name__=='__main__':
