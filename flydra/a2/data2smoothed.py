@@ -4,7 +4,7 @@ if 1:
     tables.flavor.restrict_flavors(keep=['numpy'])
 
 import numpy
-import sys, os, time
+import sys, os
 import flydra.a2.core_analysis as core_analysis
 from optparse import OptionParser
 import flydra.analysis.flydra_analysis_convert_to_mat
@@ -65,7 +65,7 @@ def convert(infilename,
 
         try:
             table_kobs   = h5file_raw.root.ML_estimates # table to get framenumbers from
-        except tables.exceptions.NoSuchNodeError, err:
+        except tables.exceptions.NoSuchNodeError:
             table_kobs   = h5file_raw.root.kalman_observations # table to get framenumbers from
 
         if file_time_data is None:
@@ -99,7 +99,7 @@ def convert(infilename,
         drift_estimates = result_utils.drift_estimates( h52d )
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h52d)
 
-        gain = {}; offset = {};
+        gain = {}; offset = {}
         print 'hostname time_gain time_offset'
         print '-------- --------- -----------'
         for i,hostname in enumerate(drift_estimates.get('hostnames',[])):
