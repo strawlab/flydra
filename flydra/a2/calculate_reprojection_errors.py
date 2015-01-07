@@ -4,6 +4,7 @@ import pandas
 import collections
 import progressbar
 import os
+import warnings
 
 import flydra.a2.core_analysis as core_analysis
 import flydra.analysis.result_utils as result_utils
@@ -99,7 +100,11 @@ def calculate_reprojection_errors(h5_filename=None,
                 # Now, for each camera viewing this object at this
                 # frame, extract images.
                 for camn, camn_pt_no in zip(this_camns, this_camn_idxs):
-                    cam_id = camn2cam_id[camn]
+                    try:
+                        cam_id = camn2cam_id[camn]
+                    except KeyError:
+                        warnings.warn('camn %d not found'%(camn, ))
+                        continue
 
                     # find 2D point corresponding to object
                     cond = ((frame2d['camn']==camn) &
