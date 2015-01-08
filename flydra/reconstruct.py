@@ -1185,7 +1185,10 @@ class Reconstructor:
                 pmat = nx.array(results.root.calibration.pmat.__getattr__(cam_id))
                 res = tuple(results.root.calibration.resolution.__getattr__(cam_id))
                 K = nx.array(results.root.calibration.intrinsic_linear.__getattr__(cam_id))
-                nlparams = tuple(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
+                nlparams = list(results.root.calibration.intrinsic_nonlinear.__getattr__(cam_id))
+                if len(nlparams)==4:
+                    nlparams = nlparams + [0.0]
+                assert len(nlparams)==5
                 try:
                     scale = nx.array(results.root.calibration.scale_factor2meters.__getattr__(cam_id))
                 except PT.exceptions.NoSuchNodeError:
