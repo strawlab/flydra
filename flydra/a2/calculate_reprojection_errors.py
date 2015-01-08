@@ -134,6 +134,7 @@ def calculate_reprojection_errors(h5_filename=None,
     for k in out:
         out[k] = np.array( out[k] )
     reprojection = pandas.DataFrame(out)
+    del out # free memory
 
     # new tables
     camns = []
