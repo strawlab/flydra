@@ -216,6 +216,9 @@ class CoordinateProcessor(threading.Thread):
 
     def mainbrain_is_attempting_synchronizing(self):
         self.ever_synchronized = True
+        with self.tracker_lock:
+            if self.tracker is not None:
+                self.tracker.kill_all_trackers() # delete all old data
 
     def get_general_cam_info(self):
         with self.all_data_lock:
