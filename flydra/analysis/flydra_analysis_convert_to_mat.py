@@ -103,7 +103,11 @@ def do_it(filename=None,
                  kalman_z = table1['z'],
                  kalman_xvel = table1['xvel'],
                  kalman_yvel = table1['yvel'],
-                 kalman_zvel = table1['zvel'])
+                 kalman_zvel = table1['zvel'],
+                 P00 = table1['P00'],
+                 P11 = table1['P11'],
+                 P22 = table1['P22'],
+                 )
 
     if orientation_quality is not None:
         assert len(orientation_quality)==len( data['kalman_obj_id'] )
@@ -156,6 +160,9 @@ def do_it(filename=None,
                                        ('kalman_x','x'),
                                        ('kalman_y','y'),
                                        ('kalman_z','z'),
+                                       ('P00','covariance_x'),
+                                       ('P11','covariance_y'),
+                                       ('P22','covariance_z'),
                                        ],
                       'trajectory_start_times': [('obj_ids','obj_id'),
                                                  ('timestamps','first_timestamp_secs'),
