@@ -13,7 +13,7 @@ import numpy as np
 import sys, os, re, hashlib
 
 import warnings
-from distutils.version import StrictVersion
+from distutils.version import StrictVersion, LooseVersion
 
 import datetime
 import pytz # from http://pytz.sourceforge.net/
@@ -533,7 +533,11 @@ def drift_estimates(results):
     result = {}
 
     for hostname in hostnames:
-        row_idx = table.getWhereList('remote_hostname == hostname')
+        if LooseVersion(tables.__version__) < LooseVersion('3.0.0'):
+            row_idx = table.getWhereList('remote_hostname == hostname')
+        else:
+            row_idx = table.get_where_list('remote_hostname == hostname',
+                                           condvars={'hostname':hostname})
         assert len(row_idx)>0
         start_timestamp = np.asarray(table.readCoordinates(row_idx,field='start_timestamp'))
         stop_timestamp = np.asarray(table.readCoordinates(row_idx,field='stop_timestamp'))
