@@ -104,7 +104,10 @@ ML_estimates_2d_idxs_type = flydra_kalman_utils.ML_estimates_2d_idxs_type
 h5_obs_names = tables.Description(FilteredObservations().columns)._v_names
 
 # allow rapid building of numpy.rec.array:
-Info2DCol_description = tables.Description(Info2D().columns)._v_nestedDescr
+if LooseVersion(tables.__version__) < LooseVersion('3.0.0'):
+    Info2DCol_description = tables.Description(Info2D().columns)._v_nestedDescr
+else:
+    Info2DCol_description = tables.Description(Info2D().columns)._v_nested_descr
 
 def save_ascii_matrix(filename,m):
     fd=open(filename,mode='wb')
