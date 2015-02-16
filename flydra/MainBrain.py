@@ -9,6 +9,7 @@ import numpy
 import numpy as np
 from numpy import nan
 import Queue
+from distutils.version import LooseVersion
 
 pytables_filt = numpy.asarray
 import atexit
@@ -23,7 +24,10 @@ from flydra.main_brain.coordinate_receiver import CoordinateProcessor, \
 
 # ensure that pytables uses numpy:
 import tables
-assert tables.__version__ >= '1.3.1' # bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
+
+# bug was fixed in pytables 1.3.1 where HDF5 file kept in inconsistent state
+assert LooseVersion(tables.__version__) >= LooseVersion('1.3.1')
+
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
 warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
