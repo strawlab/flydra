@@ -350,6 +350,7 @@ class KalmanSaver:
 def kalmanize(src_filename,
               do_full_kalmanization=True,
               dest_filename=None,
+              reconstructor=None,
               reconstructor_filename=None,
               start_frame=None,
               stop_frame=None,
@@ -378,6 +379,10 @@ def kalmanize(src_filename,
 
     dest_file_os_fd = None
 
+    if reconstructor is not None:
+        assert isinstance(reconstructor, flydra.reconstruct.Reconstructor )
+        assert reconstructor_filename is None
+
     with openFileSafe(src_filename,mode='r') as results:
         camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
 
@@ -389,18 +394,16 @@ def kalmanize(src_filename,
             else:
                 print 'using dynamic model "%s"'%dynamic_model_name
 
-            if reconstructor_filename is None:
-                reconstructor_filename = src_filename
-
-            if reconstructor_filename.endswith('h5'):
-                with PT.openFile(reconstructor_filename,mode='r') as fd:
+            if reconstructor_filename is not None:
+                if reconstructor_filename.endswith('h5'):
+                    with PT.openFile(reconstructor_filename,mode='r') as fd:
+                        reconstructor = flydra.reconstruct.Reconstructor(
+                            fd,
+                            minimum_eccentricity=options.force_minimum_eccentricity)
+                else:
                     reconstructor = flydra.reconstruct.Reconstructor(
-                        fd,
+                        reconstructor_filename,
                         minimum_eccentricity=options.force_minimum_eccentricity)
-            else:
-                reconstructor = flydra.reconstruct.Reconstructor(
-                    reconstructor_filename,
-                    minimum_eccentricity=options.force_minimum_eccentricity)
 
             if options.force_minimum_eccentricity is not None:
                 if (reconstructor.minimum_eccentricity !=
@@ -412,6 +415,13 @@ def kalmanize(src_filename,
                     results.filename)[0]+'.kalmanized.h5'
         else:
             dest_file_os_fd, dest_filename = tempfile.mkstemp(suffix='.h5')
+
+        if reconstructor.cal_source_type == 'pytables':
+            save_reconstructor_filename = reconstructor.cal_source.filename
+        else:
+            warnings.warn('unable to determine reconstructor source '
+                          'filename for %r'%reconstructor.cal_source_type)
+            save_reconstructor_filename = None
 
         if frames_per_second is None:
             frames_per_second = get_fps(results)
@@ -446,7 +456,7 @@ def kalmanize(src_filename,
                     str(parsed['trigger_CS3']),flydra.version.__version__),
                     'original file: %s'%(src_filename,),
                     'dynamic model: %s'%(dynamic_model_name,),
-                    'reconstructor file: %s'%(reconstructor_filename,),
+                    'reconstructor file: %s'%(save_reconstructor_filename,),
                     ]
 
                 kalman_model = dynamic_models.get_kalman_model(

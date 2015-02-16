@@ -157,6 +157,7 @@ def check_offline_reconstruction(with_water=False,
         kalmanize(data2d_fname,
                   dest_filename = data3d_fname,
                   dynamic_model_name = D['dynamic_model_name'],
+                  reconstructor = D['reconstructor'],
                   )
         to_unlink.append(data3d_fname)
 

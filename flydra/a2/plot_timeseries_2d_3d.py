@@ -90,161 +90,161 @@ def doit(
         if figtitle != '':
             pylab.figtext(0.01,0.01,figtitle,verticalalignment='bottom')
 
-        h5 = PT.openFile( filename, mode='r' )
-        timezone = result_utils.get_tz( h5 )
-        if options.spreadh5 is not None:
-            h5spread = PT.openFile(options.spreadh5, mode='r')
-        else:
-            h5spread = None
+        with PT.openFile( filename, mode='r' ) as h5:
+            timezone = result_utils.get_tz( h5 )
+            if options.spreadh5 is not None:
+                h5spread = PT.openFile(options.spreadh5, mode='r')
+            else:
+                h5spread = None
 
-        if fps is None:
-            fps = result_utils.get_fps( h5 )
+            if fps is None:
+                fps = result_utils.get_fps( h5 )
 
-        camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
-        cam_ids = cam_id2camns.keys()
-        cam_ids.sort()
+            camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+            cam_ids = cam_id2camns.keys()
+            cam_ids.sort()
 
-        if start is not None or stop is not None:
-            frames = h5.root.data2d_distorted.read(field='frame')
-            valid_cond = numpy.ones( frames.shape, dtype=numpy.bool)
-            if start is not None:
-                valid_cond = valid_cond & (frames >= start)
-            if stop is not None:
-                valid_cond = valid_cond & (frames <= stop)
-            read_idxs = np.nonzero(valid_cond)[0]
-            all_data = []
-            for start_stop in utils.iter_contig_chunk_idxs( read_idxs ):
-                (read_idx_start_idx, read_idx_stop_idx) = start_stop
-                start_idx = read_idxs[read_idx_start_idx]
-                stop_idx = read_idxs[read_idx_stop_idx-1]
-                these_rows = h5.root.data2d_distorted.read(start=start_idx,
-                                                           stop=stop_idx+1)
-                all_data.append(these_rows)
-            if len(all_data)==0:
-                print 'file %s has no frames in range %s - %s' % ( filename,
-                                                                   start,
-                                                                   stop )
+            if start is not None or stop is not None:
+                frames = h5.root.data2d_distorted.read(field='frame')
+                valid_cond = numpy.ones( frames.shape, dtype=numpy.bool)
+                if start is not None:
+                    valid_cond = valid_cond & (frames >= start)
+                if stop is not None:
+                    valid_cond = valid_cond & (frames <= stop)
+                read_idxs = np.nonzero(valid_cond)[0]
+                all_data = []
+                for start_stop in utils.iter_contig_chunk_idxs( read_idxs ):
+                    (read_idx_start_idx, read_idx_stop_idx) = start_stop
+                    start_idx = read_idxs[read_idx_start_idx]
+                    stop_idx = read_idxs[read_idx_stop_idx-1]
+                    these_rows = h5.root.data2d_distorted.read(start=start_idx,
+                                                               stop=stop_idx+1)
+                    all_data.append(these_rows)
+                if len(all_data)==0:
+                    print 'file %s has no frames in range %s - %s' % ( filename,
+                                                                       start,
+                                                                       stop )
+                    continue
+                all_data = np.concatenate( all_data )
+                del valid_cond, frames, start_idx, stop_idx, these_rows, read_idxs
+            else:
+                all_data = h5.root.data2d_distorted[:]
+
+            tmp_frames = all_data['frame']
+            if len(tmp_frames)==0:
+                print 'file %s has no frames, skipping.'%filename
                 continue
-            all_data = np.concatenate( all_data )
-            del valid_cond, frames, start_idx, stop_idx, these_rows, read_idxs
-        else:
-            all_data = h5.root.data2d_distorted[:]
+            n_files += 1
+            start_frame = tmp_frames.min()
+            stop_frame = tmp_frames.max()
+            del tmp_frames
 
-        tmp_frames = all_data['frame']
-        if len(tmp_frames)==0:
-            print 'file %s has no frames, skipping.'%filename
-            continue
-        n_files += 1
-        start_frame = tmp_frames.min()
-        stop_frame = tmp_frames.max()
-        del tmp_frames
-
-        for cam_id_enum, cam_id in enumerate( cam_ids ):
-            if cam_id in ax_by_cam:
-                ax = ax_by_cam[cam_id]
-            else:
-                n_subplots = len(cam_ids)
-                if kalman_filename is not None:
-                    n_subplots += 1
-                if h5spread is not None:
-                    n_subplots += 1
-                ax = pylab.subplot( n_subplots, 1, cam_id_enum+1, sharex=ax)
-                ax_by_cam[cam_id] = ax
-                ax.fmt_xdata = str
-                ax.fmt_ydata = str
-
-            camns = cam_id2camns[cam_id]
-            cam_id_n_valid = 0
-            for camn in camns:
-                this_idx = numpy.nonzero( all_data['camn']==camn )[0]
-                data = all_data[this_idx]
-
-                xdata = data['x']
-                valid = ~numpy.isnan( xdata )
-
-                data = data[valid]
-                del valid
-
-                if options.area_threshold > 0.0:
-                    area = data['area']
-
-                    valid2 = area >= options.area_threshold
-                    data = data[valid2]
-                    del valid2
-
-                if options.likely_only:
-                    pt_area = data['area']
-                    cur_val = data['cur_val']
-                    mean_val = data['mean_val']
-                    sumsqf_val = data['sumsqf_val']
-
-                    p_y_x = some_rough_negative_log_likelihood(
-                        pt_area, cur_val, mean_val, sumsqf_val )
-                    valid3 = np.isfinite(p_y_x)
-                    data = data[valid3]
-
-                n_valid = len( data )
-                cam_id_n_valid += n_valid
-                if options.timestamps:
-                    xdata = data['timestamp']
+            for cam_id_enum, cam_id in enumerate( cam_ids ):
+                if cam_id in ax_by_cam:
+                    ax = ax_by_cam[cam_id]
                 else:
-                    xdata = data['frame']
-                if n_valid >= 1:
-                    ax.plot( xdata, data['x'], 'ro',  ms=2, mew=0 )
-                    ax.plot( xdata, data['y'], 'go',  ms=2, mew=0 )
-            ax.text(0.1,0,'%s %s: %d pts'%(cam_id,cam_id2camns[cam_id],cam_id_n_valid),
-                    horizontalalignment='left',
-                    verticalalignment='bottom',
-                    transform = ax.transAxes,
-                    )
-            ax.set_ylabel('pixels')
-            if not options.timestamps:
-                ax.set_xlim( (start_frame, stop_frame) )
-        ax.set_xlabel('frame')
-        if options.timestamps:
-            df = DateFormatter(timezone)
-            ax.xaxis.set_major_formatter(
-                ticker.FuncFormatter(df.format_date))
-        else:
-            ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
-        ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
-        if h5spread is not None:
-            if options.timestamps:
-                raise NotImplementedError(
-                    '--timestamps is currently incompatible with --spreadh5')
-            ax_by_cam['h5spread'] = ax
-            if kalman_filename is not None:
-                # this is 2nd to last
-                ax = pylab.subplot( n_subplots, 1, n_subplots-1, sharex=ax)
-            else:
-                # this is last
-                ax = pylab.subplot( n_subplots, 1, n_subplots, sharex=ax)
+                    n_subplots = len(cam_ids)
+                    if kalman_filename is not None:
+                        n_subplots += 1
+                    if h5spread is not None:
+                        n_subplots += 1
+                    ax = pylab.subplot( n_subplots, 1, cam_id_enum+1, sharex=ax)
+                    ax_by_cam[cam_id] = ax
+                    ax.fmt_xdata = str
+                    ax.fmt_ydata = str
 
-            frames = h5spread.root.framenumber[:]
-            spread = h5spread.root.spread[:]
+                camns = cam_id2camns[cam_id]
+                cam_id_n_valid = 0
+                for camn in camns:
+                    this_idx = numpy.nonzero( all_data['camn']==camn )[0]
+                    data = all_data[this_idx]
 
-            valid_cond = numpy.ones( frames.shape, dtype=numpy.bool)
-            if start is not None:
-                valid_cond = valid_cond & (frames >= start)
-            if stop is not None:
-                valid_cond = valid_cond & (frames <= stop)
+                    xdata = data['x']
+                    valid = ~numpy.isnan( xdata )
 
-            spread_msec = spread[valid_cond] * 1000.0
-            ax.plot( frames[valid_cond],
-                     spread_msec,
-                     'o', ms=2, mew=0 )
+                    data = data[valid]
+                    del valid
 
-            if spread_msec.max() < 1.0:
-                ax.set_ylim((0,1))
-                ax.set_yticks([0,1])
+                    if options.area_threshold > 0.0:
+                        area = data['area']
+
+                        valid2 = area >= options.area_threshold
+                        data = data[valid2]
+                        del valid2
+
+                    if options.likely_only:
+                        pt_area = data['area']
+                        cur_val = data['cur_val']
+                        mean_val = data['mean_val']
+                        sumsqf_val = data['sumsqf_val']
+
+                        p_y_x = some_rough_negative_log_likelihood(
+                            pt_area, cur_val, mean_val, sumsqf_val )
+                        valid3 = np.isfinite(p_y_x)
+                        data = data[valid3]
+
+                    n_valid = len( data )
+                    cam_id_n_valid += n_valid
+                    if options.timestamps:
+                        xdata = data['timestamp']
+                    else:
+                        xdata = data['frame']
+                    if n_valid >= 1:
+                        ax.plot( xdata, data['x'], 'ro',  ms=2, mew=0 )
+                        ax.plot( xdata, data['y'], 'go',  ms=2, mew=0 )
+                ax.text(0.1,0,'%s %s: %d pts'%(cam_id,cam_id2camns[cam_id],cam_id_n_valid),
+                        horizontalalignment='left',
+                        verticalalignment='bottom',
+                        transform = ax.transAxes,
+                        )
+                ax.set_ylabel('pixels')
+                if not options.timestamps:
+                    ax.set_xlim( (start_frame, stop_frame) )
             ax.set_xlabel('frame')
-            ax.set_ylabel('timestamp spread (msec)')
-            ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
+            if options.timestamps:
+                df = DateFormatter(timezone)
+                ax.xaxis.set_major_formatter(
+                    ticker.FuncFormatter(df.format_date))
+            else:
+                ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
             ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
-            h5spread.close()
-            del frames
-            del spread
-        h5.close()
+            if h5spread is not None:
+                if options.timestamps:
+                    raise NotImplementedError(
+                        '--timestamps is currently incompatible with --spreadh5')
+                ax_by_cam['h5spread'] = ax
+                if kalman_filename is not None:
+                    # this is 2nd to last
+                    ax = pylab.subplot( n_subplots, 1, n_subplots-1, sharex=ax)
+                else:
+                    # this is last
+                    ax = pylab.subplot( n_subplots, 1, n_subplots, sharex=ax)
+
+                frames = h5spread.root.framenumber[:]
+                spread = h5spread.root.spread[:]
+
+                valid_cond = numpy.ones( frames.shape, dtype=numpy.bool)
+                if start is not None:
+                    valid_cond = valid_cond & (frames >= start)
+                if stop is not None:
+                    valid_cond = valid_cond & (frames <= stop)
+
+                spread_msec = spread[valid_cond] * 1000.0
+                ax.plot( frames[valid_cond],
+                         spread_msec,
+                         'o', ms=2, mew=0 )
+
+                if spread_msec.max() < 1.0:
+                    ax.set_ylim((0,1))
+                    ax.set_yticks([0,1])
+                ax.set_xlabel('frame')
+                ax.set_ylabel('timestamp spread (msec)')
+                ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
+                ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
+                h5spread.close()
+                del frames
+                del spread
+
     if options.timestamps:
         fig.autofmt_xdate()
 
@@ -504,7 +504,7 @@ def doit(
                 # plot 2D data contributing to 3D object
                 # this is forked from flydra_analysis_plot_kalman_2d.py
 
-                kresults = PT.openFile(kalman_filename,mode='r')
+                kresults = ca.get_pytables_file_by_filename(kalman_filename)
                 try:
                     kobs = kresults.root.ML_estimates
                 except tables.exceptions.NoSuchNodeError:

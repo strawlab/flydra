@@ -104,25 +104,27 @@ def plot_timeseries(subplot=None,options = None):
 
     ca = core_analysis.get_global_CachingAnalyzer()
 
-    if kalman_filename is not None:
-        m = hashlib.md5()
-        m.update(open(kalman_filename,mode='rb').read())
-        actual_md5 = m.hexdigest()
-        (obj_ids, use_obj_ids, is_mat_file, data_file,
-         extra) = ca.initial_file_load(kalman_filename)
-        print 'opened kalman file %s %s, %d obj_ids'%(
-            kalman_filename,actual_md5,len(use_obj_ids))
+    if kalman_filename is None:
+        raise ValueError('No kalman_filename given. Nothing to do.')
 
-        if 'frames' in extra:
-            if (start is not None) or (stop is not None):
-                valid_frames = np.ones( (len(extra['frames']),), dtype=np.bool)
-                if start is not None:
-                    valid_frames &= extra['frames'] >= start
-                if stop is not None:
-                    valid_frames &= extra['frames'] <= stop
-                this_use_obj_ids = np.unique(obj_ids[valid_frames])
-                use_obj_ids = list(
-                    set(use_obj_ids).intersection(this_use_obj_ids))
+    m = hashlib.md5()
+    m.update(open(kalman_filename,mode='rb').read())
+    actual_md5 = m.hexdigest()
+    (obj_ids, use_obj_ids, is_mat_file, data_file,
+     extra) = ca.initial_file_load(kalman_filename)
+    print 'opened kalman file %s %s, %d obj_ids'%(
+        kalman_filename,actual_md5,len(use_obj_ids))
+
+    if 'frames' in extra:
+        if (start is not None) or (stop is not None):
+            valid_frames = np.ones( (len(extra['frames']),), dtype=np.bool)
+            if start is not None:
+                valid_frames &= extra['frames'] >= start
+            if stop is not None:
+                valid_frames &= extra['frames'] <= stop
+            this_use_obj_ids = np.unique(obj_ids[valid_frames])
+            use_obj_ids = list(
+                set(use_obj_ids).intersection(this_use_obj_ids))
 
     include_obj_ids = None
     exclude_obj_ids = None

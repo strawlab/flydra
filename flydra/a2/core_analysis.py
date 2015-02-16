@@ -32,15 +32,27 @@ import unittest
 import pkg_resources
 from nose.plugins.attrib import attr as nose_attr # ubuntu: apt-get install python-nose
 
-def add_options_to_parser(parser):
-    parser.add_option("--velocity-weight-gain",default=0.5,type='float')
-    parser.add_option("--max-velocity-weight",default=0.9,type='float')
-    parser.add_option("--elevation-up-bias-degrees",default=45.0,type='float')
+def add_arguments_to_parser(parser):
+    return add_options_to_parser(parser,is_argparse=True)
 
-    parser.add_option("--min-ori-quality-required",default=None,type='float',
-                      help='minimum orientation quality required to emit 3D orientation info')
-    parser.add_option("--ori-quality-smooth-len",default=10,type='int',
-                      help='smoothing length of trajectory')
+def add_options_to_parser(parser,is_argparse=False):
+    if is_argparse:
+        _float = float
+        _int = int
+        add = parser.add_argument
+    else:
+        _float = 'float'
+        _int = 'int'
+        add = parser.add_option
+
+    add("--velocity-weight-gain",default=0.5,type=_float)
+    add("--max-velocity-weight",default=0.9,type=_float)
+    add("--elevation-up-bias-degrees",default=45.0,type=_float)
+    add("--min-ori-quality-required",default=None,type=_float,
+        help='minimum orientation quality required to emit 3D orientation info')
+    add("--ori-quality-smooth-len",default=10,type=_int,
+        help='smoothing length of trajectory')
+
 def get_options_kwargs(options):
     result = dict(velocity_weight_gain=options.velocity_weight_gain,
                   max_velocity_weight=options.max_velocity_weight,
@@ -749,7 +761,7 @@ class PreSmoothedDataCache(object):
         if 1:
             orig_hash = flydra.analysis.result_utils.md5sum_headtail(
                 data_file.filename)
-            expected_title = 'v=3;up_dir=(%.3f, %.3f, %.3f);hash="%s";dynamic_model="%s"'%(
+            expected_title = 'v=4;up_dir=(%.3f, %.3f, %.3f);hash="%s";dynamic_model="%s"'%(
                 up_dir[0],up_dir[1],up_dir[2],orig_hash,dynamic_model_name)
             cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
             make_new_cache = True
@@ -1330,6 +1342,9 @@ class CachingAnalyzer:
 
         self.loaded_datafile_cache[data_file] = True
         return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
+
+    def get_pytables_file_by_filename( self, filename ):
+        return self.loaded_filename_cache2[filename]
 
     def has_obj_id(self, obj_id, data_file):
         if self.loaded_datafile_cache[data_file]:
