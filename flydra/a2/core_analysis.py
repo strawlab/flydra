@@ -1343,6 +1343,9 @@ class CachingAnalyzer:
         self.loaded_datafile_cache[data_file] = True
         return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
 
+    def get_pytables_file_by_filename( self, filename ):
+        return self.loaded_filename_cache2[filename]
+
     def has_obj_id(self, obj_id, data_file):
         if self.loaded_datafile_cache[data_file]:
             # previously loaded, just find it in cache

@@ -504,7 +504,7 @@ def doit(
                 # plot 2D data contributing to 3D object
                 # this is forked from flydra_analysis_plot_kalman_2d.py
 
-                kresults = PT.openFile(kalman_filename,mode='r')
+                kresults = ca.get_pytables_file_by_filename(kalman_filename)
                 try:
                     kobs = kresults.root.ML_estimates
                 except tables.exceptions.NoSuchNodeError:
