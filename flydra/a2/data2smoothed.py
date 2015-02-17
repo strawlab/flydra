@@ -41,6 +41,7 @@ def convert(infilename,
             dynamic_model_name=None,
             hdf5=False,
             show_progress=False,
+            show_progress_json=False,
             **kwargs):
     if start_obj_id is None:
         start_obj_id=-numpy.inf
@@ -230,6 +231,9 @@ def convert(infilename,
         if show_progress:
             string_widget.set_string( '[obj_id: % 5d]'%obj_id )
             pbar.update(i)
+        if show_progress_json and i%100==0:
+            rough_percent_done = float(i)/len(obj_ids)*100.0
+            result_utils.do_json_progress(rough_percent_done)
         try:
             rows = ca.load_data(obj_id,
                                 infilename,
@@ -279,6 +283,8 @@ def convert(infilename,
         smoothed_source=smoothed_source,
         )
     ca.close()
+    if show_progress_json:
+        result_utils.do_json_progress(100)
 
 def export_flydra_hdf5():
     main(hdf5_only=True)
@@ -294,7 +300,10 @@ def main(hdf5_only=False):
                       help='input file')
     parser.add_argument("--progress", dest='show_progress',
                         action='store_true', default=False,
-                        help='disable progressbar on console')
+                        help='show progress bar on console')
+    parser.add_argument("--progress-json", dest='show_progress_json',
+                        action='store_true', default=False,
+                        help='show JSON progress messages')
     parser.add_argument("--dest-file", type=str, default=None,
                       help=dest_help)
     parser.add_argument("--time-data", dest="file2d", type=str,
@@ -361,6 +370,7 @@ def main(hdf5_only=False):
                 return_smoothed_directions = True,
                 hdf5 = do_hdf5,
                 show_progress = options.show_progress,
+                show_progress_json=options.show_progress_json,
                 **kwargs)''',
                         globals(), locals(), out_stats_filename)
 
@@ -375,6 +385,7 @@ def main(hdf5_only=False):
                 return_smoothed_directions = True,
                 hdf5 = do_hdf5,
                 show_progress = options.show_progress,
+                show_progress_json=options.show_progress_json,
                 **kwargs)
 
 if __name__=='__main__':

@@ -26,6 +26,7 @@ def calculate_reprojection_errors(h5_filename=None,
                                   start=None,
                                   stop=None,
                                   show_progress=False,
+                                  show_progress_json=False,
                                   ):
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
@@ -66,6 +67,9 @@ def calculate_reprojection_errors(h5_filename=None,
             if show_progress:
                 string_widget.set_string( '[obj_id: % 5d]'%obj_id )
                 pbar.update(obj_id_enum)
+            if show_progress_json and obj_id_enum%100==0:
+                rough_percent_done = float(obj_id_enum)/len(use_obj_ids)*100.0
+                result_utils.do_json_progress(rough_percent_done)
 
             obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id,
                                                               data_file)
@@ -152,6 +156,8 @@ def calculate_reprojection_errors(h5_filename=None,
     store.append('reprojection', reprojection, data_columns=reprojection.columns)
     store.append('cameras', cam_df)
     store.close()
+    if show_progress_json:
+        result_utils.do_json_progress(100)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -170,6 +176,9 @@ def main():
                         help="frame number to end analysis on")
     parser.add_argument('--progress', action='store_true', default=False,
                         help='show progress bar on console')
+    parser.add_argument("--progress-json", dest='show_progress_json',
+                        action='store_true', default=False,
+                        help='show JSON progress messages')
     args = parser.parse_args()
 
     if args.kalman_file is None:
@@ -184,6 +193,7 @@ def main():
                                   start=args.start,
                                   stop=args.stop,
                                   show_progress=args.progress,
+                                  show_progress_json=args.show_progress_json,
                                   )
 
 if __name__=='__main__':
