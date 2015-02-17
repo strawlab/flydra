@@ -404,6 +404,12 @@ def kalmanize(src_filename,
                     reconstructor = flydra.reconstruct.Reconstructor(
                         reconstructor_filename,
                         minimum_eccentricity=options.force_minimum_eccentricity)
+            else:
+                # reconstructor_filename is None
+                if reconstructor is None:
+                    reconstructor = flydra.reconstruct.Reconstructor(
+                        results,
+                        minimum_eccentricity=options.force_minimum_eccentricity)
 
             if options.force_minimum_eccentricity is not None:
                 if (reconstructor.minimum_eccentricity !=
