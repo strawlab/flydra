@@ -18,6 +18,7 @@ import pprint
 DEBUG = False
 
 import adskalman.adskalman as adskalman
+import adskalman.version as adskalman_version
 import flydra.kalman.dynamic_models
 import flydra.kalman.flydra_kalman_utils
 from flydra.kalman.ori_smooth import ori_smooth
@@ -29,6 +30,7 @@ import cgtypes # cgkit 1.x
 import weakref
 import warnings, tempfile
 import unittest
+from distutils.version import StrictVersion
 import pkg_resources
 from nose.plugins.attrib import attr as nose_attr # ubuntu: apt-get install python-nose
 
@@ -278,6 +280,10 @@ def _initial_file_load(filename):
 def kalman_smooth(orig_rows,
                   dynamic_model_name=None,
                   frames_per_second=None):
+    if StrictVersion(adskalman_version.__version__) < StrictVersion('0.3.4'):
+        raise ValueError('require adskalman version 0.3.4 or greater, have %s'%
+                         (adskalman_version.__version__,))
+
     obs_frames = orig_rows['frame']
     if len(obs_frames)<2:
         raise ValueError('orig_rows must have 2 or more rows of data')
@@ -296,12 +302,22 @@ def kalman_smooth(orig_rows,
     x = numpy.empty( frames.shape, dtype=numpy.float )
     y = numpy.empty( frames.shape, dtype=numpy.float )
     z = numpy.empty( frames.shape, dtype=numpy.float )
+    R = numpy.empty( (frames.shape[0],3,3), dtype=numpy.float )
     obj_id_array =  numpy.ma.masked_array( numpy.empty( frames.shape, dtype=numpy.uint32 ),
                                            mask=numpy.ones( frames.shape, dtype=numpy.bool_ ) )
 
     x[idx] = orig_rows['x']
     y[idx] = orig_rows['y']
     z[idx] = orig_rows['z']
+    R[idx,0,0] = orig_rows['P00']
+    R[idx,0,1] = orig_rows['P01']
+    R[idx,0,2] = orig_rows['P02']
+    R[idx,1,0] = orig_rows['P01'] # P10
+    R[idx,1,1] = orig_rows['P11']
+    R[idx,1,2] = orig_rows['P12']
+    R[idx,2,0] = orig_rows['P02'] # P20
+    R[idx,2,1] = orig_rows['P12'] # P21
+    R[idx,2,2] = orig_rows['P22']
     obj_id_array[idx] = orig_rows['obj_id']
 
     # assemble observations (in meters)
@@ -336,7 +352,7 @@ def kalman_smooth(orig_rows,
                                                  model['A'],
                                                  model['C'],
                                                  model['Q'],
-                                                 model['R'],
+                                                 R,
                                                  init_x,
                                                  P_k1,
                                                  valid_data_idx=idx)
@@ -761,7 +777,7 @@ class PreSmoothedDataCache(object):
         if 1:
             orig_hash = flydra.analysis.result_utils.md5sum_headtail(
                 data_file.filename)
-            expected_title = 'v=4;up_dir=(%.3f, %.3f, %.3f);hash="%s";dynamic_model="%s"'%(
+            expected_title = 'v=5;up_dir=(%.3f, %.3f, %.3f);hash="%s";dynamic_model="%s"'%(
                 up_dir[0],up_dir[1],up_dir[2],orig_hash,dynamic_model_name)
             cache_h5file_name = os.path.abspath(os.path.splitext(data_file.filename)[0]) + '.kh5-smoothcache'
             make_new_cache = True

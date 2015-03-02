@@ -11,6 +11,7 @@ tables.flavor.restrict_flavors(keep=['python','numpy']) # ensure pytables 2.x
 
 import numpy as np
 import sys, os, re, hashlib
+import json
 
 import warnings
 from distutils.version import StrictVersion, LooseVersion
@@ -682,3 +683,8 @@ def check_qi(dtype):
     idxs=qi.get_idxs(fno)
     assert len(idxs)==0
 
+def do_json_progress(percent):
+    class PrettyFloat(float):
+        def __repr__(self):
+            return '%.1f' % self
+    print json.dumps({'progress':{'percent':PrettyFloat(percent)}})

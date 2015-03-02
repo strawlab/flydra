@@ -472,7 +472,7 @@ def doit(
                         pass
                     else:
                         ax.set_xlim( (start_frame, stop_frame) )
-                if not kalman_smoothing:
+                if 1:
                     ax = ax_by_cam['kalman pmean']
                     P00 = kalman_rows['P00'][cond]
                     P11 = kalman_rows['P11'][cond]
@@ -483,7 +483,7 @@ def doit(
                         xdata = time_est
                     else:
                         xdata = frame
-                    ax.plot( xdata, std, 'k-')
+                    ax.plot( xdata, std, 'k-', **kwprops)
 
                     if options.timestamps:
                         ax.set_xlabel('time (sec)')
