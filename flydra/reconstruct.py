@@ -1636,9 +1636,14 @@ class Reconstructor:
 
             if return_X_coords:
                 if self.wateri is not None:
+
+                    # Per camera:
+                    #   Get point on water surface in this direction.
+                    #   Get underwater line from water surface (using Snell's Law).
+                    # All lines -> closest point to all lines.
+
                     # See http://math.stackexchange.com/questions/61719/finding-the-intersection-point-of-many-lines-in-3d-point-closest-to-all-lines
                     1/0
-                    # water case
                 else:
                     Pmat = self.Pmat[cam_id] # Pmat is 3 rows x 4 columns
                     row2 = Pmat[2,:]
