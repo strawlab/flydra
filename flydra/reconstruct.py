@@ -1607,7 +1607,7 @@ class Reconstructor:
             max_count = 100
             while delta_dist > eps:
                 if frame > max_count:
-                    warnings.warn('exceeded max count (delta_dist: %f)'%delta_dist)
+                    warnings.warn('exceeded max count')
                     break
                 frame += 1
                 tro.calculate_a_posteriori_estimate(frame,data_dict,
