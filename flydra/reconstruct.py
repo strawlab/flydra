@@ -30,7 +30,6 @@ L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
 NO_BACKWARDS_COMPAT = int(os.environ.get('FLYDRA_NO_BACKWARDS_COMPAT','0'))
-STRICT_WATER = int(os.environ.get('STRICT_WATER','0'))
 
 def mat2quat(m):
     """Initialize q from either a mat3 or mat4 and returns self."""
@@ -1528,23 +1527,16 @@ class Reconstructor:
         This function can optionally undistort points.
 
         """
-        global STRICT_WATER
         if simulate_via_tracking_dynamic_model is not None:
             # simulate via tracking uses flydra tracking framework to
             # iteratively attempt to find location
             assert return_X_coords == True
             assert return_line_coords == False
 
-            # get original 3D guess (disable strict water check)
-            orig_strict = STRICT_WATER
-            STRICT_WATER = 'no warn'
-            try:
-                start_guess = self.find3d( cam_ids_and_points2d,
-                                           return_X_coords = return_X_coords,
-                                           return_line_coords = return_line_coords,
-                                           )
-            finally:
-                 STRICT_WATER = orig_strict
+            start_guess = self.find3d( cam_ids_and_points2d,
+                                       return_X_coords = return_X_coords,
+                                       return_line_coords = return_line_coords,
+                                       )
 
             import flydra.kalman.flydra_tracker
             frame = 0
@@ -1619,17 +1611,6 @@ class Reconstructor:
                     delta_dist = np.sqrt(np.sum((prev[:3]-cur[:3])**2))
             return cur[:3]
 
-        if self.wateri is not None:
-            if STRICT_WATER=='no warn':
-                pass
-            elif STRICT_WATER:
-                raise NotImplementedError('no find3d() implemented with refraction')
-            else:
-                warnings.warn('reconstruct find3d() done without '
-                              'refraction correction. Result will be wrong. '
-                              'Set environment variable STRICT_WATER to '
-                              'raise an error rather than give this warning.')
-
         svd = scipy.linalg.svd
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
         # also p. 587)
@@ -1652,11 +1633,17 @@ class Reconstructor:
                 # get shape information from each view of a blob:
                 x,y,area = value_tuple[:3]
                 have_line_coords = True
+
             if return_X_coords:
-                Pmat = self.Pmat[cam_id] # Pmat is 3 rows x 4 columns
-                row2 = Pmat[2,:]
-                A.append( x*row2 - Pmat[0,:] )
-                A.append( y*row2 - Pmat[1,:] )
+                if self.wateri is not None:
+                    # See http://math.stackexchange.com/questions/61719/finding-the-intersection-point-of-many-lines-in-3d-point-closest-to-all-lines
+                    1/0
+                    # water case
+                else:
+                    Pmat = self.Pmat[cam_id] # Pmat is 3 rows x 4 columns
+                    row2 = Pmat[2,:]
+                    A.append( x*row2 - Pmat[0,:] )
+                    A.append( y*row2 - Pmat[1,:] )
 
             if return_line_coords and have_line_coords:
                 slope,eccentricity, p1,p2,p3,p4 = value_tuple[3:]
