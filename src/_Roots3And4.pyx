@@ -45,3 +45,6 @@ cdef double real_nonnegative_root_less_than(double p4, double p3, double p2, dou
             # value above maxval only accepted due to numerical precision
             result = maxval
     return result
+
+def py_real_nonnegative_root_less_than( p4, p3, p2, p1, p0, maxval, eps):
+    return real_nonnegative_root_less_than(p4, p3, p2, p1, p0, maxval, eps)
