@@ -32,7 +32,7 @@ extern double   sqrt(), cbrt(), cos(), acos();
 
 /* epsilon surrounding for near zero values */
 
-#define     EQN_EPS     1e-9
+#define     EQN_EPS     1e-30
 #define	    IsZero(x)	((x) > -EQN_EPS && (x) < EQN_EPS)
 
 #ifdef NOCBRT
