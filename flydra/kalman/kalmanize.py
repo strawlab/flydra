@@ -388,6 +388,13 @@ def kalmanize(src_filename,
 
         if do_full_kalmanization:
             if dynamic_model_name is None:
+                if hasattr(results.root,'kalman_estimates'):
+                    if hasattr(results.root.kalman_estimates.attrs,'dynamic_model_name'):
+                        dynamic_model_name = (
+                            results.root.kalman_estimates.attrs.dynamic_model_name)
+                        warnings.warn('dynamic model not specified. '
+                                      'using "%s"'%dynamic_model_name)
+            if dynamic_model_name is None:
                 dynamic_model_name = 'EKF mamarama, units: mm'
                 warnings.warn('dynamic model not specified. '
                               'using "%s"'%dynamic_model_name)
