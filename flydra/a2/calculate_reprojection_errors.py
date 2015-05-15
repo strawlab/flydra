@@ -23,11 +23,13 @@ class StringWidget(progressbar.Widget):
 def calculate_reprojection_errors(h5_filename=None,
                                   output_h5_filename=None,
                                   kalman_filename=None,
+                                  from_source=None,
                                   start=None,
                                   stop=None,
                                   show_progress=False,
                                   show_progress_json=False,
                                   ):
+    assert from_source in ['ML_estimates','smoothed']
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
             "will not overwrite old file '%s'"%output_h5_filename)
@@ -37,6 +39,11 @@ def calculate_reprojection_errors(h5_filename=None,
         kalman_filename)
     R = reconstruct.Reconstructor(kalman_filename)
     ML_estimates_2d_idxs = data_file.root.ML_estimates_2d_idxs[:]
+
+    if from_source=='smoothed':
+        dynamic_model_name = extra['dynamic_model_name']
+        if dynamic_model_name.startswith('EKF '):
+            dynamic_model_name = dynamic_model_name[4:]
 
     out = {'camn':[],
            'frame':[],
@@ -73,6 +80,21 @@ def calculate_reprojection_errors(h5_filename=None,
 
             obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id,
                                                               data_file)
+
+            if from_source=='smoothed':
+
+                smoothed_rows = None
+                try:
+                    smoothed_rows = ca.load_data(
+                        obj_id, data_file,
+                        use_kalman_smoothing=True,
+                        dynamic_model_name = dynamic_model_name,
+                        frames_per_second=fps,
+                        )
+                except core_analysis.NotEnoughDataToSmoothError, err:
+                    # OK, we don't have data from this obj_id
+                    pass
+
             for this_3d_row in obj_3d_rows:
                 # iterate over each sample in the current camera
                 framenumber = this_3d_row['frame']
@@ -87,7 +109,18 @@ def calculate_reprojection_errors(h5_filename=None,
                     # At the start, there may be 3d data without 2d data.
                     continue
 
-                X3d = this_3d_row['x'], this_3d_row['y'], this_3d_row['z']
+                if from_source=='ML_estimates':
+                    X3d = this_3d_row['x'], this_3d_row['y'], this_3d_row['z']
+                elif from_source=='smoothed':
+                    if smoothed_rows is None:
+                        X3d = np.nan, np.nan, np.nan
+                    else:
+                        this_smoothed_rows = smoothed_rows[ smoothed_rows['frame']==framenumber ]
+                        assert len(this_smoothed_rows) <= 1
+                        if len(this_smoothed_rows) == 0:
+                            X3d = np.nan, np.nan, np.nan
+                        else:
+                            X3d = this_smoothed_rows['x'][0], this_smoothed_rows['y'][0], this_smoothed_rows['z'][0]
 
                 # If there was a 3D ML estimate, there must be 2D data.
 
@@ -174,6 +207,8 @@ def main():
                         help="frame number to begin analysis on")
     parser.add_argument("--stop", type=int, default=None,
                         help="frame number to end analysis on")
+    parser.add_argument('--from-source', type=str, default='ML_estimates',
+                        help="source of 3D data for reprojection ('ML_estimates' or 'smoothed')")
     parser.add_argument('--progress', action='store_true', default=False,
                         help='show progress bar on console')
     parser.add_argument("--progress-json", dest='show_progress_json',
@@ -185,11 +220,15 @@ def main():
         args.kalman_file = args.h5
 
     if args.output_h5 is None:
-        args.output_h5 = args.kalman_file + '.repro_errors.h5'
+        if args.from_source == 'ML_estimates':
+            args.output_h5 = args.kalman_file + '.repro_errors.h5'
+        else:
+            args.output_h5 = args.kalman_file + '.%s_repro_errors.h5'%args.from_source
 
     calculate_reprojection_errors(h5_filename=args.h5,
-                                  kalman_filename=args.kalman_file,
                                   output_h5_filename=args.output_h5,
+                                  kalman_filename=args.kalman_file,
+                                  from_source=args.from_source,
                                   start=args.start,
                                   stop=args.stop,
                                   show_progress=args.progress,
