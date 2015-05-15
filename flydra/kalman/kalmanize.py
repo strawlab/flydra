@@ -701,6 +701,7 @@ def kalmanize(src_filename,
                         if 'sumsqf_val' in row.dtype.fields: sumsqf_val = row['sumsqf_val']
                         else: sumsqf_val = None
 
+                        # FIXME: cache this stuff?
                         pmat_inv = reconstructor.get_pmat_inv(cam_id)
                         camera_center = reconstructor.get_camera_center(cam_id)
                         camera_center = numpy.hstack((camera_center[:,0],[1]))
