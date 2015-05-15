@@ -310,7 +310,11 @@ cdef class TrackedObject:
                                         long frame,
                                         object data_dict,
                                         object camn2cam_id,
-                                        int debug1=0):
+                                        int debug1=0,
+                                        int skip_data_association=0,
+                                        object original_camns_and_idxs=None,
+                                        object original_cam_ids_and_points2d=None,
+                                        ):
         # Step 1. Update Kalman state to a priori estimates for this frame.
         # Step 1.A. Update Kalman state for each skipped frame.
 
@@ -360,12 +364,19 @@ cdef class TrackedObject:
                 print
 
             # Step 2. Filter incoming 2D data to use informative points (data association)
-            (position_MLE, Lcoords, used_camns_and_idxs,
-             cam_ids_and_points2d,
-             all_close_camn_pt_idxs) = self._filter_data(xhatminus, Pminus,
-                                                         data_dict,
-                                                         camn2cam_id,
-                                                         debug=debug1)
+            if skip_data_association:
+                position_MLE = numpy.nan*numpy.ones( (3,)) # skip
+                Lcoords = None
+                used_camns_and_idxs = original_camns_and_idxs
+                cam_ids_and_points2d = original_cam_ids_and_points2d
+                all_close_camn_pt_idxs = [] # not important when skipping data association
+            else:
+                (position_MLE, Lcoords, used_camns_and_idxs,
+                 cam_ids_and_points2d,
+                 all_close_camn_pt_idxs) = self._filter_data(xhatminus, Pminus,
+                                                             data_dict,
+                                                             camn2cam_id,
+                                                             debug=debug1)
             if debug1>2:
                 print 'position MLE, used_camns_and_idxs',position_MLE,used_camns_and_idxs
                 print 'Lcoords (3D body orientation) : %s'%str(Lcoords)

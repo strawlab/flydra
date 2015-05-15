@@ -3,6 +3,8 @@ import socket, struct
 import Queue, threading
 import tempfile, os
 import pprint
+import pkg_resources
+import shutil
 
 import numpy as np
 
@@ -16,7 +18,7 @@ import flydra.water as water
 import flydra.a2.core_analysis as core_analysis
 import flydra.flydra_socket as flydra_socket
 from flydra.reconstruct import Reconstructor, DEFAULT_WATER_REFRACTIVE_INDEX
-
+from flydra.a2.retrack_reuse_data_association import retrack_reuse_data_association
 from flydra.main_brain.coordinate_receiver import CoordinateProcessor
 
 SPINUP_DURATION = 0.2
@@ -117,6 +119,47 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False, with_distort
                   eccentricity=eccentricity,
                   )
     return result
+
+def test_retracking_without_data_association():
+    ca = core_analysis.get_global_CachingAnalyzer()
+
+    orig_fname = pkg_resources.resource_filename('flydra.a2','sample_datafile.h5')
+    (_, orig_obj_ids, _, orig_data_file, extra) = ca.initial_file_load(orig_fname)
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        retracked_fname = os.path.join(tmpdir,'retracked.h5')
+        retrack_reuse_data_association(h5_filename=orig_fname,
+                                       output_h5_filename=retracked_fname,
+                                       kalman_filename=orig_fname,
+                                       )
+
+        (_, retracked_obj_ids, _, retracked_data_file, _) = ca.initial_file_load(retracked_fname)
+
+        assert len(retracked_obj_ids) > 10
+
+        for obj_id in retracked_obj_ids[1:-1]:
+            # Cycle over retracked obj_ids, which may be subset of
+            # original (due to missing 2D data)
+
+            retracked_rows = ca.load_data(
+                obj_id, retracked_data_file,
+                use_kalman_smoothing=False,
+                dynamic_model_name=extra['dynamic_model_name'],
+                frames_per_second=extra['frames_per_second'],
+                )
+            orig_rows = ca.load_data(
+                obj_id, orig_data_file,
+                use_kalman_smoothing=False,
+                dynamic_model_name=extra['dynamic_model_name'],
+                frames_per_second=extra['frames_per_second'],
+                )
+            # They tracks start at the same frame...
+            assert retracked_rows['frame'][0]==orig_rows['frame'][0]
+            # and they should be no longer than the original.
+            assert len(retracked_rows)<=len(orig_rows) # may be shorter?!
+    finally:
+        shutil.rmtree(tmpdir)
 
 def test_offline_reconstruction():
     fps=120.0

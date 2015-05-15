@@ -400,7 +400,8 @@ def read_textlog_header(results,fail_on_error=True):
         else:
             return None
     infostr = textlog['message'].tostring().strip('\x00')
-    if not (infostr.startswith('MainBrain running at') or infostr.startswith('kalmanize running at')):
+    if not (infostr.startswith('MainBrain running at') or infostr.startswith('kalmanize running at')
+            or infostr.startswith('retrack_reuse_data_association running at')):
         raise TextlogParseError('could not parse textlog - old version?')
     fps_str = infostr.split()[3]
     parsed = {}

@@ -1651,7 +1651,7 @@ class Reconstructor:
                 if undistort:
                     raise ValueError('Undistoring line coords not implemented')
                 # get shape information from each view of a blob:
-                x,y,area,slope,eccentricity, p1,p2,p3,p4 = value_tuple
+                x,y,area = value_tuple[:3]
                 have_line_coords = True
             if return_X_coords:
                 Pmat = self.Pmat[cam_id] # Pmat is 3 rows x 4 columns
@@ -1660,6 +1660,7 @@ class Reconstructor:
                 A.append( y*row2 - Pmat[1,:] )
 
             if return_line_coords and have_line_coords:
+                slope,eccentricity, p1,p2,p3,p4 = value_tuple[3:]
                 if eccentricity > self.minimum_eccentricity: # require a bit of elongation
                     P.append( (p1,p2,p3,p4) )
 

@@ -152,6 +152,7 @@ setup(name='flydra',
     'flydra_textlog2csv = flydra.a2.flydra_textlog2csv:main',
     'flydra_analysis_print_kalmanize_makefile_location = flydra.a2.print_kalmanize_makefile_location:main',
     'flydra_analysis_calculate_reprojection_errors = flydra.a2.calculate_reprojection_errors:main',
+    'flydra_analysis_retrack_reuse_data_association = flydra.a2.retrack_reuse_data_association:main',
 
 # analysis - image based orientation
     'flydra_analysis_image_based_orientation = flydra.a2.image_based_orientation:main',

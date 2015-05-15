@@ -247,15 +247,20 @@ class KalmanSaver:
     def close(self):
         pass
 
-    def save_tro(self,tro):
+    def save_tro(self,tro,force_obj_id=None):
         if len(tro.observations_frames) < self.min_observations_to_save:
             # not enough data to bother saving
             return
 
         self.obj_id += 1
 
+        if force_obj_id is not None:
+            save_obj_id = force_obj_id
+        else:
+            save_obj_id = self.obj_id
+
         if self.debug:
-            print 'saving %s as obj_id %d'%(repr(self), self.obj_id)
+            print 'saving %s as obj_id %d'%(repr(self), save_obj_id)
 
         # save observation 2d data indexes
         debugADS=False
@@ -284,7 +289,7 @@ class KalmanSaver:
             tro.observations_frames, dtype=numpy.uint64)
         obj_id_array = numpy.empty(
             observations_frames.shape, dtype=numpy.uint32)
-        obj_id_array.fill(self.obj_id)
+        obj_id_array.fill(save_obj_id)
         MLE_position = numpy.array(
             tro.MLE_position, dtype=numpy.float32)
         MLE_Lcoords = numpy.array(
@@ -330,7 +335,7 @@ class KalmanSaver:
         P_data_full = P_data_full[cond]
 
         obj_id_array = numpy.empty(frames.shape, dtype=numpy.uint32)
-        obj_id_array.fill(self.obj_id)
+        obj_id_array.fill(save_obj_id)
 
         # one list entry per column
         list_of_xhats = [xhat_data[:,i]
