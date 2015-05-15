@@ -32,7 +32,7 @@ ML_estimates_2d_idxs_type = tmp
 del tmp
 
 def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
-                  debug=0, area_threshold=0):
+                  debug=0):
     if debug is None:
         debug=0
     frame_data = tracker.calculate_a_posteriori_estimates(
@@ -55,7 +55,7 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
     found_data_dict,first_idx_by_cam_id = convert_format(
         frame_data,
         camn2cam_id,
-        area_threshold=area_threshold)
+        area_threshold=tracker.area_threshold)
 
     hypothesis_test_found_point = False
     # test to short-circuit rest of function
@@ -637,8 +637,7 @@ def kalmanize(src_filename,
                                 else:
                                     process_frame(reconstructor,tracker,
                                                   last_frame,frame_data,camn2cam_id,
-                                                  debug=debug,
-                                                  area_threshold=area_threshold)
+                                                  debug=debug)
                             frame_count += 1
                             if do_full_kalmanization and frame_count%1000==0:
                                 time2 = time.time()
