@@ -37,20 +37,20 @@ def retrack_reuse_data_association(h5_filename=None,
             "will not overwrite old file '%s'"%output_h5_filename)
 
     ca = core_analysis.get_global_CachingAnalyzer()
-    obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
+    obj_ids, use_obj_ids, is_mat_file, h5, extra = ca.initial_file_load(
         kalman_filename)
-    R = reconstruct.Reconstructor(kalman_filename)
+    R = reconstruct.Reconstructor(h5)
     try:
-        ML_estimates_2d_idxs = data_file.root.ML_estimates_2d_idxs[:]
+        ML_estimates_2d_idxs = h5.root.ML_estimates_2d_idxs[:]
     except tables.exceptions.NoSuchNodeError:
         # backwards compatibility
-        ML_estimates_2d_idxs = data_file.root.kalman_observations_2d_idxs
+        ML_estimates_2d_idxs = h5.root.kalman_observations_2d_idxs
     dt = 1.0/extra['frames_per_second']
     dynamic_model_name = extra['dynamic_model_name']
     kalman_model = dynamic_models.get_kalman_model(
         name=dynamic_model_name, dt=dt )
 
-    with openFileSafe( h5_filename, mode='r' ) as h5:
+    if 1:
 
         with openFileSafe(output_h5_filename, mode="w", title="tracked Flydra data file",
                           delete_on_error=True) as output_h5:
@@ -104,7 +104,7 @@ def retrack_reuse_data_association(h5_filename=None,
                 tro = None
                 first_frame_per_obj = True
                 obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id,
-                                                                  data_file)
+                                                                  h5)
                 for this_3d_row in obj_3d_rows:
                     # iterate over each sample in the current camera
                     framenumber = this_3d_row['frame']
