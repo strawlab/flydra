@@ -226,15 +226,7 @@ def check_is_mat_file(data_file):
 def _initial_file_load(filename):
     extra = {}
     if os.path.splitext(filename)[1] == '.mat':
-        mat_data = scipy.io.loadmat(filename,squeeze_me=True)
-        mat_data = WeakRefAbleDict(mat_data)
-        obj_ids = mat_data['kalman_obj_id']
-        obj_ids = obj_ids.astype( numpy.uint32 )
-        obs_obj_ids = obj_ids # use as observation length, even though these aren't observations
-        unique_obj_ids = numpy.unique(obj_ids)
-        is_mat_file = True
-        data_file = mat_data
-        # XXX probably need to add time_model computation here
+        raise ValueError('.mat files no longer supported')
     else:
         kresults = tables.openFile(filename,mode='r')
         extra['frames_per_second'] = flydra.analysis.result_utils.get_fps(
@@ -2052,14 +2044,10 @@ class TestCoreAnalysis:
 
         fname1=pkg_resources.resource_filename(__name__,
                                                'sample_kalman_trajectories.h5')
-        fname2=pkg_resources.resource_filename(__name__,
-                                               'sample_kalman_trajectory.mat')
 
         filenames = [fname1,
-                     fname2,
                      ]
         self.test_obj_ids_list = [[497,1369], #fname1
-                                  [1606], #fname2
                                   ]
 
         self.data_files = []
