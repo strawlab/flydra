@@ -344,12 +344,12 @@ cdef class TrackedObject:
             self.timestamps.append( 0.0 )
             self.Ps.append( P )
 
+        self.current_frameno = frame
         this_observations_2d_hash = None
         used_camns_and_idxs = []
         all_close_camn_pt_idxs = []
         Pmean = c_inf
         if not self.kill_me:
-            self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
             if isinstance(self.my_kalman, kalman_ekf.EKF):
                 xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori(
