@@ -78,7 +78,6 @@ def retrack_reuse_data_association(h5_filename=None,
             # associate framenumbers with timestamps using 2d .h5 file
             data2d = h5_context.load_entire_table('data2d_distorted')
 
-            data2d_idxs = np.arange(len(data2d))
             h5_framenumbers = data2d['frame']
             h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
 
@@ -117,7 +116,6 @@ def retrack_reuse_data_association(h5_filename=None,
                     # If there was a 3D ML estimate, there must be 2D data.
 
                     frame2d = data2d[h5_2d_row_idxs]
-                    frame2d_idxs = data2d_idxs[h5_2d_row_idxs]
 
                     obs_2d_idx = this_3d_row['obs_2d_idx']
                     kobs_2d_data = ML_estimates_2d_idxs[int(obs_2d_idx)]
