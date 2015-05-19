@@ -223,11 +223,6 @@ def check_is_mat_file(data_file):
     else:
         return False
 
-def get_data(filename):
-    warnings.warn('instead of get_data(), use CachingAnalyzer.initial_file_load(filename)',
-                  DeprecationWarning)
-    return _initial_file_load(filename)
-
 def _initial_file_load(filename):
     extra = {}
     if os.path.splitext(filename)[1] == '.mat':
