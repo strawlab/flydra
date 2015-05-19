@@ -1953,12 +1953,11 @@ class CachingAnalyzer:
 
     def _load_dict(self,result_h5_file):
         if isinstance(result_h5_file,str) or isinstance(result_h5_file,unicode):
-            kresults = tables.openFile(result_h5_file,mode='r')
-            self_should_close = True
-        else:
-            kresults = result_h5_file
-            self_should_close = False
-            # XXX I should make my reference a weakref
+            raise ValueError('should pass opened HDF5, not filename')
+        kresults = result_h5_file
+        self_should_close = False
+        # XXX I should make my reference a weakref
+
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
         if hasattr(kresults.root,'ML_estimates'):
             obs_obj_ids = kresults.root.ML_estimates.read(field='obj_id')
