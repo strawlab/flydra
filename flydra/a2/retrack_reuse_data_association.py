@@ -29,6 +29,7 @@ def retrack_reuse_data_association(h5_filename=None,
                                    kalman_filename=None,
                                    start=None,
                                    stop=None,
+                                   less_ram=False,
                                    show_progress=False,
                                    show_progress_json=False,
                                    ):
@@ -39,7 +40,10 @@ def retrack_reuse_data_association(h5_filename=None,
     ca = core_analysis.get_global_CachingAnalyzer()
     with ca.kalman_analysis_context( kalman_filename ) as h5_context:
         R = h5_context.get_reconstructor()
-        ML_estimates_2d_idxs = h5_context.load_entire_table('ML_estimates_2d_idxs')
+        if less_ram:
+            ML_estimates_2d_idxs = h5_context.get_pytable_node('ML_estimates_2d_idxs')
+        else:
+            ML_estimates_2d_idxs = h5_context.load_entire_table('ML_estimates_2d_idxs')
         use_obj_ids = h5_context.get_unique_obj_ids()
         extra = h5_context.get_extra_info()
         dt = 1.0/extra['frames_per_second']
@@ -76,9 +80,12 @@ def retrack_reuse_data_association(h5_filename=None,
                                   )
 
             # associate framenumbers with timestamps using 2d .h5 file
-            data2d = h5_context.load_entire_table('data2d_distorted')
-
-            h5_framenumbers = data2d['frame']
+            if less_ram:
+                data2d = h5_context.get_pytable_node('data2d_distorted')
+                h5_framenumbers = data2d.cols.frame[:]
+            else:
+                data2d = h5_context.load_entire_table('data2d_distorted')
+                h5_framenumbers = data2d['frame']
             h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
 
             if show_progress:
@@ -217,6 +224,8 @@ def main():
                         help="frame number to begin analysis on")
     parser.add_argument("--stop", type=int, default=None,
                         help="frame number to end analysis on")
+    parser.add_argument('--less-ram', action='store_true', default=False,
+                        help='use less RAM (but slower)')
     parser.add_argument('--progress', action='store_true', default=False,
                         help='show progress bar on console')
     parser.add_argument("--progress-json", dest='show_progress_json',
@@ -235,6 +244,7 @@ def main():
                                    output_h5_filename=args.output_h5,
                                    start=args.start,
                                    stop=args.stop,
+                                   less_ram=args.less_ram,
                                    show_progress=args.progress,
                                    show_progress_json=args.show_progress_json,
                                    )
