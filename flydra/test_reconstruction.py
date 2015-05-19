@@ -124,7 +124,6 @@ def test_retracking_without_data_association():
     ca = core_analysis.get_global_CachingAnalyzer()
 
     orig_fname = pkg_resources.resource_filename('flydra.a2','sample_datafile.h5')
-    (_, orig_obj_ids, _, orig_data_file, extra) = ca.initial_file_load(orig_fname)
 
     tmpdir = tempfile.mkdtemp()
     try:
@@ -133,31 +132,33 @@ def test_retracking_without_data_association():
                                        output_h5_filename=retracked_fname,
                                        kalman_filename=orig_fname,
                                        )
+        with ca.kalman_analysis_context( orig_fname ) as orig_h5_context:
+            orig_obj_ids = orig_h5_context.get_unique_obj_ids()
+            extra = orig_h5_context.get_extra_info()
 
-        (_, retracked_obj_ids, _, retracked_data_file, _) = ca.initial_file_load(retracked_fname)
+            with ca.kalman_analysis_context( retracked_fname ) as retracked_h5_context:
+                retracked_obj_ids = retracked_h5_context.get_unique_obj_ids()
 
-        assert len(retracked_obj_ids) > 10
+                assert len(retracked_obj_ids) > 10
 
-        for obj_id in retracked_obj_ids[1:-1]:
-            # Cycle over retracked obj_ids, which may be subset of
-            # original (due to missing 2D data)
+                for obj_id in retracked_obj_ids[1:-1]:
+                    # Cycle over retracked obj_ids, which may be subset of
+                    # original (due to missing 2D data)
 
-            retracked_rows = ca.load_data(
-                obj_id, retracked_data_file,
-                use_kalman_smoothing=False,
-                dynamic_model_name=extra['dynamic_model_name'],
-                frames_per_second=extra['frames_per_second'],
-                )
-            orig_rows = ca.load_data(
-                obj_id, orig_data_file,
-                use_kalman_smoothing=False,
-                dynamic_model_name=extra['dynamic_model_name'],
-                frames_per_second=extra['frames_per_second'],
-                )
-            # They tracks start at the same frame...
-            assert retracked_rows['frame'][0]==orig_rows['frame'][0]
-            # and they should be no longer than the original.
-            assert len(retracked_rows)<=len(orig_rows) # may be shorter?!
+                    retracked_rows = retracked_h5_context.load_data(
+                        obj_id, use_kalman_smoothing=False,
+                        dynamic_model_name=extra['dynamic_model_name'],
+                        frames_per_second=extra['frames_per_second'],
+                        )
+                    orig_rows = orig_h5_context.load_data(
+                        obj_id, use_kalman_smoothing=False,
+                        dynamic_model_name=extra['dynamic_model_name'],
+                        frames_per_second=extra['frames_per_second'],
+                        )
+                    # They tracks start at the same frame...
+                    assert retracked_rows['frame'][0]==orig_rows['frame'][0]
+                    # and they should be no longer than the original.
+                    assert len(retracked_rows)<=len(orig_rows) # may be shorter?!
     finally:
         shutil.rmtree(tmpdir)
 

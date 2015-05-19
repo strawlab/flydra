@@ -37,39 +37,34 @@ def retrack_reuse_data_association(h5_filename=None,
             "will not overwrite old file '%s'"%output_h5_filename)
 
     ca = core_analysis.get_global_CachingAnalyzer()
-    obj_ids, use_obj_ids, is_mat_file, h5, extra = ca.initial_file_load(
-        kalman_filename)
-    R = reconstruct.Reconstructor(h5)
-    try:
-        ML_estimates_2d_idxs = h5.root.ML_estimates_2d_idxs[:]
-    except tables.exceptions.NoSuchNodeError:
-        # backwards compatibility
-        ML_estimates_2d_idxs = h5.root.kalman_observations_2d_idxs
-    dt = 1.0/extra['frames_per_second']
-    dynamic_model_name = extra['dynamic_model_name']
-    kalman_model = dynamic_models.get_kalman_model(
-        name=dynamic_model_name, dt=dt )
+    with ca.kalman_analysis_context( kalman_filename ) as h5_context:
+        R = h5_context.get_reconstructor()
+        ML_estimates_2d_idxs = h5_context.load_entire_table('ML_estimates_2d_idxs')
+        use_obj_ids = h5_context.get_unique_obj_ids()
+        extra = h5_context.get_extra_info()
+        dt = 1.0/extra['frames_per_second']
+        dynamic_model_name = extra['dynamic_model_name']
+        kalman_model = dynamic_models.get_kalman_model(
+            name=dynamic_model_name, dt=dt )
 
-    if 1:
+        fps = extra['frames_per_second']
+        camn2cam_id, cam_id2camns = h5_context.get_caminfo_dicts()
+
+        parsed = h5_context.read_textlog_header()
+        if 'trigger_CS3' not in parsed:
+            parsed['trigger_CS3'] = 'unknown'
+
+        textlog_save_lines = [
+            'retrack_reuse_data_association running at %s fps, (top %s, trigger_CS3 %s, flydra_version %s)'%(
+            str(fps),str(parsed.get('top','unknown')),
+            str(parsed['trigger_CS3']),flydra.version.__version__),
+            'original file: %s'%(kalman_filename,),
+            'dynamic model: %s'%(dynamic_model_name,),
+            'reconstructor file: %s'%(kalman_filename,),
+            ]
 
         with openFileSafe(output_h5_filename, mode="w", title="tracked Flydra data file",
                           delete_on_error=True) as output_h5:
-
-            fps = result_utils.get_fps( h5, fail_on_error=True )
-            camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
-
-            parsed = result_utils.read_textlog_header(h5)
-            if 'trigger_CS3' not in parsed:
-                parsed['trigger_CS3'] = 'unknown'
-
-            textlog_save_lines = [
-                'retrack_reuse_data_association running at %s fps, (top %s, trigger_CS3 %s, flydra_version %s)'%(
-                str(fps),str(parsed.get('top','unknown')),
-                str(parsed['trigger_CS3']),flydra.version.__version__),
-                'original file: %s'%(kalman_filename,),
-                'dynamic model: %s'%(dynamic_model_name,),
-                'reconstructor file: %s'%(kalman_filename,),
-                ]
 
             h5saver = KalmanSaver(output_h5,
                                   R,
@@ -81,7 +76,8 @@ def retrack_reuse_data_association(h5_filename=None,
                                   )
 
             # associate framenumbers with timestamps using 2d .h5 file
-            data2d = h5.root.data2d_distorted[:] # load to RAM
+            data2d = h5_context.load_entire_table('data2d_distorted')
+
             data2d_idxs = np.arange(len(data2d))
             h5_framenumbers = data2d['frame']
             h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
@@ -103,8 +99,7 @@ def retrack_reuse_data_association(h5_filename=None,
 
                 tro = None
                 first_frame_per_obj = True
-                obj_3d_rows = ca.load_dynamics_free_MLE_position( obj_id,
-                                                                  h5)
+                obj_3d_rows = h5_context.load_dynamics_free_MLE_position(obj_id)
                 for this_3d_row in obj_3d_rows:
                     # iterate over each sample in the current camera
                     framenumber = this_3d_row['frame']
