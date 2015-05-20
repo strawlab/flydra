@@ -50,6 +50,7 @@ def convert(infilename,
 
     h5file_raw = tables.openFile(infilename,mode='r')
     extra_vars = {}
+    close_h52d = False
 
     if save_timestamps:
         print 'STAGE 1: finding timestamps'
@@ -62,7 +63,6 @@ def convert(infilename,
 
         if file_time_data is None:
             h52d = h5file_raw
-            close_h52d = False
         else:
             h52d = tables.openFile(file_time_data,mode='r')
             close_h52d = True
@@ -167,14 +167,11 @@ def convert(infilename,
         extra_vars['obj_ids'] = unique_obj_ids
         extra_vars['timestamps'] = timestamp_time
 
-        if close_h52d:
-            h52d.close()
-
         print 'STAGE 2: running Kalman smoothing operation'
 
     #also save the experiment data if present
     try:
-        table_experiment = h5file_raw.root.experiment_info
+        table_experiment = h52d.root.experiment_info
         uuid=None
         try:
             uuid = table_experiment.read(field='uuid')
@@ -186,6 +183,8 @@ def convert(infilename,
         pass
 
     h5file_raw.close()
+    if close_h52d:
+        h52d.close()
 
     ca = core_analysis.get_global_CachingAnalyzer()
     all_obj_ids, obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
@@ -307,7 +306,7 @@ def main(hdf5_only=False):
     parser.add_argument("--dest-file", type=str, default=None,
                       help=dest_help)
     parser.add_argument("--time-data", dest="file2d", type=str,
-                      help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
+                      help="hdf5 file with 2d data FILE2D used to calculate timestamp information and take UUID",
                       metavar="FILE2D")
     parser.add_argument("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
     if not hdf5_only:
