@@ -13,7 +13,6 @@ from pymvg.multi_camera_system import MultiCameraSystem
 
 import flydra.offline_data_save
 from flydra.kalman.kalmanize import kalmanize
-from flydra.a2.calculate_reprojection_errors import calculate_reprojection_errors
 import flydra.water as water
 import flydra.a2.core_analysis as core_analysis
 import flydra.flydra_socket as flydra_socket
