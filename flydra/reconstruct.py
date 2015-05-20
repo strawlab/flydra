@@ -1567,6 +1567,8 @@ class Reconstructor:
                 camn = cam_id2camn[cam_id]
                 if undistort:
                     x_undistorted,y_undistorted = self.undistort( cam_id, pt2d )
+                else:
+                    x_undistorted,y_undistorted = pt2d[:2]
                 rise=np.nan
                 run=np.nan
                 area=100.0
