@@ -162,6 +162,48 @@ def test_retracking_without_data_association():
     finally:
         shutil.rmtree(tmpdir)
 
+def test_find3d():
+    fps=120.0
+    for use_kalman_smoothing in [False, True]:
+        for with_orientation in [False]:
+            for with_water in [False, True]:
+                for with_distortion in [False,True]:
+                    yield check_find3d, with_water, use_kalman_smoothing, with_orientation, fps, with_distortion
+
+def check_find3d(with_water=False,
+                 use_kalman_smoothing=False,
+                 with_orientation=False,
+                 fps=120.0,
+                 with_distortion=True):
+    assert with_orientation==False
+    D = setup_data( fps=fps,
+                    with_water=with_water,
+                    with_orientation=with_orientation,
+                    with_distortion=with_distortion,
+                    )
+    R = D['reconstructor']
+    pos2d = D['data2d']['2d_pos_by_cam_ids']
+    rowidx = -1
+    while 1:
+        rowidx += 1
+        cam_ids_and_points2d = []
+        for cam_id in R.cam_ids:
+            if rowidx >= len(pos2d[cam_id]):
+                break
+            points2d=pos2d[cam_id][rowidx]
+            cam_ids_and_points2d.append( (cam_id, points2d) )
+        if len(cam_ids_and_points2d)==0:
+            break
+        X_actual = R.find3d(cam_ids_and_points2d,
+                     undistort=True,
+                     return_line_coords = False,
+                     )
+        X_expected = np.array([D['x'][rowidx], D['y'][rowidx], D['z'][rowidx]])
+        dist = np.sqrt(np.sum((X_actual-X_expected)**2))
+        assert dist < 1e-5
+
+    assert rowidx > 0 # make sure we did some tests
+
 def test_offline_reconstruction():
     fps=120.0
     for use_kalman_smoothing in [False, True]:
