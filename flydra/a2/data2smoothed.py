@@ -48,6 +48,10 @@ def convert(infilename,
     if stop_obj_id is None:
         stop_obj_id=numpy.inf
 
+
+    smoothed_data_filename = os.path.split(infilename)[1]
+    raw_data_filename = smoothed_data_filename
+
     h5file_raw = tables.openFile(infilename,mode='r')
     h52d = h5file_raw
     close_h52d = False
@@ -65,6 +69,7 @@ def convert(infilename,
 
         if file_time_data is not None:
             h52d = tables.openFile(file_time_data,mode='r')
+            raw_data_filename = os.path.split(file_time_data)[1]
             close_h52d = True
 
         tzname = result_utils.get_tzname0(h52d)
@@ -182,18 +187,26 @@ def convert(infilename,
     except tables.exceptions.NoSuchNodeError:
         pass
 
+    recording_header = result_utils.read_textlog_header(h52d)
+    recording_flydra_version = recording_header['flydra_version']
+
     h5file_raw.close()
+
     if close_h52d:
         h52d.close()
 
     ca = core_analysis.get_global_CachingAnalyzer()
     all_obj_ids, obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
+    smoothing_flydra_version = extra['header']['flydra_version']
+
     obj_ids = obj_ids[ obj_ids >= start_obj_id ]
     obj_ids = obj_ids[ obj_ids <= stop_obj_id ]
     if frames_per_second is None:
         frames_per_second = extra['frames_per_second']
+
     if dynamic_model_name is None:
-        dynamic_model_name = extra.get('dynamic_model_name',None)
+        orig_dynamic_model_name = extra.get('dynamic_model_name',None)
+        dynamic_model_name = orig_dynamic_model_name
         if dynamic_model_name is None:
             dynamic_model_name = dynamic_models.DEFAULT_MODEL
             warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
@@ -280,6 +293,11 @@ def convert(infilename,
         tzname=tzname,
         fps=fps,
         smoothed_source=smoothed_source,
+        smoothed_data_filename=smoothed_data_filename,
+        raw_data_filename=raw_data_filename,
+        dynamic_model_name=orig_dynamic_model_name,
+        recording_flydra_version=recording_flydra_version,
+        smoothing_flydra_version=smoothing_flydra_version,
         )
     ca.close()
     if show_progress_json:

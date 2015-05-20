@@ -28,6 +28,11 @@ def do_it(filename=None,
           tzname=None,
           fps=None,
           smoothed_source=None,
+          smoothed_data_filename=None,
+          raw_data_filename=None,
+          dynamic_model_name=None,
+          recording_flydra_version=None,
+          smoothing_flydra_version=None,
           ):
 
     if hdf5:
@@ -204,7 +209,13 @@ def do_it(filename=None,
 
         # save as h5 file
         save_as_flydra_hdf5(newfilename, data_dict, tzname, fps,
-                            smoothed_source=smoothed_source)
+                            smoothed_source=smoothed_source,
+                            smoothed_data_filename=smoothed_data_filename,
+                            raw_data_filename=raw_data_filename,
+                            dynamic_model_name=dynamic_model_name,
+                            recording_flydra_version=recording_flydra_version,
+                            smoothing_flydra_version=smoothing_flydra_version,
+                            )
 
     else:
         scipy.io.savemat(newfilename,data,appendmat=False)
