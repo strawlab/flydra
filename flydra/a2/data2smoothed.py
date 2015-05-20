@@ -52,6 +52,7 @@ def convert(infilename,
     h52d = h5file_raw
     close_h52d = False
     extra_vars = {}
+    tzname = None
 
     if save_timestamps:
         print 'STAGE 1: finding timestamps'
