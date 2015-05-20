@@ -11,6 +11,7 @@ import scipy.linalg
 import traceback
 import _pmat_jacobian # in pyrex/C for speed
 import _pmat_jacobian_water # in pyrex/C for speed
+import _fastgeom as fastgeom
 import flydra.water as water
 import flydra.align
 import xml.etree.ElementTree as ET
@@ -707,17 +708,15 @@ class SingleCameraCalibration:
 
     def get_optical_axis(self):
         # project back through principal point to get 3D line
-        #import flydra.geom as geom
-        import flydra.fastgeom as geom
         c1 = self.get_cam_center()[:,0]
         pp = self.get_image_center()
 
         x2d = (pp[0],pp[1],1.0)
         c2 = numpy.dot(self.pmat_inv, as_column(x2d))[:,0]
         c2 = c2[:3]/c2[3]
-        c1 = geom.ThreeTuple(c1)
-        c2 = geom.ThreeTuple(c2)
-        return geom.line_from_points( c1, c2 )
+        c1 = fastgeom.ThreeTuple(c1)
+        c2 = fastgeom.ThreeTuple(c2)
+        return fastgeom.line_from_points( c1, c2 )
 
     def get_up_vector(self):
         # create up vector from image plane
@@ -1548,7 +1547,6 @@ class Reconstructor:
                  STRICT_WATER = orig_strict
 
             import flydra.kalman.flydra_tracker
-            import _fastgeom as geom
             frame = 0
             tro = flydra.kalman.flydra_tracker.TrackedObject(
                 self,
@@ -1600,7 +1598,7 @@ class Reconstructor:
                                   frame_pt_idx, cur_val, mean_val, sumsqf_val)
 
                 pluecker_hz = (ray0, ray1, ray2, ray3, ray4, ray5)
-                projected_line=geom.line_from_HZline(pluecker_hz)
+                projected_line=fastgeom.line_from_HZline(pluecker_hz)
                 data_dict[camn] = [ (pt_undistorted, projected_line) ]
 
             delta_dist = 1.0
