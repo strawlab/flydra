@@ -235,6 +235,14 @@ def main():
                                   show_progress=args.progress,
                                   show_progress_json=args.show_progress_json,
                                   )
+def print_summarize_file(fname):
+    import pandas
+
+    orig_store = pandas.HDFStore(fname,mode='r')
+    orig_df = orig_store['reprojection']
+    print fname,'-'*50
+    for x,y in orig_df.groupby('camn'):
+        print x, y.dist.mean()
 
 if __name__=='__main__':
     main()
