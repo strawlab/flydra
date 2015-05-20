@@ -359,6 +359,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object found_data_
             bad_cam_ids.append( cam_id )
             continue # don't build this row
 
+        # Similar to code in reconstruct.Reconstructor.find3d()
 
         Pmat = Pmat_fastnx[cam_id] # Pmat is 3 rows x 4 columns
         row3 = Pmat[2,:]

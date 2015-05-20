@@ -1647,10 +1647,12 @@ class Reconstructor:
                     # See http://math.stackexchange.com/questions/61719/finding-the-intersection-point-of-many-lines-in-3d-point-closest-to-all-lines
                     1/0
                 else:
+                    # Similar to code in
+                    # _reconstruct_utils.hypothesis_testing_algorithm__find_best_3d()
                     Pmat = self.Pmat[cam_id] # Pmat is 3 rows x 4 columns
-                    row2 = Pmat[2,:]
-                    A.append( x*row2 - Pmat[0,:] )
-                    A.append( y*row2 - Pmat[1,:] )
+                    row3 = Pmat[2,:]
+                    A.append( x*row3 - Pmat[0,:] )
+                    A.append( y*row3 - Pmat[1,:] )
 
             if return_line_coords and have_line_coords:
                 slope,eccentricity, p1,p2,p3,p4 = value_tuple[3:]
