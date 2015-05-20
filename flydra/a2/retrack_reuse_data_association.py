@@ -178,21 +178,23 @@ def retrack_reuse_data_association(h5_filename=None,
                         cam_ids_and_points2d.append( (cam_id,observed_2d) )
 
                     if first_frame_per_obj:
+                        if len( cam_ids_and_points2d ) < 2:
+                            warnings.warn('some 2D data seems to be missing, cannot completely reconstruct')
+                        else:
+                            X3d = R.find3d( cam_ids_and_points2d,
+                                            return_line_coords = False,
+                                            simulate_via_tracking_dynamic_model=kalman_model)
 
-                        X3d = R.find3d( cam_ids_and_points2d,
-                                        return_line_coords = False,
-                                        simulate_via_tracking_dynamic_model=kalman_model)
-
-                        # first frame
-                        tro = TrackedObject(R, obj_id, framenumber,
-                                            X3d, # obs0_position
-                                            None, # obs0_Lcoords
-                                            observation_camns, # first_observation_camns
-                                            observation_idxs, # first_observation_idxs
-                                            kalman_model=kalman_model,
-                                            )
-                        del X3d
-                        first_frame_per_obj = False
+                            # first frame
+                            tro = TrackedObject(R, obj_id, framenumber,
+                                                X3d, # obs0_position
+                                                None, # obs0_Lcoords
+                                                observation_camns, # first_observation_camns
+                                                observation_idxs, # first_observation_idxs
+                                                kalman_model=kalman_model,
+                                                )
+                            del X3d
+                            first_frame_per_obj = False
                     else:
                         tro.calculate_a_posteriori_estimate(framenumber,
                                                             data_dict,
