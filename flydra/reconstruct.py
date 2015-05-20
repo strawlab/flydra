@@ -12,6 +12,7 @@ import traceback
 import _pmat_jacobian # in pyrex/C for speed
 import _pmat_jacobian_water # in pyrex/C for speed
 import _fastgeom as fastgeom
+import flydra.geom as slowgeom
 import flydra.water as water
 import flydra.align
 import xml.etree.ElementTree as ET
@@ -22,6 +23,8 @@ from optparse import OptionParser
 R2D = 180.0/np.pi
 D2R = np.pi/180.0
 
+Z0_plane = slowgeom.Plane( slowgeom.ThreeTuple( (0,0,1) ), 0 )
+
 DEFAULT_WATER_REFRACTIVE_INDEX=1.3330
 
 WARN_CALIB_DIFF = False
@@ -30,7 +33,6 @@ L_i = nx.array([0,0,0,1,3,2])
 L_j = nx.array([1,2,3,2,1,3])
 
 NO_BACKWARDS_COMPAT = int(os.environ.get('FLYDRA_NO_BACKWARDS_COMPAT','0'))
-STRICT_WATER = int(os.environ.get('STRICT_WATER','0'))
 
 def mat2quat(m):
     """Initialize q from either a mat3 or mat4 and returns self."""
@@ -388,6 +390,37 @@ def test_angles_near2():
     a = 1.51026430701
     b = 2.92753197003
     assert angles_near(a,b,eps=10.0*D2R,mod_pi=True) == False
+
+def lineIntersect3D(PA,PB):
+    """Find intersection point of lines in 3D space, in the least squares sense.
+
+PA :          Nx3-matrix containing starting point of N lines
+PB :          Nx3-matrix containing end point of N lines
+P_Intersect : Best intersection point of the N lines, in least squares sense.
+distances   : Distances from intersection point to the input lines
+Anders Eikenes, 2012
+translated to Python by Andrew Straw 2015
+"""
+    # from http://www.mathworks.com/matlabcentral/fileexchange/37192
+    Si = PB-PA # N lines described as vectors
+    ni = Si / np.sqrt(np.sum(Si**2,axis=1))[:,np.newaxis] # Normalize vectors
+    nx = ni[:,0]; ny = ni[:,1]; nz = ni[:,2]
+    SXX = np.sum( nx**2 - 1)
+    SYY = np.sum( ny**2 - 1)
+    SZZ = np.sum( nz**2 - 1)
+    SXY = np.sum( nx*ny )
+    SXZ = np.sum( nx*nz )
+    SYZ = np.sum( ny*nz )
+    S = np.array([[SXX, SXY, SXZ],
+                  [SXY, SYY, SYZ],
+                  [SXZ, SYZ, SZZ]])
+    CX = np.sum( PA[:,0] * (nx**2-1) + PA[:,1]*(nx*ny)   + PA[:,2]*(nx*nz) )
+    CY = np.sum( PA[:,0] * (nx*ny)   + PA[:,1]*(ny**2-1) + PA[:,2]*(ny*nz) )
+    CZ = np.sum( PA[:,0] * (nx*nz)   + PA[:,1]*(ny*nz)   + PA[:,2]*(nz**2-1) )
+    C = np.array([CX,CY,CZ])
+    P_intersect_results = np.linalg.lstsq( S, C )
+
+    return P_intersect_results[0]
 
 def test_pymvg_roundtrip():
     from pymvg.camera_model import CameraModel
@@ -1528,23 +1561,16 @@ class Reconstructor:
         This function can optionally undistort points.
 
         """
-        global STRICT_WATER
         if simulate_via_tracking_dynamic_model is not None:
             # simulate via tracking uses flydra tracking framework to
             # iteratively attempt to find location
             assert return_X_coords == True
             assert return_line_coords == False
 
-            # get original 3D guess (disable strict water check)
-            orig_strict = STRICT_WATER
-            STRICT_WATER = 'no warn'
-            try:
-                start_guess = self.find3d( cam_ids_and_points2d,
-                                           return_X_coords = return_X_coords,
-                                           return_line_coords = return_line_coords,
-                                           )
-            finally:
-                 STRICT_WATER = orig_strict
+            start_guess = self.find3d( cam_ids_and_points2d,
+                                       return_X_coords = return_X_coords,
+                                       return_line_coords = return_line_coords,
+                                       )
 
             import flydra.kalman.flydra_tracker
             frame = 0
@@ -1573,7 +1599,10 @@ class Reconstructor:
                     camn2cam_id[next_camn] = cam_id
                     next_camn += 1
                 camn = cam_id2camn[cam_id]
-                x_undistorted,y_undistorted = self.undistort( cam_id, pt2d )
+                if undistort:
+                    x_undistorted,y_undistorted = self.undistort( cam_id, pt2d )
+                else:
+                    x_undistorted,y_undistorted = pt2d[:2]
                 rise=np.nan
                 run=np.nan
                 area=100.0
@@ -1606,7 +1635,7 @@ class Reconstructor:
             max_count = 100
             while delta_dist > eps:
                 if frame > max_count:
-                    warnings.warn('exceeded max count (delta_dist: %f)'%delta_dist)
+                    warnings.warn('exceeded max count')
                     break
                 frame += 1
                 tro.calculate_a_posteriori_estimate(frame,data_dict,
@@ -1618,16 +1647,9 @@ class Reconstructor:
                     delta_dist = np.sqrt(np.sum((prev[:3]-cur[:3])**2))
             return cur[:3]
 
-        if self.wateri is not None:
-            if STRICT_WATER=='no warn':
-                pass
-            elif STRICT_WATER:
-                raise NotImplementedError('no find3d() implemented with refraction')
-            else:
-                warnings.warn('reconstruct find3d() done without '
-                              'refraction correction. Result will be wrong. '
-                              'Set environment variable STRICT_WATER to '
-                              'raise an error rather than give this warning.')
+
+        if self.wateri is not None and return_line_coords:
+            raise NotImplementedError()
 
         svd = scipy.linalg.svd
         # for info on SVD, see Hartley & Zisserman (2003) p. 593 (see
@@ -1636,6 +1658,8 @@ class Reconstructor:
         # Construct matrices
         A=[]
         P=[]
+        PA = []
+        PB = []
         for m, (cam_id,value_tuple) in enumerate(cam_ids_and_points2d):
             if len(value_tuple)==2:
                 # only point information ( no line )
@@ -1651,11 +1675,48 @@ class Reconstructor:
                 # get shape information from each view of a blob:
                 x,y,area = value_tuple[:3]
                 have_line_coords = True
+
             if return_X_coords:
-                Pmat = self.Pmat[cam_id] # Pmat is 3 rows x 4 columns
-                row2 = Pmat[2,:]
-                A.append( x*row2 - Pmat[0,:] )
-                A.append( y*row2 - Pmat[1,:] )
+                if self.wateri is not None:
+                    # Per camera:
+                    #   Get point on water surface in this direction.
+                    #   Get underwater line from water surface (using Snell's Law).
+                    # All lines -> closest point to all lines.
+
+                    # Get point on water surface in this direction.
+                    pluecker_hz = self.get_projected_line_from_2d(cam_id,(x,y))
+                    projected_line=slowgeom.line_from_HZline(pluecker_hz)
+                    surface_pt_g = projected_line.intersect(Z0_plane)
+                    surface_pt = surface_pt_g.vals
+                    pt1 = self.get_camera_center(cam_id)[:,0]
+                    pt2 = np.array(pt1,copy=True); pt2[2]=0 # closest point to camera on water surface, assumes water at z==0
+                    surface_pt_cam = surface_pt - pt2
+
+                    # Get underwater line from water surface (using Snell's Law).
+                    pt_angle = np.arctan2( surface_pt_cam[1], surface_pt_cam[0] ) # OK to here
+                    pt_horiz_dist = np.sqrt(np.sum(surface_pt_cam**2)) # horizontal distance from camera to water surface
+                    theta_air = np.arctan2( pt_horiz_dist, pt1[2] )
+                    # sin(theta_water)/sin(theta_air) = sin(n_air)/sin(n_water)
+                    sin_theta_water = np.sin(theta_air)*self.wateri.n1/self.wateri.n2
+                    theta_water = np.arcsin( sin_theta_water )
+                    horiz_dist_at_depth_1 = np.tan(theta_water)
+                    horiz_dist_cam_depth_1 = horiz_dist_at_depth_1 + pt_horiz_dist # total horizontal distance
+                    deep_pt_cam = (horiz_dist_cam_depth_1*np.cos(pt_angle),
+                                   horiz_dist_cam_depth_1*np.sin(pt_angle),
+                                   -1)
+                    deep_pt = deep_pt_cam + pt2
+
+                    PA.append( surface_pt )
+                    PB.append( deep_pt )
+
+                    # See http://math.stackexchange.com/questions/61719/finding-the-intersection-point-of-many-lines-in-3d-point-closest-to-all-lines
+                else:
+                    # Similar to code in
+                    # _reconstruct_utils.hypothesis_testing_algorithm__find_best_3d()
+                    Pmat = self.Pmat[cam_id] # Pmat is 3 rows x 4 columns
+                    row3 = Pmat[2,:]
+                    A.append( x*row3 - Pmat[0,:] )
+                    A.append( y*row3 - Pmat[1,:] )
 
             if return_line_coords and have_line_coords:
                 slope,eccentricity, p1,p2,p3,p4 = value_tuple[3:]
@@ -1664,11 +1725,17 @@ class Reconstructor:
 
         # Calculate best point
         if return_X_coords:
-            A=nx.array(A)
-            u,d,vt=svd(A)
-            X = vt[-1,0:3]/vt[-1,3] # normalize
-            if not return_line_coords:
+            if self.wateri is not None:
+                PA = np.array(PA)
+                PB = np.array(PB)
+                X = lineIntersect3D(PA,PB)
                 return X
+            else:
+                A=nx.array(A)
+                u,d,vt=svd(A)
+                X = vt[-1,0:3]/vt[-1,3] # normalize
+                if not return_line_coords:
+                    return X
 
         if not return_line_coords or len(P) < 2:
             Lcoords = None

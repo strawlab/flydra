@@ -56,6 +56,7 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
         frame_data,
         camn2cam_id,
         area_threshold=tracker.area_threshold)
+    # found_data_dict contains undistorted points
 
     hypothesis_test_found_point = False
     # test to short-circuit rest of function
