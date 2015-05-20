@@ -49,8 +49,9 @@ def convert(infilename,
         stop_obj_id=numpy.inf
 
     h5file_raw = tables.openFile(infilename,mode='r')
-    extra_vars = {}
+    h52d = h5file_raw
     close_h52d = False
+    extra_vars = {}
 
     if save_timestamps:
         print 'STAGE 1: finding timestamps'
@@ -61,9 +62,7 @@ def convert(infilename,
         except tables.exceptions.NoSuchNodeError:
             table_kobs   = h5file_raw.root.kalman_observations # table to get framenumbers from
 
-        if file_time_data is None:
-            h52d = h5file_raw
-        else:
+        if file_time_data is not None:
             h52d = tables.openFile(file_time_data,mode='r')
             close_h52d = True
 
