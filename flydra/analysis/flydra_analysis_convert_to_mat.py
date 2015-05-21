@@ -186,12 +186,18 @@ def do_it(filename=None,
                 if new_colname.endswith('_secs') or new_colname.endswith('_nsecs'):
                     dtype_elements.append( (new_colname, numpy.uint64) )
                 else:
+                    if orig_colname not in data:
+                        # do not do this column
+                        continue
                     dtype_elements.append( (new_colname, data[orig_colname].dtype) )
                 assert data[orig_colname].ndim == 1
                 if num_rows is None:
                     num_rows = data[orig_colname].shape[0]
                 else:
                     assert num_rows == data[orig_colname].shape[0]
+            if len(dtype_elements)==0:
+                # do not save this table
+                continue
             my_dtype = numpy.dtype( dtype_elements )
             arr = numpy.empty( num_rows, dtype=my_dtype )
             for orig_colname,new_colname in colnames:
