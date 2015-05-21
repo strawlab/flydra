@@ -299,7 +299,6 @@ def convert(infilename,
         recording_flydra_version=recording_flydra_version,
         smoothing_flydra_version=smoothing_flydra_version,
         )
-    ca.close()
     if show_progress_json:
         result_utils.do_json_progress(100)
 
