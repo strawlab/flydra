@@ -122,7 +122,7 @@ def setup_data(with_water=False, fps=120.0, with_orientation=False, with_distort
 def test_retracking_without_data_association():
     ca = core_analysis.get_global_CachingAnalyzer()
 
-    orig_fname = pkg_resources.resource_filename('flydra.a2','sample_datafile.h5')
+    orig_fname = pkg_resources.resource_filename('flydra.a2','sample_datafile-v0.4.28.h5')
 
     tmpdir = tempfile.mkdtemp()
     try:

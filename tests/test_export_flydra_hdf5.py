@@ -2,7 +2,7 @@ import flydra.a2.data2smoothed
 import os, tempfile, shutil
 import pkg_resources
 
-DATAFILE2D = pkg_resources.resource_filename('flydra.a2','sample_datafile.h5')
+DATAFILE2D = pkg_resources.resource_filename('flydra.a2','sample_datafile-v0.4.28.h5')
 #DATAFILE3D = pkg_resources.resource_filename('flydra.a2','sample_datafile.h5')
 DATAFILE3D = pkg_resources.resource_filename('flydra.a2','sample_datafile.h5.retracked.h5')
 
