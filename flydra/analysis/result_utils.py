@@ -393,13 +393,13 @@ class TextlogParseError(Exception):
 
 def read_textlog_header(results,fail_on_error=True):
     try:
-        textlog = results.root.textlog.readCoordinates([0])
+        textlog1 = results.root.textlog.readCoordinates([0])
     except PT.exceptions.NoSuchNodeError, err:
         if fail_on_error:
             raise
         else:
             return None
-    infostr = textlog['message'].tostring().strip('\x00')
+    infostr = textlog1['message'].tostring().strip('\x00')
     if not (infostr.startswith('MainBrain running at') or infostr.startswith('kalmanize running at')
             or infostr.startswith('retrack_reuse_data_association running at')):
         raise TextlogParseError('could not parse textlog - old version?')
@@ -415,6 +415,29 @@ def read_textlog_header(results,fail_on_error=True):
         if strvalue=='unknown':
             continue
         parsed[name]=strvalue
+
+    # Backwards compatibility to get version number in old files.
+    if 'flydra_version' not in parsed:
+        # get second line of text log, if it exists
+        try:
+            textlog2 = results.root.textlog.readCoordinates([1])
+        except IndexError as err:
+            pass
+        else:
+            if textlog2['mainbrain_timestamp']==textlog1['mainbrain_timestamp']:
+                assert textlog2['cam_id']=='mainbrain'
+                message2 = textlog2['message'].tostring().strip('\x00')
+                version_start_string = 'using flydra version '
+                if message2.startswith(version_start_string):
+                    test_version = message2[len(version_start_string):]
+                    try:
+                        # check if it can be parsed
+                        StrictVersion(test_version)
+                    except ValueError as err:
+                        # cannot be parsed
+                        pass
+                    else:
+                        parsed['flydra_version'] = test_version
     return parsed
 
 def get_fps(results,fail_on_error=True):
