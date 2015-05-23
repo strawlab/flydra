@@ -4,7 +4,7 @@ import pkg_resources
 
 DATAFILE2D = pkg_resources.resource_filename('flydra.a2','sample_datafile-v0.4.28.h5')
 #DATAFILE3D = pkg_resources.resource_filename('flydra.a2','sample_datafile.h5')
-DATAFILE3D = pkg_resources.resource_filename('flydra.a2','sample_datafile.h5.retracked.h5')
+DATAFILE3D = pkg_resources.resource_filename('flydra.a2','sample_datafile-v0.4.28.h5.retracked.h5')
 
 def test_export_flydra_hdf5():
     for from_source in ['smoothed', 'ML_estimates']:
