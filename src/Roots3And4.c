@@ -25,20 +25,11 @@
  */
 
 #include    <math.h>
-#ifndef M_PI
-#define M_PI          3.14159265358979323846
-#endif
-extern double   sqrt(), cbrt(), cos(), acos();
 
 /* epsilon surrounding for near zero values */
 
 #define     EQN_EPS     1e-30
 #define	    IsZero(x)	((x) > -EQN_EPS && (x) < EQN_EPS)
-
-#ifdef NOCBRT
-#define     cbrt(x)     ((x) > 0.0 ? pow((double)(x), 1.0/3.0) : \
-                          ((x) < 0.0 ? -pow((double)-(x), 1.0/3.0) : 0.0))
-#endif
 
 int SolveQuadric(c, s)
     double c[ 3 ];
