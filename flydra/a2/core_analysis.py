@@ -2019,11 +2019,10 @@ class CachingAnalyzer:
             if preloaded_dict['self_should_close']:
                 preloaded_dict['kresults'].close()
                 preloaded_dict['self_should_close'] = False
-        del_fnames = []
-        for fname, h5file in self._smooth_cache.open_cache_h5files.iteritems():
-            h5file.close()
-            del_fnames.append(fname)
+        del_fnames = [fname for fname in self._smooth_cache.open_cache_h5files]
         for fname in del_fnames:
+            h5file = self._smooth_cache.open_cache_h5files[fname]
+            h5file.close()
             del self._smooth_cache.open_cache_h5files[fname]
 
     def __del__(self):
