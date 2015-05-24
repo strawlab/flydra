@@ -22,19 +22,18 @@
  *                  reduced considerably (e.g. to 1E-30), results will be
  *                  correct but multiple roots might be reported more
  *                  than once.
+ *  May 24, 2015    Make eps an input variable. Assume math functions.
+ *                  Make IsZero a function. Remove compiler warnings.
  */
 
 #include    <math.h>
+#include "Roots3And4.h"
 
-/* epsilon surrounding for near zero values */
+inline int IsZero(double x, double eps) {
+  return ((x) > -eps && (x) < eps);
+}
 
-#define     EQN_EPS     1e-30
-#define	    IsZero(x)	((x) > -EQN_EPS && (x) < EQN_EPS)
-
-int SolveQuadric(c, s)
-    double c[ 3 ];
-    double s[ 2 ];
-{
+int SolveQuadric(double c[3], double s[2], double eps) {
     double p, q, D;
 
     /* normal form: x^2 + px + q = 0 */
@@ -44,7 +43,7 @@ int SolveQuadric(c, s)
 
     D = p * p - q;
 
-    if (IsZero(D))
+    if (IsZero(D,eps))
     {
 	s[ 0 ] = - p;
 	return 1;
@@ -53,20 +52,16 @@ int SolveQuadric(c, s)
     {
 	return 0;
     }
-    else if (D > 0)
-    {
-	double sqrt_D = sqrt(D);
+    // (D > 0)
+    double sqrt_D = sqrt(D);
 
-	s[ 0 ] =   sqrt_D - p;
-	s[ 1 ] = - sqrt_D - p;
-	return 2;
-    }
+    s[ 0 ] =   sqrt_D - p;
+    s[ 1 ] = - sqrt_D - p;
+    return 2;
 }
 
 
-int SolveCubic(c, s)
-    double c[ 4 ];
-    double s[ 3 ];
+int SolveCubic(double c[4], double s[3], double eps)
 {
     int     i, num;
     double  sub;
@@ -92,9 +87,9 @@ int SolveCubic(c, s)
     cb_p = p * p * p;
     D = q * q + cb_p;
 
-    if (IsZero(D))
+    if (IsZero(D,eps))
     {
-	if (IsZero(q)) /* one triple solution */
+       if (IsZero(q,eps)) /* one triple solution */
 	{
 	    s[ 0 ] = 0;
 	    num = 1;
@@ -138,9 +133,7 @@ int SolveCubic(c, s)
 }
 
 
-int SolveQuartic(c, s)
-    double c[ 5 ]; 
-    double s[ 4 ];
+int SolveQuartic(double c[5], double s[4], double eps)
 {
     double  coeffs[ 4 ];
     double  z, u, v, sub;
@@ -163,7 +156,7 @@ int SolveQuartic(c, s)
     q = 1.0/8 * sq_A * A - 1.0/2 * A * B + C;
     r = - 3.0/256*sq_A*sq_A + 1.0/16*sq_A*B - 1.0/4*A*C + D;
 
-    if (IsZero(r))
+    if (IsZero(r,eps))
     {
 	/* no absolute term: y(y^3 + py + q) = 0 */
 
@@ -172,7 +165,7 @@ int SolveQuartic(c, s)
 	coeffs[ 2 ] = 0;
 	coeffs[ 3 ] = 1;
 
-	num = SolveCubic(coeffs, s);
+	num = SolveCubic(coeffs, s, eps);
 
 	s[ num++ ] = 0;
     }
@@ -185,7 +178,7 @@ int SolveQuartic(c, s)
 	coeffs[ 2 ] = - 1.0/2 * p;
 	coeffs[ 3 ] = 1;
 
-	(void) SolveCubic(coeffs, s);
+	(void) SolveCubic(coeffs, s, eps);
 
 	/* ... and take the one real solution ... */
 
@@ -196,14 +189,14 @@ int SolveQuartic(c, s)
 	u = z * z - r;
 	v = 2 * z - p;
 
-	if (IsZero(u))
+	if (IsZero(u,eps))
 	    u = 0;
 	else if (u > 0)
 	    u = sqrt(u);
 	else
 	    return 0;
 
-	if (IsZero(v))
+	if (IsZero(v,eps))
 	    v = 0;
 	else if (v > 0)
 	    v = sqrt(v);
@@ -214,13 +207,13 @@ int SolveQuartic(c, s)
 	coeffs[ 1 ] = q < 0 ? -v : v;
 	coeffs[ 2 ] = 1;
 
-	num = SolveQuadric(coeffs, s);
+	num = SolveQuadric(coeffs, s, eps);
 
 	coeffs[ 0 ]= z + u;
 	coeffs[ 1 ] = q < 0 ? v : -v;
 	coeffs[ 2 ] = 1;
 
-	num += SolveQuadric(coeffs, s + num);
+	num += SolveQuadric(coeffs, s + num, eps);
     }
 
     /* resubstitute */
