@@ -38,6 +38,7 @@ def get_config_defaults():
             'obj_labels':False,
             'linewidth':1.0,
             'show_cam_id':False,
+            'image_manipulation':'raw',
             }
     default = collections.defaultdict(dict)
     default['what to show']=what
@@ -336,6 +337,7 @@ def make_montage( h5_filename,
                 cam_id = frame_data['cam_id']
                 camn = frame_data['camn']
                 image = frame_data['image']
+                mean_image = frame_data.get('mean',None)
                 del frame_data
             except KeyError:
                 # no data saved (frame skip on Prosilica camera?)
@@ -349,6 +351,7 @@ def make_montage( h5_filename,
                     image = np.empty((im_h,im_w),dtype=np.uint8); image.fill(255)
                     blank_images[cam_id] = image
                 image = blank_images[cam_id]
+                mean_image = None
             save_fname = 'tmp_frame%07d_%s.png'%(frame,cam_id)
             save_fname_path = os.path.join(dest_dir, save_fname)
 
@@ -407,7 +410,12 @@ def make_montage( h5_filename,
             device_rect = (device_x,device_y,device_w,device_h)
             with canv.set_user_coords(device_rect, user_rect,
                                       transform=transform):
-                canv.imshow(image,0,0,cmap=colormap)
+                if config['what to show']['image_manipulation'] == 'raw':
+                    canv.imshow(image,0,0,cmap=colormap)
+                if config['what to show']['image_manipulation'] == 'absdiff':
+                    adsdiff_image = abs(image.astype(np.int16)-mean_image.astype(np.int16))
+                    scaled_show = np.clip((5*adsdiff_image)+127, 0, 255).astype(np.uint8)
+                    canv.imshow(scaled_show,0,0,cmap=colormap)
                 if config['what to show']['show_2d_position'] and camn is not None:
                     cond = tracker_data['camn']==camn
                     this_cam_data = tracker_data[cond]
@@ -612,6 +620,7 @@ zoom_factor = 5
 obj_labels = False
 linewidth = 1.0
 show_cam_id = False
+image_manipulation = 'raw'
 
 Config files may also have sections such as:
 

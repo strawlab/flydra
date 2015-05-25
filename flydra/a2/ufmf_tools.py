@@ -208,6 +208,7 @@ def iterate_frames(h5_filename,
                         image,image_ts,more  = ufmf.get_next_frame(_return_more=True)
                     else:
                         image,image_ts  = ufmf.get_next_frame()
+                        more = None
                 except ufmf_mod.NoMoreFramesException:
                     image_ts = None
                 if this_camn_ts != image_ts:
@@ -229,6 +230,7 @@ def iterate_frames(h5_filename,
                                                              _return_more=True)
                     else:
                         image,image_ts = ufmf.get_frame(ufmf_frame_no)
+                        more = None
 
                     del ufmf_frame_no, ufmf_frame_idxs
                 coding = ufmf.get_format()
@@ -246,7 +248,7 @@ def iterate_frames(h5_filename,
                     this_cam_h5_data['cam_received_timestamp'][0],
                     'ufmf_frame_timestamp':this_cam_h5_data[timestamp_name][0],
                     }
-                if is_real_ufmf:
+                if more is not None:
                     per_frame_dict[ufmf_fname].update(more)
             per_frame_dict['tracker_data']=this_h5_data
             per_frame_dict['global_data']=global_data # on every iteration, pass our global data
