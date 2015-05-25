@@ -334,11 +334,6 @@ def make_montage( h5_filename,
         for movie_idx,ufmf_fname in enumerate(movie_fnames):
             try:
                 frame_data = frame_dict[ufmf_fname]
-                cam_id = frame_data['cam_id']
-                camn = frame_data['camn']
-                image = frame_data['image']
-                mean_image = frame_data.get('mean',None)
-                del frame_data
             except KeyError:
                 # no data saved (frame skip on Prosilica camera?)
                 if movie_cam_ids is not None:
@@ -352,6 +347,13 @@ def make_montage( h5_filename,
                     blank_images[cam_id] = image
                 image = blank_images[cam_id]
                 mean_image = None
+            else:
+                cam_id = frame_data['cam_id']
+                camn = frame_data['camn']
+                image = frame_data['image']
+                if config['what to show']['image_manipulation'] == 'absdiff':
+                    mean_image = frame_data['mean']
+                del frame_data
             save_fname = 'tmp_frame%07d_%s.png'%(frame,cam_id)
             save_fname_path = os.path.join(dest_dir, save_fname)
 
@@ -413,9 +415,10 @@ def make_montage( h5_filename,
                 if config['what to show']['image_manipulation'] == 'raw':
                     canv.imshow(image,0,0,cmap=colormap)
                 if config['what to show']['image_manipulation'] == 'absdiff':
-                    adsdiff_image = abs(image.astype(np.int16)-mean_image.astype(np.int16))
-                    scaled_show = np.clip((5*adsdiff_image)+127, 0, 255).astype(np.uint8)
-                    canv.imshow(scaled_show,0,0,cmap=colormap)
+                    if mean_image is not None:
+                        adsdiff_image = abs(image.astype(np.int16)-mean_image.astype(np.int16))
+                        scaled_show = np.clip((5*adsdiff_image)+127, 0, 255).astype(np.uint8)
+                        canv.imshow(scaled_show,0,0,cmap=colormap)
                 if config['what to show']['show_2d_position'] and camn is not None:
                     cond = tracker_data['camn']==camn
                     this_cam_data = tracker_data[cond]
