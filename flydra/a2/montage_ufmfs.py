@@ -35,6 +35,7 @@ def get_config_defaults():
             'zoom_factor':5,
             'white_background': False,
             'max_resolution': None,
+            'border_pixels': 0,
             'obj_labels':False,
             'linewidth':1.0,
             'show_cam_id':False,
@@ -360,24 +361,29 @@ def make_montage( h5_filename,
             pixel_aspect = config[cam_id].get('pixel_aspect',1)
             transform = config[cam_id].get('transform','orig')
 
+            border_pixels = config['what to show']['border_pixels']
+
             if config['what to show']['max_resolution'] is not None:
+                b2 = border_pixels*2
                 fix_w, fix_h = config['what to show']['max_resolution']
-                fix_aspect = fix_w/float(fix_h)
+                fix_aspect = (fix_w-b2)/float(fix_h-b2)
                 desire_aspect = image.shape[1]/float(image.shape[0]*pixel_aspect)
                 if desire_aspect >= fix_aspect:
                     # image is wider than resolution given
-                    device_w = fix_w
-                    device_h = fix_w/desire_aspect
-                    device_x = 0
-                    device_y = (fix_h-device_h)/2.0
+                    device_w = fix_w-b2
+                    device_h = (fix_w-b2)/desire_aspect
+                    device_x = border_pixels
+                    device_y = (fix_h-device_h+border_pixels)/2.0
                 else:
                     # image is taller than resolution given
-                    device_h = fix_h
-                    device_w = fix_h*desire_aspect
-                    device_y = 0
-                    device_x = (fix_w-device_w)/2.0
+                    device_h = fix_h-b2
+                    device_w = (fix_h-b2)*desire_aspect
+                    device_y = border_pixels
+                    device_x = (fix_w-device_w+border_pixels)/2.0
                 user_rect = (0,0,image.shape[1],image.shape[0])
             elif config['what to show']['zoom_obj']:
+                if border_pixels != 0:
+                    raise NotImplementedError()
                 device_x = 0
                 device_y = 0
                 device_w = config['what to show']['zoom_orig_pixels']*config['what to show']['zoom_factor']
@@ -400,12 +406,12 @@ def make_montage( h5_filename,
                     # we're not tracking object -- don't draw anything
                     user_rect = (-1000,-1000,10,10)
             else:
-                device_x = 0
-                device_y = 0
+                device_x = border_pixels
+                device_y = border_pixels
                 device_w = image.shape[1]
                 device_h = int(image.shape[0]*pixel_aspect) # compensate for pixel_aspect
-                fix_w = device_w
-                fix_h = device_h
+                fix_w = device_w+2*border_pixels
+                fix_h = device_h+2*border_pixels
                 user_rect = (0,0,image.shape[1],image.shape[0])
 
             canv=benu.Canvas(save_fname_path,fix_w,fix_h)
@@ -617,6 +623,7 @@ show_3d_smoothed_orientation = False
 minimum_display_orientation_quality = 0
 white_background =  False
 max_resolution = None
+border_pixels = 0
 zoom_obj = None
 zoom_orig_pixels = 50
 zoom_factor = 5
