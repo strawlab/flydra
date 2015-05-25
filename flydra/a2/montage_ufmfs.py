@@ -165,6 +165,7 @@ def make_montage( h5_filename,
                   candidate_index = 0,
                   nth_frame=1,
                   verbose = False,
+                  reconstructor=None,
                   **kwargs):
     config = get_config_defaults()
     if cfg_filename is not None:
@@ -215,7 +216,10 @@ def make_montage( h5_filename,
                 dataqual_raw_3d = None
         else:
             data_raw_3d, dataqual_raw_3d = None, None
-        R = reconstruct.Reconstructor(kalman_filename)
+        if reconstructor is None:
+            R = reconstruct.Reconstructor(kalman_filename)
+        else:
+            R = reconstruct.Reconstructor(reconstructor)
     else:
         data3d = R = data_raw_3d = None
         dataqual_raw_3d = None
@@ -647,7 +651,11 @@ transform='rot 180' # rotate the image 180 degrees (See transform
 
     parser.add_option('-k', "--kalman-file", dest="kalman_filename",
                       type='string',
-                      help=".h5 file with 3D kalman data and 3D reconstructor")
+                      help=".h5 file with 3D kalman data (and reconstructor if not given)")
+
+    parser.add_option('-R', "--reconstructor", dest="reconstructor",
+                      type='string',
+                      help="reconstructor used for computing 2D coordinates")
 
     parser.add_option("--dest-dir", type='string',
                       help="destination directory to save resulting files")
@@ -710,6 +718,8 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     if movie_cam_ids is not None:
         movie_cam_ids = movie_cam_ids.split( os.pathsep )
 
+    reconstructor = options.reconstructor
+
     h5_filename = args[0]
     kwargs = core_analysis.get_options_kwargs(options)
     make_montage( h5_filename,
@@ -729,4 +739,5 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   candidate_index = options.candidate,
                   verbose = options.verbose,
                   nth_frame = options.nth_frame,
+                  reconstructor = reconstructor,
                   **kwargs)
