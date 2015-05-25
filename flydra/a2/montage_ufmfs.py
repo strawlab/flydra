@@ -251,6 +251,8 @@ def make_montage( h5_filename,
 
     if len(movie_fnames)==0:
         raise ValueError('no input movies -- nothing to do')
+    elif verbose:
+        print 'movie_fnames:',movie_fnames
 
     if dest_dir is None:
         dest_dir = os.curdir
@@ -653,10 +655,12 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                       help="don't remove intermediate images")
 
     parser.add_option('--movie-fnames', type='string', default=None,
-                      help="names of movie files (don't autodiscover from .h5)")
+                      help=("names of movie files (separator is %r; "
+                            "don't autodiscover from .h5)"%(os.pathsep,)))
 
     parser.add_option('--movie-cam-ids', type='string', default=None,
-                      help="cam_ids of movie files (don't autodiscover from .h5)")
+                      help=("cam_ids of movie files (separator is %r; "
+                            "don't autodiscover from .h5)"%(os.pathsep,)))
 
     parser.add_option("--verbose", action='store_true', default=False,
                       help="verbose mode (help understand autodiscovery)")
