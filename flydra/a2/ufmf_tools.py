@@ -53,6 +53,41 @@ def get_cam_id_from_ufmf_fname(ufmf_fname):
 
     return cam_id
 
+frames_by_fmf = {}
+def lru_cache_get_frame( f, idx ):
+    global frames_by_fmf
+
+    # get cache (or create it)
+    try:
+        cached = frames_by_fmf[f]
+    except KeyError:
+        cached = {'idx':None,
+                  }
+        frames_by_fmf[f] = cached
+
+    if cached['idx']!=idx:
+        # cache miss
+        f.seek(idx)
+        return_value = f.get_next_frame()
+        cached['idx']=idx
+        cached['return_value']=return_value
+
+    return cached['return_value']
+
+def fill_more_for( extra, image_ts ):
+    if 'bg_tss' not in extra:
+        return None
+    more = {}
+    bg_tss = extra['bg_tss']
+    bg_fmf = extra['bg_fmf']
+    idxs = np.nonzero((bg_tss >= image_ts))[0]
+    if len(idxs)<1:
+        return None
+    idx = idxs[0]
+    image, image_ts = lru_cache_get_frame( bg_fmf, idx )
+    more['mean']=image
+    return more
+
 def iterate_frames(h5_filename,
                    ufmf_fnames, # or fmfs
                    white_background=False,
@@ -78,8 +113,15 @@ def iterate_frames(h5_filename,
             cam_id = get_cam_id_from_ufmf_fname(ufmf_fname)
         cam_ids.append( cam_id )
         kwargs = {}
+        extra = {}
         if ufmf_fname.lower().endswith('.fmf'):
             ufmf = fmf_mod.FlyMovie(ufmf_fname)
+            bg_fmf_filename = os.path.splitext(ufmf_fname)[0] + '_mean.fmf'
+            if os.path.exists(bg_fmf_filename):
+                extra['bg_fmf'] = fmf_mod.FlyMovie(bg_fmf_filename)
+                extra['bg_tss'] = extra['bg_fmf'].get_all_timestamps()
+                extra['bg_fmf'].seek(0)
+
         else:
             ufmf = ufmf_mod.FlyMovieEmulator(ufmf_fname,
                                              white_background=white_background,
@@ -88,7 +130,7 @@ def iterate_frames(h5_filename,
         global_data['width_heights'][cam_id] = ( ufmf.get_width(), ufmf.get_height() )
         tss = ufmf.get_all_timestamps()
         ufmf.seek(0)
-        ufmfs[ufmf_fname] = (ufmf, cam_id, tss)
+        ufmfs[ufmf_fname] = (ufmf, cam_id, tss, extra)
         min_ts = np.min(tss)
         max_ts = np.max(tss)
         if min_ts > first_ufmf_ts:
@@ -136,7 +178,7 @@ def iterate_frames(h5_filename,
         for cam_id in cam_ids:
             cam_id_camn_already_found = False
             for ufmf_fname in ufmfs.keys():
-                (ufmf, test_cam_id, tss) = ufmfs[ufmf_fname]
+                (ufmf, test_cam_id, tss, extra) = ufmfs[ufmf_fname]
                 if cam_id != test_cam_id:
                     continue
                 assert not cam_id_camn_already_found
@@ -183,7 +225,7 @@ def iterate_frames(h5_filename,
 
             per_frame_dict = {}
             for ufmf_fname in ufmf_fnames:
-                ufmf, cam_id, tss = ufmfs[ufmf_fname]
+                ufmf, cam_id, tss, extra = ufmfs[ufmf_fname]
                 if cam_id not in cam_id2camn:
                     continue
                 camn = cam_id2camn[cam_id]
@@ -207,7 +249,8 @@ def iterate_frames(h5_filename,
                     if is_real_ufmf:
                         image,image_ts,more  = ufmf.get_next_frame(_return_more=True)
                     else:
-                        image,image_ts  = ufmf.get_next_frame()
+                        image,image_ts = ufmf.get_next_frame()
+                        more = fill_more_for( extra, image_ts )
                 except ufmf_mod.NoMoreFramesException:
                     image_ts = None
                 if this_camn_ts != image_ts:
@@ -229,6 +272,7 @@ def iterate_frames(h5_filename,
                                                              _return_more=True)
                     else:
                         image,image_ts = ufmf.get_frame(ufmf_frame_no)
+                        more = fill_more_for( extra, image_ts )
 
                     del ufmf_frame_no, ufmf_frame_idxs
                 coding = ufmf.get_format()
@@ -246,7 +290,7 @@ def iterate_frames(h5_filename,
                     this_cam_h5_data['cam_received_timestamp'][0],
                     'ufmf_frame_timestamp':this_cam_h5_data[timestamp_name][0],
                     }
-                if is_real_ufmf:
+                if more is not None:
                     per_frame_dict[ufmf_fname].update(more)
             per_frame_dict['tracker_data']=this_h5_data
             per_frame_dict['global_data']=global_data # on every iteration, pass our global data
