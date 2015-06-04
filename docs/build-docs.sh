@@ -7,6 +7,8 @@ set -o errexit
 
 VIRTUALENVDIR=PYtest
 
+virtualenv --system-site-packages ${VIRTUALENVDIR}
+
 # activate new virutal environment
 source $VIRTUALENVDIR/bin/activate
 

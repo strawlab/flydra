@@ -1,7 +1,6 @@
 #emacs, this is -*-Python-*- mode
 import numpy as np
 cimport numpy as np
-cimport c_lib
 cimport _fastgeom
 cimport _mahalanobis
 cimport _pmat_jacobian
@@ -47,6 +46,9 @@ cdef double cnan
 cnan = np.nan
 
 ctypedef int mybool
+
+cdef extern from "math.h":
+    double sqrt(double)
 
 cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, np.ndarray[np.double_t, ndim=1] xhatminus):
     cdef int N
@@ -619,7 +621,7 @@ cdef class TrackedObject:
                         dist2=_mahalanobis.dist2( best_3d_location,
                                                   fast_prediction_3d,
                                                   Pminus_inv )
-                        dist = c_lib.sqrt(dist2)
+                        dist = sqrt(dist2)
                         nll_this_point = p_y_x + dist # negative log likelihood of this point
 
                 frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]
