@@ -1,5 +1,4 @@
 #emacs, this is -*-Python-*- mode
-# $Id: c_python.pxd 1020 2006-05-01 22:32:39Z astraw $
 
 ctypedef struct FILE
 
