@@ -1,5 +1,5 @@
-import _refraction
-import _Roots3And4
+import flydra._refraction as _refraction
+import flydra._Roots3And4 as _Roots3And4
 
 import numpy as np
 import scipy.optimize

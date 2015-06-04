@@ -3,15 +3,15 @@ opj=os.path.join
 import numpy as np
 import numpy as nx
 import numpy
-import _reconstruct_utils as reconstruct_utils # in pyrex/C for speed
+import flydra._reconstruct_utils as reconstruct_utils # in pyrex/C for speed
 import time
 from flydra.common_variables import MINIMUM_ECCENTRICITY as DEFAULT_MINIMUM_ECCENTRICITY
 from flydra.common_variables import WATER_ROOTS_EPS
 import scipy.linalg
 import traceback
-import _pmat_jacobian # in pyrex/C for speed
-import _pmat_jacobian_water # in pyrex/C for speed
-import _fastgeom as fastgeom
+import flydra._pmat_jacobian as  _pmat_jacobian # in pyrex/C for speed
+import flydra._pmat_jacobian_water as  _pmat_jacobian_water # in pyrex/C for speed
+import flydra._fastgeom as fastgeom
 import flydra.geom as slowgeom
 import flydra.water as water
 import flydra.align

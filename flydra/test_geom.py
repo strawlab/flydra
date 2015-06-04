@@ -3,12 +3,12 @@ import reconstruct
 import pkg_resources
 import flydra.reconstruct_utils as reconstruct_utils
 import flydra.geom
-import _fastgeom as fastgeom
+import flydra._fastgeom as fastgeom
 import flydra.undistort
 import numpy
 import numpy as np
 import scipy.optimize
-import _mahalanobis as mahalanobis
+import flydra._mahalanobis as mahalanobis
 import xml.etree.ElementTree as ET
 import StringIO
 import pickle
