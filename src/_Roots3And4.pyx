@@ -24,6 +24,8 @@ cdef double real_nonnegative_root_less_than(double p4, double p3, double p2, dou
     num = SolveQuartic(c,s,1e-30)
     if num == 0:
         num = SolveQuartic(c,s,1e-20)
+        if num == 0:
+            num = SolveQuartic(c,s,1e-15)
 
     found = 0
     for i in range(num):
