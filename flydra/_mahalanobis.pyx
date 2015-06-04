@@ -1,6 +1,6 @@
 #emacs, this is -*-Python-*- mode
 import numpy
-cimport _fastgeom
+cimport flydra._fastgeom as _fastgeom
 
 def line_fit_2d(line_2d, mu, sigma_inv):
     """find the point closest to mu on the line according to Mahalanois distance"""

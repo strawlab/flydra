@@ -8,4 +8,4 @@ no_backwards_compat = int(os.environ.get('FLYDRA_NO_BACKWARDS_COMPAT','0'))
 if no_backwards_compat:
     raise RuntimeError('you are using an outdated import')
 
-from _reconstruct_utils import *
+from flydra._reconstruct_utils import *

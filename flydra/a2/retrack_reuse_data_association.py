@@ -13,7 +13,7 @@ from flydra.a2.tables_tools import openFileSafe
 import flydra.reconstruct as reconstruct
 import flydra.kalman.dynamic_models as dynamic_models
 from flydra.kalman.kalmanize import KalmanSaver
-from _flydra_tracked_object import TrackedObject
+from flydra._flydra_tracked_object import TrackedObject
 
 class StringWidget(progressbar.Widget):
     def set_string(self,ts):
