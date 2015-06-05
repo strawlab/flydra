@@ -50,6 +50,7 @@ def retrack_reuse_data_association(h5_filename=None,
         dynamic_model_name = extra['dynamic_model_name']
         kalman_model = dynamic_models.get_kalman_model(
             name=dynamic_model_name, dt=dt )
+        kalman_model['max_frames_skipped'] = 2**62 # close to max i64
 
         fps = extra['frames_per_second']
         camn2cam_id, cam_id2camns = h5_context.get_caminfo_dicts()

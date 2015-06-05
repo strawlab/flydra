@@ -424,8 +424,8 @@ cdef class TrackedObject:
             if frames_skipped > self.max_frames_skipped:
                 self.kill_me = True
                 if debug1>=1:
-                    print 'will kill next time because frames skipped (%f > %f)'%(frames_skipped,
-                                                                                  self.max_frames_skipped)
+                    print 'will kill next time because frames skipped (%ld > %ld, frame %ld)'%(
+                        frames_skipped, self.max_frames_skipped,frame)
 
             ############ save outputs ###############
             self.frames.append( frame )
