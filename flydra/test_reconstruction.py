@@ -320,11 +320,13 @@ def test_online_reconstruction():
     for with_water in [False, True]:
         for with_orientation in [False,True]:
             for multithreaded in [True, False]:
-                yield check_online_reconstruction, with_water, with_orientation, multithreaded
+                for skip_frames in [None, 'some', 'too many']:
+                    yield check_online_reconstruction, with_water, with_orientation, multithreaded, skip_frames
 
 def check_online_reconstruction(with_water=False,
                                 with_orientation=False,
                                 multithreaded=True,
+                                skip_frames=None,
                                 fps=120.0,
                                 with_distortion=True,
                                 ):
@@ -371,6 +373,9 @@ def check_online_reconstruction(with_water=False,
     coord_processor.set_reconstructor(R)
     model = flydra.kalman.dynamic_models.get_kalman_model(name=D['dynamic_model_name'],dt=(1.0/fps))
     coord_processor.set_new_tracker(model)
+
+    max_frames_skipped = model['max_frames_skipped']
+
     if multithreaded:
         # XXX remove this in the future
 
@@ -406,12 +411,27 @@ def check_online_reconstruction(with_water=False,
     dt = 1.0/fps
     time.sleep(SPINUP_DURATION)
 
+    n_skipped = 0
+    if skip_frames is not None:
+        start_skip_frame = 20
+        if skip_frames =='some':
+            n_skipped = max_frames_skipped - 1
+        else:
+            assert skip_frames =='too many'
+            n_skipped = max_frames_skipped
+        stop_skip_frame = start_skip_frame + n_skipped
+
     errors = []
     num_sync_frames = 1
     obj_id = None
     for framenumber, orig_timestamp in enumerate(orig_timestamps):
         # frame 0 - first 2D coordinates and synchronization
         # frame 1 - first saveable data
+
+        if skip_frames is not None:
+            if framenumber > start_skip_frame:
+                if framenumber <= stop_skip_frame:
+                    continue
 
         timestamp = time.time()
         with time_lock:
@@ -457,15 +477,23 @@ def check_online_reconstruction(with_water=False,
 
         if framenumber < num_sync_frames:
             # Before sync, we may not get data or it may be wrong, so
-            # ignore it. But wait dt seconds to ensure sychronization
+            # ignore it. But wait 3*dt seconds to ensure sychronization
             # has enough time to run.
             try:
-                coord_processor.queue_realtime_ros_packets.get(True,dt)
+                coord_processor.queue_realtime_ros_packets.get(True,3*dt)
             except Queue.Empty:
                 pass
 
         else:
-            next = coord_processor.queue_realtime_ros_packets.get()
+            try:
+                next = coord_processor.queue_realtime_ros_packets.get(True, 3*dt)
+            except Queue.Empty:
+                if skip_frames == 'too many':
+                    assert framenumber == (stop_skip_frame+1)
+                    # this is what we expect, the tracking should end
+                    return
+                else:
+                    raise
 
             assert len(next.objects)==1
             o1 = next.objects[0]
@@ -501,7 +529,7 @@ def check_online_reconstruction(with_water=False,
         raise RuntimeError('coordinate processor thread had error')
 
     mean_error = np.mean(errors)
-    assert len(errors)+num_sync_frames == len(orig_timestamps)
+    assert len(errors)+num_sync_frames+n_skipped == len(orig_timestamps)
 
     # We should have very low error
     assert mean_error < MAX_MEAN_ERROR
