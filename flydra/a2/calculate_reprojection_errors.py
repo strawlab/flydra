@@ -42,7 +42,8 @@ def calculate_reprojection_errors(h5_filename=None,
            }
 
     ca = core_analysis.get_global_CachingAnalyzer()
-    with ca.kalman_analysis_context( kalman_filename ) as h5_context:
+    with ca.kalman_analysis_context( kalman_filename,
+                                     data2d_fname=h5_filename ) as h5_context:
         R = h5_context.get_reconstructor()
         ML_estimates_2d_idxs = h5_context.load_entire_table('ML_estimates_2d_idxs')
         use_obj_ids = h5_context.get_unique_obj_ids()
@@ -54,13 +55,14 @@ def calculate_reprojection_errors(h5_filename=None,
             if dynamic_model_name.startswith('EKF '):
                 dynamic_model_name = dynamic_model_name[4:]
 
-        with openFileSafe( h5_filename, mode='r' ) as h5:
+        if 1:
 
-            fps = result_utils.get_fps( h5, fail_on_error=True )
-            camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
+            fps = h5_context.get_fps()
+            camn2cam_id, cam_id2camns = h5_context.get_caminfo_dicts()
 
             # associate framenumbers with timestamps using 2d .h5 file
-            data2d = h5.root.data2d_distorted[:] # load to RAM
+            data2d = h5_context.load_entire_table('data2d_distorted',
+                                                  from_2d_file=True )
             data2d_idxs = np.arange(len(data2d))
             h5_framenumbers = data2d['frame']
             h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)

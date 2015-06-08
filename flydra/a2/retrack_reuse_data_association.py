@@ -38,7 +38,8 @@ def retrack_reuse_data_association(h5_filename=None,
             "will not overwrite old file '%s'"%output_h5_filename)
 
     ca = core_analysis.get_global_CachingAnalyzer()
-    with ca.kalman_analysis_context( kalman_filename ) as h5_context:
+    with ca.kalman_analysis_context( kalman_filename,
+                                     data2d_fname=h5_filename ) as h5_context:
         R = h5_context.get_reconstructor()
         if less_ram:
             ML_estimates_2d_idxs = h5_context.get_pytable_node('ML_estimates_2d_idxs')
@@ -82,10 +83,12 @@ def retrack_reuse_data_association(h5_filename=None,
 
             # associate framenumbers with timestamps using 2d .h5 file
             if less_ram:
-                data2d = h5_context.get_pytable_node('data2d_distorted')
+                data2d = h5_context.get_pytable_node('data2d_distorted',
+                                                     from_2d_file=True)
                 h5_framenumbers = data2d.cols.frame[:]
             else:
-                data2d = h5_context.load_entire_table('data2d_distorted')
+                data2d = h5_context.load_entire_table('data2d_distorted',
+                                                      from_2d_file=True)
                 h5_framenumbers = data2d['frame']
             h5_frame_qfi = result_utils.QuickFrameIndexer(h5_framenumbers)
 

@@ -1286,14 +1286,25 @@ def detect_saccades(rows,
     return results
 
 class FileContextManager:
-    def __init__(self,ca,filename,mode):
+    def __init__(self,ca,filename,data2d_fname=None,mode='r'):
         self._ca = ca
         self._ctx = openFileSafe(filename,mode=mode)
+        if (data2d_fname is None) or \
+           (os.path.abspath(filename) == os.path.abspath( data2d_fname )):
+            self._ctx2d = None
+        else:
+            self._ctx2d = openFileSafe(data2d_fname,mode='r')
     def __enter__(self):
         self._data_file = self._ctx.__enter__()
+        if self._ctx2d is not None:
+            self._2d_file = self._ctx2d.__enter__()
+        else:
+            self._2d_file = self._data_file
         self._obj_ids, self._unique_obj_ids, _, self._extra = _get_initial_file_info(self._data_file)
         return self
     def __exit__(self,exc_type, exc_val, exc_tb):
+        if self._ctx2d is not None:
+            result2d = self._ctx2d.__exit__(exc_type, exc_val, exc_tb)
         return self._ctx.__exit__(exc_type, exc_val, exc_tb)
         #self._data_file.close()
     def get_unique_obj_ids(self):
@@ -1303,14 +1314,20 @@ class FileContextManager:
     def get_reconstructor(self):
         return flydra.reconstruct.Reconstructor(self._data_file)
     def get_caminfo_dicts(self):
-        return flydra.analysis.result_utils.get_caminfo_dicts(self._data_file)
+        return flydra.analysis.result_utils.get_caminfo_dicts(self._2d_file)
+    def get_fps(self):
+        return flydra.analysis.result_utils.get_fps(self._2d_file,
+                                                    fail_on_error=True)
     def read_textlog_header(self):
         return flydra.analysis.result_utils.read_textlog_header(self._data_file)
-    def get_pytable_node(self, table_name, groups=None):
+    def get_pytable_node(self, table_name, from_2d_file=False, groups=None):
         """read entire table into RAM"""
         if groups is None:
             groups = ['root']
-        cur_base = self._data_file
+        if from_2d_file:
+            cur_base = self._2d_file
+        else:
+            cur_base = self._data_file
         for g in groups:
             cur_base = getattr(cur_base, g)
 
@@ -1349,8 +1366,8 @@ class CachingAnalyzer:
 
     """
 
-    def kalman_analysis_context(self,filename,mode='r'):
-        return FileContextManager(self,filename,mode)
+    def kalman_analysis_context(self,filename,data2d_fname=None,mode='r'):
+        return FileContextManager(self,filename,data2d_fname,mode)
 
     def initial_file_load(self,filename):
         """
