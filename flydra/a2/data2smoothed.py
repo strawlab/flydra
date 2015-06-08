@@ -201,6 +201,11 @@ def convert(infilename,
 
     obj_ids = obj_ids[ obj_ids >= start_obj_id ]
     obj_ids = obj_ids[ obj_ids <= stop_obj_id ]
+
+    if obj_only is not None:
+        obj_ids = numpy.array(obj_only )
+        print 'filtered to obj_only',obj_ids
+
     if frames_per_second is None:
         frames_per_second = extra['frames_per_second']
 
