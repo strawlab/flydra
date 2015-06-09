@@ -1,5 +1,5 @@
 import tables
-from optparse import OptionParser
+import argparse
 import warnings
 import numpy as np
 
@@ -111,15 +111,16 @@ def h5_shorten(input_filename, output_filename, options):
                     node._f_copy(output_h5.root,recursive=True)
 
 def main():
-    usage = '%prog [options]'
+    parser = argparse.ArgumentParser(
+        description="shorten flydra mainbrain HDF5 files",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser = OptionParser(usage)
-    parser.add_option("--input", type='string')
-    parser.add_option("--output", type='string')
-    parser.add_option("--start", type='int', default=None)
-    parser.add_option("--stop", type='int', default=None)
+    parser.add_argument("--input", type=str, required=True)
+    parser.add_argument("--output", type=str, required=True)
+    parser.add_argument("--start", type=int, default=None)
+    parser.add_argument("--stop", type=int, default=None)
 
-    (options, args) = parser.parse_args()
+    options = parser.parse_args()
 
     input = options.input
     output = options.output
