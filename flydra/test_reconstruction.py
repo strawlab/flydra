@@ -477,16 +477,16 @@ def check_online_reconstruction(with_water=False,
 
         if framenumber < num_sync_frames:
             # Before sync, we may not get data or it may be wrong, so
-            # ignore it. But wait 3*dt seconds to ensure sychronization
+            # ignore it. But wait 10*dt seconds to ensure sychronization
             # has enough time to run.
             try:
-                coord_processor.queue_realtime_ros_packets.get(True,3*dt)
+                coord_processor.queue_realtime_ros_packets.get(True,10*dt)
             except Queue.Empty:
                 pass
 
         else:
             try:
-                next = coord_processor.queue_realtime_ros_packets.get(True, 3*dt)
+                next = coord_processor.queue_realtime_ros_packets.get(True, 10*dt)
             except Queue.Empty:
                 if skip_frames == 'too many':
                     assert framenumber == (stop_skip_frame+1)
