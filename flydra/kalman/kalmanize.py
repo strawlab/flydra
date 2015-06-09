@@ -178,7 +178,7 @@ class KalmanSaver:
                  debug=False):
         self.cam_id2camns = cam_id2camns
         self.min_observations_to_save = min_observations_to_save
-        self.debug = 0
+        self.debug = debug
 
         self.kalman_saver_info_instance = flydra_kalman_utils.KalmanSaveInfo(
             name=dynamic_model_name)
