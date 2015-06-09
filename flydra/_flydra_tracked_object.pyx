@@ -487,6 +487,8 @@ cdef class TrackedObject:
         self.my_kalman.xhat_k1 = self.xhats[-1]
         self.my_kalman.P_k1 = self.Ps[-1]
 
+        self.last_frameno_with_data = self.observations_frames[-1]
+
     cpdef _filter_data(self, object xhatminus, object Pminus,
                        object data_dict, object camn2cam_id,
                        int debug=0):
