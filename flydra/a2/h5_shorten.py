@@ -96,10 +96,14 @@ def copy_selective(src_h5,input_node,output_group,options):
 def h5_shorten(input_filename, output_filename, options):
     with openFileSafe(input_filename,mode='r') as h5:
         with openFileSafe( output_filename, mode='w', delete_on_error=True ) as output_h5:
-            do_data_association_tables(h5, output_h5, options)
+            if not options.data2d_only:
+                do_data_association_tables(h5, output_h5, options)
             for node in h5.root._f_iterNodes():
                 if (hasattr(node,'name') and
                     node.name in ['data2d_distorted','kalman_estimates']):
+                    if options.data2d_only:
+                        if node.name != 'data2d_distorted':
+                            continue
                     print 'selectively copying',node
                     copy_selective(h5,node,output_h5.root,options)
                 elif (hasattr(node,'name') and
@@ -119,9 +123,9 @@ def main():
     parser.add_argument("--output", type=str, required=True)
     parser.add_argument("--start", type=int, default=None)
     parser.add_argument("--stop", type=int, default=None)
+    parser.add_argument("--data2d-only", action='store_true', default=False)
 
     options = parser.parse_args()
-
     input = options.input
     output = options.output
     h5_shorten(input,output,options)
