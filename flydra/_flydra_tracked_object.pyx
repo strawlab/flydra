@@ -113,6 +113,7 @@ cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, np.ndarray[np.double_t
     return y, hx, C, R, missing_data
 
 def obs2d_hashable( arr ):
+    # XXX FIXME: this could likely be sped up
     assert arr.dtype == numpy.uint16
     assert len(arr.shape)==1
 
@@ -140,7 +141,8 @@ cdef class TrackedObject:
     cdef readonly long current_frameno
     cdef readonly long last_frameno_with_data
     cdef long max_frames_skipped
-    cdef mybool kill_me, save_all_data
+    cdef readonly mybool kill_me
+    cdef mybool save_all_data
     cdef double area_threshold, area_threshold_for_orientation
 
     cdef object reconstructor, my_kalman
@@ -261,6 +263,10 @@ cdef class TrackedObject:
         # Don't run kalman filter with initial data, as this would
         # cause error estimates to drop too low.
 
+    def __repr__(self):
+        return '<TRO frames[0]=%r observations_2d[0]=%r xhats[0]=%r>' % (
+            self.frames[0], self.observations_2d[0], self.xhats[0])
+
     def debug_info(self,level=3):
         if level > 5:
             sys.stdout.write('%s\n'%self)
@@ -308,7 +314,7 @@ cdef class TrackedObject:
             else:
                 break
 
-    def calculate_a_posteriori_estimate(self,
+    cpdef calculate_a_posteriori_estimate(self,
                                         long frame,
                                         object data_dict,
                                         object camn2cam_id,
@@ -452,11 +458,10 @@ cdef class TrackedObject:
                 this_observations_2d_hash = obs2d_hashable( this_observations_2d )
             if debug1>2:
                 print
-        return (used_camns_and_idxs, self.kill_me, this_observations_2d_hash,
+        return (used_camns_and_idxs, this_observations_2d_hash,
                 Pmean, all_close_camn_pt_idxs)
 
-    def remove_previous_observation(self, debug1=0):
-
+    def remove_previous_observation(self, int debug1=0):
 
         # This will remove the just-done observation from my
         # state. Thus, this instance will act as it it skipped data on

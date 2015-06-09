@@ -103,7 +103,6 @@ class Tracker:
         if debug2>1:
             print self,'gobbling all data for frame %d'%(frame,)
 
-        kill_idxs = []
         all_to_gobble= []
         best_by_hash = {}
         to_rewind = []
@@ -115,7 +114,7 @@ class Tracker:
         # this is reduce:
         all_close_camn_pt_idxs = []
         for idx,result in enumerate(results):
-            (used_camns_and_idxs, kill_me, obs2d_hash,
+            (used_camns_and_idxs, obs2d_hash,
              Pmean, close_camn_pt_idxs) = result
 
             # Two similar lists -- lists of points that will be
@@ -126,11 +125,14 @@ class Tracker:
             # pre-existing objects, but will prevent birth of new
             # targets.
 
+            # This works on entire group of 2D
+            # observations. (I.e. individual 2D observations can support
+            # multiple 3D targets. Only the entire set of 2D
+            # observations, given by the obs2d_hash, cannot be shared.)
+
             all_to_gobble.extend( used_camns_and_idxs )
             all_close_camn_pt_idxs.extend( close_camn_pt_idxs )
 
-            if kill_me:
-                kill_idxs.append( idx )
             if obs2d_hash is not None:
                 if obs2d_hash in best_by_hash:
                     (best_idx, best_Pmean) = best_by_hash[ obs2d_hash ]
@@ -169,6 +171,8 @@ class Tracker:
                 for i in to_rewind ]
 
         # remove tracked objects from live list (when their error grows too large)
+        kill_idxs = [ idx for (idx, tro) in enumerate(self.live_tracked_objects)
+                      if tro.kill_me ]
         kill_idxs.sort()
         kill_idxs.reverse()
         newly_dead = [self.live_tracked_objects.pop(i) for i in kill_idxs]
