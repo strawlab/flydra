@@ -17,7 +17,6 @@ class Tracker:
     def __init__(self,
                  reconstructor,
                  kalman_model=None,
-                 max_frames_skipped=25,
                  save_all_data=False,
                  area_threshold=0,
                  area_threshold_for_orientation=0.0,
@@ -45,9 +44,6 @@ class Tracker:
         self.orientation_consensus = orientation_consensus
         self.fake_timestamp = fake_timestamp
         self.cur_obj_id = 500001
-
-        # set values for passing to TrackedObject
-        self.max_frames_skipped = max_frames_skipped
 
         if kalman_model is None:
             raise ValueError('must specify kalman_model')
