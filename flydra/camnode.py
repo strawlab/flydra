@@ -85,6 +85,11 @@ if BENCHMARK:
 import flydra.version
 import flydra.rosutils
 
+import flydra.data_descriptions
+WIRE_ORDER_CUR_VAL_IDX    = flydra.data_descriptions.WIRE_ORDER_CUR_VAL_IDX
+WIRE_ORDER_MEAN_VAL_IDX   = flydra.data_descriptions.WIRE_ORDER_MEAN_VAL_IDX
+WIRE_ORDER_SUMSQF_VAL_IDX = flydra.data_descriptions.WIRE_ORDER_SUMSQF_VAL_IDX
+
 import camnode_utils
 import motmot.FastImage.FastImage as FastImage
 #FastImage.set_debug(3)
@@ -540,6 +545,8 @@ class ProcessCamClass(rospy.SubscribeListener):
             # see flydra.common_variables.recv_pt_fmt struct definition:
             pt = (x0_abs, y0_abs, area, slope, eccentricity,
                   slope_found, cur_val, mean_val, sumsqf_val)
+            # WIRE_ORDER_CUR_VAL_IDX, WIRE_ORDER_MEAN_VAL_IDX, WIRE_ORDER_SUMSQF_VAL_IDX
+            assert len(pt) == (WIRE_ORDER_SUMSQF_VAL_IDX+1)
             points.append( pt )
         return points
 
@@ -2601,7 +2608,8 @@ class AppState(object):
                         continue
 
                     timestamp, points, camn_received_time = last_points[idx]
-                    # make sure data is pure python, (not numpy)
+                    # Make sure data is pure python, (not numpy).
+                    # "points" was filled by _convert_to_wire_order().
                     missing_data.append( (int(camn), int(missing_framenumber), float(timestamp),
                                           float(camn_received_time), points) )
                 if len(missing_data):
