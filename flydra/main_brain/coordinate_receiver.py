@@ -52,7 +52,7 @@ if os.name == 'posix':
     try:
         import posix_sched
     except ImportError:
-        warnings.warn('Could not open posix_sched module')
+        LOG.warn('Could not open posix_sched module')
 
 ATTEMPT_DATA_RECOVERY = True
 #ATTEMPT_DATA_RECOVERY = False

@@ -1,4 +1,3 @@
-cimport c_python
 cimport motmot.FastImage.FastImage as FastImage
 import motmot.FastImage.FastImage as FastImage
 cimport ipp

@@ -19,6 +19,10 @@ PT_TUPLE_IDX_CUR_VAL_IDX = 11
 PT_TUPLE_IDX_MEAN_VAL_IDX = 12
 PT_TUPLE_IDX_SUMSQF_VAL_IDX = 13
 
+WIRE_ORDER_CUR_VAL_IDX    = 6
+WIRE_ORDER_MEAN_VAL_IDX   = 7
+WIRE_ORDER_SUMSQF_VAL_IDX = 8
+
 # 2D data format for PyTables:
 class Info2D(PT.IsDescription):
     camn         = PT.UInt16Col(pos=0)

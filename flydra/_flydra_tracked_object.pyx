@@ -1,7 +1,6 @@
 #emacs, this is -*-Python-*- mode
 import numpy as np
 cimport numpy as np
-cimport c_lib
 cimport _fastgeom
 cimport _mahalanobis
 cimport _pmat_jacobian
@@ -47,6 +46,9 @@ cdef double cnan
 cnan = np.nan
 
 ctypedef int mybool
+
+cdef extern from "math.h":
+    double sqrt(double)
 
 cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, np.ndarray[np.double_t, ndim=1] xhatminus):
     cdef int N
@@ -111,6 +113,7 @@ cpdef evaluate_pmat_jacobian(object pmats_and_points_cov, np.ndarray[np.double_t
     return y, hx, C, R, missing_data
 
 def obs2d_hashable( arr ):
+    # XXX FIXME: this could likely be sped up
     assert arr.dtype == numpy.uint16
     assert len(arr.shape)==1
 
@@ -138,7 +141,8 @@ cdef class TrackedObject:
     cdef readonly long current_frameno
     cdef readonly long last_frameno_with_data
     cdef long max_frames_skipped
-    cdef mybool kill_me, save_all_data
+    cdef readonly mybool kill_me
+    cdef mybool save_all_data
     cdef double area_threshold, area_threshold_for_orientation
 
     cdef object reconstructor, my_kalman
@@ -259,6 +263,10 @@ cdef class TrackedObject:
         # Don't run kalman filter with initial data, as this would
         # cause error estimates to drop too low.
 
+    def __repr__(self):
+        return '<TRO frames[0]=%r observations_2d[0]=%r xhats[0]=%r>' % (
+            self.frames[0], self.observations_2d[0], self.xhats[0])
+
     def debug_info(self,level=3):
         if level > 5:
             sys.stdout.write('%s\n'%self)
@@ -306,11 +314,15 @@ cdef class TrackedObject:
             else:
                 break
 
-    def calculate_a_posteriori_estimate(self,
+    cpdef calculate_a_posteriori_estimate(self,
                                         long frame,
                                         object data_dict,
                                         object camn2cam_id,
-                                        int debug1=0):
+                                        int debug1=0,
+                                        int skip_data_association=0,
+                                        object original_camns_and_idxs=None,
+                                        object original_cam_ids_and_points2d=None,
+                                        ):
         # Step 1. Update Kalman state to a priori estimates for this frame.
         # Step 1.A. Update Kalman state for each skipped frame.
 
@@ -340,12 +352,12 @@ cdef class TrackedObject:
             self.timestamps.append( 0.0 )
             self.Ps.append( P )
 
+        self.current_frameno = frame
         this_observations_2d_hash = None
         used_camns_and_idxs = []
         all_close_camn_pt_idxs = []
         Pmean = c_inf
         if not self.kill_me:
-            self.current_frameno = frame
             # Step 1.B. Update Kalman to provide a priori estimates for this frame
             if isinstance(self.my_kalman, kalman_ekf.EKF):
                 xhatminus, Pminus = self.my_kalman.step1__calculate_a_priori(
@@ -360,12 +372,19 @@ cdef class TrackedObject:
                 print
 
             # Step 2. Filter incoming 2D data to use informative points (data association)
-            (position_MLE, Lcoords, used_camns_and_idxs,
-             cam_ids_and_points2d,
-             all_close_camn_pt_idxs) = self._filter_data(xhatminus, Pminus,
-                                                         data_dict,
-                                                         camn2cam_id,
-                                                         debug=debug1)
+            if skip_data_association:
+                position_MLE = numpy.nan*numpy.ones( (3,)) # skip
+                Lcoords = None
+                used_camns_and_idxs = original_camns_and_idxs
+                cam_ids_and_points2d = original_cam_ids_and_points2d
+                all_close_camn_pt_idxs = [] # not important when skipping data association
+            else:
+                (position_MLE, Lcoords, used_camns_and_idxs,
+                 cam_ids_and_points2d,
+                 all_close_camn_pt_idxs) = self._filter_data(xhatminus, Pminus,
+                                                             data_dict,
+                                                             camn2cam_id,
+                                                             debug=debug1)
             if debug1>2:
                 print 'position MLE, used_camns_and_idxs',position_MLE,used_camns_and_idxs
                 print 'Lcoords (3D body orientation) : %s'%str(Lcoords)
@@ -411,8 +430,8 @@ cdef class TrackedObject:
             if frames_skipped > self.max_frames_skipped:
                 self.kill_me = True
                 if debug1>=1:
-                    print 'will kill next time because frames skipped (%f > %f)'%(frames_skipped,
-                                                                                  self.max_frames_skipped)
+                    print 'will kill next time because frames skipped (%ld > %ld, frame %ld)'%(
+                        frames_skipped, self.max_frames_skipped,frame)
 
             ############ save outputs ###############
             self.frames.append( frame )
@@ -439,11 +458,10 @@ cdef class TrackedObject:
                 this_observations_2d_hash = obs2d_hashable( this_observations_2d )
             if debug1>2:
                 print
-        return (used_camns_and_idxs, self.kill_me, this_observations_2d_hash,
+        return (used_camns_and_idxs, this_observations_2d_hash,
                 Pmean, all_close_camn_pt_idxs)
 
-    def remove_previous_observation(self, debug1=0):
-
+    def remove_previous_observation(self, int debug1=0):
 
         # This will remove the just-done observation from my
         # state. Thus, this instance will act as it it skipped data on
@@ -468,6 +486,8 @@ cdef class TrackedObject:
         # reset self.my_kalman
         self.my_kalman.xhat_k1 = self.xhats[-1]
         self.my_kalman.P_k1 = self.Ps[-1]
+
+        self.last_frameno_with_data = self.observations_frames[-1]
 
     cpdef _filter_data(self, object xhatminus, object Pminus,
                        object data_dict, object camn2cam_id,
@@ -608,7 +628,7 @@ cdef class TrackedObject:
                         dist2=_mahalanobis.dist2( best_3d_location,
                                                   fast_prediction_3d,
                                                   Pminus_inv )
-                        dist = c_lib.sqrt(dist2)
+                        dist = sqrt(dist2)
                         nll_this_point = p_y_x + dist # negative log likelihood of this point
 
                 frame_pt_idx = pt_undistorted[PT_TUPLE_IDX_FRAME_PT_IDX]

@@ -359,6 +359,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object found_data_
             bad_cam_ids.append( cam_id )
             continue # don't build this row
 
+        # Similar to code in reconstruct.Reconstructor.find3d()
 
         Pmat = Pmat_fastnx[cam_id] # Pmat is 3 rows x 4 columns
         row3 = Pmat[2,:]
@@ -449,7 +450,22 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object found_data_
 
     # now calculate final values
     cam_ids_used = cam_ids_for_least_err[best_n_cams]
-    X = X_for_least_err[best_n_cams]
+    if with_water:
+        # Even though (for speed reasons) we did not use proper
+        # refraction-correct code above, we now recompute X using
+        # refraction.
+        cam_ids_and_points2d = []
+        for cam_id in cam_ids_used:
+            xy = found_data_dict[cam_id][:2]
+            cam_ids_and_points2d.append(( cam_id, xy ))
+
+        X = recon.find3d(cam_ids_and_points2d,
+                         undistort=False, # points are already undistorted
+                         return_line_coords = False,
+                         )
+    else:
+        X = X_for_least_err[best_n_cams]
+    del X_for_least_err
 
     # calculate line3d
     P = []

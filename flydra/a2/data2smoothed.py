@@ -48,8 +48,15 @@ def convert(infilename,
     if stop_obj_id is None:
         stop_obj_id=numpy.inf
 
+
+    smoothed_data_filename = os.path.split(infilename)[1]
+    raw_data_filename = smoothed_data_filename
+
     h5file_raw = tables.openFile(infilename,mode='r')
+    h52d = h5file_raw
+    close_h52d = False
     extra_vars = {}
+    tzname = None
 
     if save_timestamps:
         print 'STAGE 1: finding timestamps'
@@ -60,11 +67,9 @@ def convert(infilename,
         except tables.exceptions.NoSuchNodeError:
             table_kobs   = h5file_raw.root.kalman_observations # table to get framenumbers from
 
-        if file_time_data is None:
-            h52d = h5file_raw
-            close_h52d = False
-        else:
+        if file_time_data is not None:
             h52d = tables.openFile(file_time_data,mode='r')
+            raw_data_filename = os.path.split(file_time_data)[1]
             close_h52d = True
 
         tzname = result_utils.get_tzname0(h52d)
@@ -167,14 +172,11 @@ def convert(infilename,
         extra_vars['obj_ids'] = unique_obj_ids
         extra_vars['timestamps'] = timestamp_time
 
-        if close_h52d:
-            h52d.close()
-
         print 'STAGE 2: running Kalman smoothing operation'
 
     #also save the experiment data if present
     try:
-        table_experiment = h5file_raw.root.experiment_info
+        table_experiment = h52d.root.experiment_info
         uuid=None
         try:
             uuid = table_experiment.read(field='uuid')
@@ -185,16 +187,31 @@ def convert(infilename,
     except tables.exceptions.NoSuchNodeError:
         pass
 
+    recording_header = result_utils.read_textlog_header(h52d)
+    recording_flydra_version = recording_header['flydra_version']
+
     h5file_raw.close()
+
+    if close_h52d:
+        h52d.close()
 
     ca = core_analysis.get_global_CachingAnalyzer()
     all_obj_ids, obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(infilename)
+    smoothing_flydra_version = extra['header']['flydra_version']
+
     obj_ids = obj_ids[ obj_ids >= start_obj_id ]
     obj_ids = obj_ids[ obj_ids <= stop_obj_id ]
+
+    if obj_only is not None:
+        obj_ids = numpy.array(obj_only )
+        print 'filtered to obj_only',obj_ids
+
     if frames_per_second is None:
         frames_per_second = extra['frames_per_second']
+
     if dynamic_model_name is None:
-        dynamic_model_name = extra.get('dynamic_model_name',None)
+        orig_dynamic_model_name = extra.get('dynamic_model_name',None)
+        dynamic_model_name = orig_dynamic_model_name
         if dynamic_model_name is None:
             dynamic_model_name = dynamic_models.DEFAULT_MODEL
             warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
@@ -281,8 +298,12 @@ def convert(infilename,
         tzname=tzname,
         fps=fps,
         smoothed_source=smoothed_source,
+        smoothed_data_filename=smoothed_data_filename,
+        raw_data_filename=raw_data_filename,
+        dynamic_model_name=orig_dynamic_model_name,
+        recording_flydra_version=recording_flydra_version,
+        smoothing_flydra_version=smoothing_flydra_version,
         )
-    ca.close()
     if show_progress_json:
         result_utils.do_json_progress(100)
 
@@ -307,7 +328,7 @@ def main(hdf5_only=False):
     parser.add_argument("--dest-file", type=str, default=None,
                       help=dest_help)
     parser.add_argument("--time-data", dest="file2d", type=str,
-                      help="hdf5 file with 2d data FILE2D used to calculate timestamp information",
+                      help="hdf5 file with 2d data FILE2D used to calculate timestamp information and take UUID",
                       metavar="FILE2D")
     parser.add_argument("--no-timestamps",action='store_true',dest='no_timestamps',default=False)
     if not hdf5_only:

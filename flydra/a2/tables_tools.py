@@ -3,6 +3,7 @@ import contextlib, warnings
 import tables
 import numpy as np
 import os
+import tempfile
 
 def clear_col(dest_table, colname, fill_value=np.nan):
     if 0:
@@ -28,14 +29,29 @@ def openFileSafe(filename,delete_on_error=False,**kwargs):
     This is very similar to contextlib.closing(), but optionally
     deletes file on error.
     """
+    if delete_on_error:
+        if os.path.exists(filename):
+            raise RuntimeError('will not overwrite exiting file %r'%filename)
+        # create filename in appropriate directory
+        out_dir = os.path.split(os.path.abspath( filename ))[0]
+        f = tempfile.NamedTemporaryFile(dir=out_dir,delete=False)
+        use_fname = f.name
+        f.close()
+        del f
+    else:
+        use_fname = filename
 
-    result = tables.openFile(filename,**kwargs)
+    result = tables.openFile(use_fname,**kwargs)
     try:
         yield result
     except:
         result.close()
         if delete_on_error:
-            os.unlink(filename)
+            os.unlink(use_fname)
         raise
     finally:
         result.close()
+
+    if delete_on_error:
+        # We had no error if we are here, so the file is OK.
+        os.rename( use_fname, filename )

@@ -58,7 +58,7 @@ An optional Op-Amp may be used to boost the output signal voltage from
 a degree of protection to the microcontroller from from adverse
 connections.
 
-.. image:: ../figures/trigger_op_amp.png
+.. image:: ../../figures/trigger_op_amp.png
   :width: 500
   :height: 320
 

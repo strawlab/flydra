@@ -25,6 +25,7 @@ from flydra.kalman.ori_smooth import ori_smooth
 import flydra.analysis.result_utils
 import flydra.reconstruct
 import flydra.analysis.PQmath as PQmath
+from flydra.a2.tables_tools import openFileSafe
 import cgtypes # cgkit 1.x
 
 import weakref
@@ -223,59 +224,47 @@ def check_is_mat_file(data_file):
     else:
         return False
 
-def get_data(filename):
-    warnings.warn('instead of get_data(), use CachingAnalyzer.initial_file_load(filename)',
-                  DeprecationWarning)
-    return _initial_file_load(filename)
-
 def _initial_file_load(filename):
-    extra = {}
     if os.path.splitext(filename)[1] == '.mat':
-        mat_data = scipy.io.loadmat(filename,squeeze_me=True)
-        mat_data = WeakRefAbleDict(mat_data)
-        obj_ids = mat_data['kalman_obj_id']
-        obj_ids = obj_ids.astype( numpy.uint32 )
-        obs_obj_ids = obj_ids # use as observation length, even though these aren't observations
-        unique_obj_ids = numpy.unique(obj_ids)
-        is_mat_file = True
-        data_file = mat_data
-        # XXX probably need to add time_model computation here
-    else:
-        kresults = tables.openFile(filename,mode='r')
-        extra['frames_per_second'] = flydra.analysis.result_utils.get_fps(
+        raise ValueError('.mat files no longer supported')
+    kresults = tables.openFile(filename,mode='r')
+    return kresults
+
+def _get_initial_file_info(kresults):
+    extra = {}
+    extra['frames_per_second'] = flydra.analysis.result_utils.get_fps(
+        kresults, fail_on_error=False)
+    if hasattr(kresults.root,'textlog'):
+        textlog = kresults.root.textlog.readCoordinates([0])
+        infostr = textlog['message'].tostring().strip('\x00')
+        header = flydra.analysis.result_utils.read_textlog_header(
             kresults, fail_on_error=False)
-        if hasattr(kresults.root,'textlog'):
-            textlog = kresults.root.textlog.readCoordinates([0])
-            infostr = textlog['message'].tostring().strip('\x00')
-            header = flydra.analysis.result_utils.read_textlog_header(
-                kresults, fail_on_error=False)
-            extra['header'] = header
-        if hasattr(kresults.root,'kalman_estimates'):
-            obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
-            extra['frames'] = kresults.root.kalman_estimates.read(field='frame')
-            unique_obj_ids = numpy.unique(obj_ids)
-            if hasattr(kresults.root.kalman_estimates.attrs,'dynamic_model_name'):
-                extra['dynamic_model_name'] = (
-                    kresults.root.kalman_estimates.attrs.dynamic_model_name)
+        extra['header'] = header
+    if hasattr(kresults.root,'kalman_estimates'):
+        obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
+        extra['frames'] = kresults.root.kalman_estimates.read(field='frame')
+        unique_obj_ids = numpy.unique(obj_ids)
+        if hasattr(kresults.root.kalman_estimates.attrs,'dynamic_model_name'):
+            extra['dynamic_model_name'] = (
+                kresults.root.kalman_estimates.attrs.dynamic_model_name)
+    else:
+        obj_ids = None
+        unique_obj_ids = None
+    is_mat_file = False
+    extra['kresults'] = kresults
+    if hasattr(kresults.root,'textlog'):
+        try:
+            time_model = (
+                flydra.analysis.result_utils.get_time_model_from_data(
+                kresults))
+        except flydra.analysis.result_utils.TextlogParseError:
+            pass
+        except flydra.analysis.result_utils.NoTimestampDataError:
+            pass
         else:
-            obj_ids = None
-            unique_obj_ids = None
-        is_mat_file = False
-        data_file = kresults
-        extra['kresults'] = kresults
-        if hasattr(kresults.root,'textlog'):
-            try:
-                time_model = (
-                    flydra.analysis.result_utils.get_time_model_from_data(
-                    kresults))
-            except flydra.analysis.result_utils.TextlogParseError:
-                pass
-            except flydra.analysis.result_utils.NoTimestampDataError:
-                pass
-            else:
-                if time_model is not None:
-                    extra['time_model'] = time_model
-    return obj_ids, unique_obj_ids, is_mat_file, data_file, extra
+            if time_model is not None:
+                extra['time_model'] = time_model
+    return obj_ids, unique_obj_ids, is_mat_file,  extra
 
 def kalman_smooth(orig_rows,
                   dynamic_model_name=None,
@@ -1296,6 +1285,70 @@ def detect_saccades(rows,
 
     return results
 
+class FileContextManager:
+    def __init__(self,ca,filename,data2d_fname=None,mode='r'):
+        self._ca = ca
+        self._ctx = openFileSafe(filename,mode=mode)
+        if (data2d_fname is None) or \
+           (os.path.abspath(filename) == os.path.abspath( data2d_fname )):
+            self._ctx2d = None
+        else:
+            self._ctx2d = openFileSafe(data2d_fname,mode='r')
+    def __enter__(self):
+        self._data_file = self._ctx.__enter__()
+        if self._ctx2d is not None:
+            self._2d_file = self._ctx2d.__enter__()
+        else:
+            self._2d_file = self._data_file
+        self._obj_ids, self._unique_obj_ids, _, self._extra = _get_initial_file_info(self._data_file)
+        return self
+    def __exit__(self,exc_type, exc_val, exc_tb):
+        if self._ctx2d is not None:
+            result2d = self._ctx2d.__exit__(exc_type, exc_val, exc_tb)
+        return self._ctx.__exit__(exc_type, exc_val, exc_tb)
+        #self._data_file.close()
+    def get_unique_obj_ids(self):
+        return self._unique_obj_ids
+    def get_extra_info(self):
+        return self._extra
+    def get_reconstructor(self):
+        return flydra.reconstruct.Reconstructor(self._data_file)
+    def get_caminfo_dicts(self):
+        return flydra.analysis.result_utils.get_caminfo_dicts(self._2d_file)
+    def get_fps(self):
+        return flydra.analysis.result_utils.get_fps(self._2d_file,
+                                                    fail_on_error=True)
+    def read_textlog_header(self):
+        return flydra.analysis.result_utils.read_textlog_header(self._data_file)
+    def get_pytable_node(self, table_name, from_2d_file=False, groups=None):
+        """read entire table into RAM"""
+        if groups is None:
+            groups = ['root']
+        if from_2d_file:
+            cur_base = self._2d_file
+        else:
+            cur_base = self._data_file
+        for g in groups:
+            cur_base = getattr(cur_base, g)
+
+        if table_name=='ML_estimates_2d_idxs':
+            if not hasattr(cur_base,table_name) and hasattr(cur_base,'kalman_observations_2d_idxs'):
+                # backwards compatibility
+                table_name = 'kalman_observations_2d_idxs'
+
+        return getattr(cur_base,table_name)
+
+    def load_entire_table(self, *args, **kwargs):
+        table = self.get_pytable_node(*args, **kwargs)
+        nptable = table[:]
+        return nptable
+    def load_dynamics_free_MLE_position(self,obj_id,**kwargs):
+        return self._ca.load_dynamics_free_MLE_position(obj_id,self._data_file,
+                                                        **kwargs)
+    def load_data(self,obj_id,**kwargs):
+        return self._ca.load_data(obj_id,self._data_file,
+                                  **kwargs)
+
 class CachingAnalyzer:
 
     """
@@ -1312,6 +1365,9 @@ class CachingAnalyzer:
      likelihood estimates of position without any dynamical model)
 
     """
+
+    def kalman_analysis_context(self,filename,data2d_fname=None,mode='r'):
+        return FileContextManager(self,filename,data2d_fname,mode)
 
     def initial_file_load(self,filename):
         """
@@ -1338,8 +1394,8 @@ class CachingAnalyzer:
              Dictionary with addtional information.
         """
         if filename not in self.loaded_filename_cache:
-            (obj_ids, unique_obj_ids, is_mat_file, data_file,
-             extra) = _initial_file_load(filename)
+            data_file = _initial_file_load(filename)
+            (obj_ids, unique_obj_ids, is_mat_file, extra) = _get_initial_file_info(data_file)
 
             if 0:
                 # Why did I used to have this assertion check?
@@ -1953,12 +2009,11 @@ class CachingAnalyzer:
 
     def _load_dict(self,result_h5_file):
         if isinstance(result_h5_file,str) or isinstance(result_h5_file,unicode):
-            kresults = tables.openFile(result_h5_file,mode='r')
-            self_should_close = True
-        else:
-            kresults = result_h5_file
-            self_should_close = False
-            # XXX I should make my reference a weakref
+            raise ValueError('should pass opened HDF5, not filename')
+        kresults = result_h5_file
+        self_should_close = False
+        # XXX I should make my reference a weakref
+
         obj_ids = kresults.root.kalman_estimates.read(field='obj_id')
         if hasattr(kresults.root,'ML_estimates'):
             obs_obj_ids = kresults.root.ML_estimates.read(field='obj_id')
@@ -1981,8 +2036,11 @@ class CachingAnalyzer:
             if preloaded_dict['self_should_close']:
                 preloaded_dict['kresults'].close()
                 preloaded_dict['self_should_close'] = False
-        for fname, h5file in self._smooth_cache.open_cache_h5files.iteritems():
+        del_fnames = [fname for fname in self._smooth_cache.open_cache_h5files]
+        for fname in del_fnames:
+            h5file = self._smooth_cache.open_cache_h5files[fname]
             h5file.close()
+            del self._smooth_cache.open_cache_h5files[fname]
 
     def __del__(self):
         self.close()
@@ -2058,14 +2116,10 @@ class TestCoreAnalysis:
 
         fname1=pkg_resources.resource_filename(__name__,
                                                'sample_kalman_trajectories.h5')
-        fname2=pkg_resources.resource_filename(__name__,
-                                               'sample_kalman_trajectory.mat')
 
         filenames = [fname1,
-                     fname2,
                      ]
         self.test_obj_ids_list = [[497,1369], #fname1
-                                  [1606], #fname2
                                   ]
 
         self.data_files = []

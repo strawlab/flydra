@@ -55,37 +55,37 @@ if not LIGHT_INSTALL:
                                  extra_compile_args=ipp_extra_compile_args,
                                  ))
 
-ext_modules.append(Extension(name='_reconstruct_utils',
-                             sources=['src/_reconstruct_utils.pyx']))
+ext_modules.append(Extension(name='flydra._reconstruct_utils',
+                             sources=['flydra/_reconstruct_utils.pyx']))
 
-ext_modules.append(Extension(name='_pmat_jacobian',
-                             sources=['src/_pmat_jacobian.pyx'],
+ext_modules.append(Extension(name='flydra._pmat_jacobian',
+                             sources=['flydra/_pmat_jacobian.pyx'],
                              include_dirs=[np.get_include()],
                          ))
 
-ext_modules.append(Extension(name='_pmat_jacobian_water',
-                             sources=['src/_pmat_jacobian_water.pyx'],
+ext_modules.append(Extension(name='flydra._pmat_jacobian_water',
+                             sources=['flydra/_pmat_jacobian_water.pyx'],
                              include_dirs=[np.get_include()],
                          ))
 
-ext_modules.append(Extension(name='_flydra_tracked_object',
-                             sources=['src/_flydra_tracked_object.pyx'],
+ext_modules.append(Extension(name='flydra._flydra_tracked_object',
+                             sources=['flydra/_flydra_tracked_object.pyx'],
                              include_dirs=[np.get_include()],
                          ))
 
-ext_modules.append(Extension(name='_mahalanobis',
-                             sources=['src/_mahalanobis.pyx']))
+ext_modules.append(Extension(name='flydra._mahalanobis',
+                             sources=['flydra/_mahalanobis.pyx']))
 
-ext_modules.append(Extension(name='_fastgeom',
-                             sources=['src/_fastgeom.pyx']))
+ext_modules.append(Extension(name='flydra._fastgeom',
+                             sources=['flydra/_fastgeom.pyx']))
 
-ext_modules.append(Extension(name='_Roots3And4',
-                             sources=['src/_Roots3And4.pyx',
-                                      'src/Roots3And4.c',
+ext_modules.append(Extension(name='flydra._Roots3And4',
+                             sources=['flydra/_Roots3And4.pyx',
+                                      'flydra/Roots3And4.c',
                                       ]))
 
-ext_modules.append(Extension(name='_refraction',
-                             sources=['src/_refraction.pyx']))
+ext_modules.append(Extension(name='flydra._refraction',
+                             sources=['flydra/_refraction.pyx']))
 
 ext_modules.append(Extension(name='flydra.a2.fastfinder_help',
                              sources=['flydra/a2/fastfinder_help.pyx'],
@@ -157,6 +157,9 @@ setup(name='flydra',
     'flydra_textlog2csv = flydra.a2.flydra_textlog2csv:main',
     'flydra_analysis_print_kalmanize_makefile_location = flydra.a2.print_kalmanize_makefile_location:main',
     'flydra_analysis_calculate_reprojection_errors = flydra.a2.calculate_reprojection_errors:main',
+    'flydra_analysis_retrack_reuse_data_association = flydra.a2.retrack_reuse_data_association:main',
+    'flydra_analysis_calculate_skipped_frames = flydra.a2.calculate_skipped_frames:main',
+    'flydra_analysis_plot_skipped_frames = flydra.a2.plot_skipped_frames:main',
 
 # analysis - image based orientation
     'flydra_analysis_image_based_orientation = flydra.a2.image_based_orientation:main',

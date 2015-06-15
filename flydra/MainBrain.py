@@ -55,12 +55,9 @@ MIN_KALMAN_OBSERVATIONS_TO_SAVE = 0 # how many data points are required before s
 import flydra.common_variables
 import flydra.flydra_socket as flydra_socket
 
-PT_TUPLE_IDX_X = flydra.data_descriptions.PT_TUPLE_IDX_X
-PT_TUPLE_IDX_Y = flydra.data_descriptions.PT_TUPLE_IDX_Y
-PT_TUPLE_IDX_FRAME_PT_IDX = flydra.data_descriptions.PT_TUPLE_IDX_FRAME_PT_IDX
-PT_TUPLE_IDX_CUR_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_CUR_VAL_IDX
-PT_TUPLE_IDX_MEAN_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
-PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
+WIRE_ORDER_CUR_VAL_IDX    = flydra.data_descriptions.WIRE_ORDER_CUR_VAL_IDX
+WIRE_ORDER_MEAN_VAL_IDX   = flydra.data_descriptions.WIRE_ORDER_MEAN_VAL_IDX
+WIRE_ORDER_SUMSQF_VAL_IDX = flydra.data_descriptions.WIRE_ORDER_SUMSQF_VAL_IDX
 
 class MainBrainKeeper:
     def __init__(self):
@@ -437,16 +434,15 @@ class MainBrain(object):
 
                 corrected_framenumber = framenumber-framenumber_offset
                 if len(points_distorted)==0:
-                    # no point was tracked that frame
-                    points_distorted = [(nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)] # same as no_point_tuple
-                for point_tuple in points_distorted:
+                    # No point was tracked that frame, send nan values.
+                    points_distorted = [(nan,nan,nan,nan,nan,False,0,0,0)]
+                for frame_pt_idx, point_tuple in enumerate(points_distorted):
                     # Save 2D data (even when no point found) to allow
                     # temporal correlation of movie frames to 2D data.
                     try:
-                        frame_pt_idx = point_tuple[PT_TUPLE_IDX_FRAME_PT_IDX]
-                        cur_val = point_tuple[PT_TUPLE_IDX_CUR_VAL_IDX]
-                        mean_val = point_tuple[PT_TUPLE_IDX_MEAN_VAL_IDX]
-                        sumsqf_val = point_tuple[PT_TUPLE_IDX_SUMSQF_VAL_IDX]
+                        cur_val = point_tuple[WIRE_ORDER_CUR_VAL_IDX]
+                        mean_val = point_tuple[WIRE_ORDER_MEAN_VAL_IDX]
+                        sumsqf_val = point_tuple[WIRE_ORDER_SUMSQF_VAL_IDX]
                     except:
                         LOG.warn('error while appending point_tuple %r'%point_tuple)
                         raise

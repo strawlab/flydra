@@ -135,11 +135,11 @@ def do_it(filename,
             row_keys.append( ( len(points), obj_id ) )
 #            print 'obj_id %d (%d of %d)'%(obj_id, obj_id_enum+1, len(use_obj_ids))
             this_obj_id = obj_id
-            k_use_idxs = kobs.getWhereList(
+            k_use_idxs = kobs.get_where_list(
                 'obj_id==this_obj_id')
-            obs_2d_idxs = kobs.readCoordinates( k_use_idxs,
+            obs_2d_idxs = kobs.read_coordinates( k_use_idxs,
                                                 field='obs_2d_idx')
-            kframes = kobs.readCoordinates( k_use_idxs,
+            kframes = kobs.read_coordinates( k_use_idxs,
                                             field='frame')
             kframes_use = kframes[::use_nth_observation]
             obs_2d_idxs_use = obs_2d_idxs[::use_nth_observation]
@@ -153,7 +153,7 @@ def do_it(filename,
                 pbar.update(n_kframe)
                 if 0:
                     k_use_idx = k_use_idxs[n_kframe*use_nth_observation]
-                    print kobs.readCoordinates( numpy.array([k_use_idx]))
+                    print kobs.read_coordinates( numpy.array([k_use_idx]))
                 if PT.__version__ <= '1.3.3':
                     obs_2d_idx_find = int(obs_2d_idx)
                     kframe_find = int(kframe)
@@ -182,14 +182,14 @@ def do_it(filename,
                 elif 0:
                     this_use_idxs=numpy.nonzero(frames==kframe_find)[0]
                 else:
-                    this_use_idxs = data2d.getWhereList( 'frame==kframe_find')
+                    this_use_idxs = data2d.get_where_list( 'frame==kframe_find')
                 #sys.stdout.write('done\n')
                 #sys.stdout.flush()
 
                 if PT.__version__ <= '1.3.3':
                     this_use_idxs = [int(t) for t in this_use_idxs]
 
-                d2d = data2d.readCoordinates( this_use_idxs )
+                d2d = data2d.read_coordinates( this_use_idxs )
                 if len(this_camns) < options.min_num_points:
                     # not enough points to contribute to calibration
                     continue
@@ -217,7 +217,7 @@ def do_it(filename,
         for frameno in range(start,stop+1,use_nth_observation):
             this_use_idxs=qfi.get_frame_idxs(frameno)
 
-            d2d = data2d.readCoordinates( this_use_idxs )
+            d2d = data2d.read_coordinates( this_use_idxs )
             d2d = d2d[ ~numpy.isnan(d2d['x']) ]
             this_camns = d2d['camn']
 

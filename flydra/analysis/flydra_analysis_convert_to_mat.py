@@ -28,6 +28,11 @@ def do_it(filename=None,
           tzname=None,
           fps=None,
           smoothed_source=None,
+          smoothed_data_filename=None,
+          raw_data_filename=None,
+          dynamic_model_name=None,
+          recording_flydra_version=None,
+          smoothing_flydra_version=None,
           ):
 
     if hdf5:
@@ -181,12 +186,18 @@ def do_it(filename=None,
                 if new_colname.endswith('_secs') or new_colname.endswith('_nsecs'):
                     dtype_elements.append( (new_colname, numpy.uint64) )
                 else:
+                    if orig_colname not in data:
+                        # do not do this column
+                        continue
                     dtype_elements.append( (new_colname, data[orig_colname].dtype) )
                 assert data[orig_colname].ndim == 1
                 if num_rows is None:
                     num_rows = data[orig_colname].shape[0]
                 else:
                     assert num_rows == data[orig_colname].shape[0]
+            if len(dtype_elements)==0:
+                # do not save this table
+                continue
             my_dtype = numpy.dtype( dtype_elements )
             arr = numpy.empty( num_rows, dtype=my_dtype )
             for orig_colname,new_colname in colnames:
@@ -204,7 +215,13 @@ def do_it(filename=None,
 
         # save as h5 file
         save_as_flydra_hdf5(newfilename, data_dict, tzname, fps,
-                            smoothed_source=smoothed_source)
+                            smoothed_source=smoothed_source,
+                            smoothed_data_filename=smoothed_data_filename,
+                            raw_data_filename=raw_data_filename,
+                            dynamic_model_name=dynamic_model_name,
+                            recording_flydra_version=recording_flydra_version,
+                            smoothing_flydra_version=smoothing_flydra_version,
+                            )
 
     else:
         scipy.io.savemat(newfilename,data,appendmat=False)

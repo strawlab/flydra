@@ -1,5 +1,5 @@
 import numpy as np
-import _refraction # from flydra
+import flydra._refraction as _refraction
 R2D = 180./np.pi
 
 class WaterInterface:

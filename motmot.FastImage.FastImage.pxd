@@ -2,7 +2,6 @@
 
 cimport c_python
 cimport ipp
-cimport fic
 
 ctypedef void* fiptr # pointer to FastImage base type
 

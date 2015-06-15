@@ -2,9 +2,9 @@ from __future__ import with_statement
 import numpy
 import numpy as np
 import flydra.reconstruct
-import _reconstruct_utils as ru
+import flydra._reconstruct_utils as ru
 #import flydra.geom as geom
-import _fastgeom as geom
+import flydra._fastgeom as geom
 import time
 from flydra.analysis.result_utils import get_caminfo_dicts, \
      get_fps, read_textlog_header
@@ -32,7 +32,7 @@ ML_estimates_2d_idxs_type = tmp
 del tmp
 
 def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
-                  debug=0, area_threshold=0):
+                  debug=0):
     if debug is None:
         debug=0
     frame_data = tracker.calculate_a_posteriori_estimates(
@@ -55,7 +55,8 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
     found_data_dict,first_idx_by_cam_id = convert_format(
         frame_data,
         camn2cam_id,
-        area_threshold=area_threshold)
+        area_threshold=tracker.area_threshold)
+    # found_data_dict contains undistorted points
 
     hypothesis_test_found_point = False
     # test to short-circuit rest of function
@@ -177,7 +178,7 @@ class KalmanSaver:
                  debug=False):
         self.cam_id2camns = cam_id2camns
         self.min_observations_to_save = min_observations_to_save
-        self.debug = 0
+        self.debug = debug
 
         self.kalman_saver_info_instance = flydra_kalman_utils.KalmanSaveInfo(
             name=dynamic_model_name)
@@ -247,15 +248,20 @@ class KalmanSaver:
     def close(self):
         pass
 
-    def save_tro(self,tro):
+    def save_tro(self,tro,force_obj_id=None):
         if len(tro.observations_frames) < self.min_observations_to_save:
             # not enough data to bother saving
             return
 
         self.obj_id += 1
 
+        if force_obj_id is not None:
+            save_obj_id = force_obj_id
+        else:
+            save_obj_id = self.obj_id
+
         if self.debug:
-            print 'saving %s as obj_id %d'%(repr(self), self.obj_id)
+            print 'saving %s as obj_id %d'%(repr(self), save_obj_id)
 
         # save observation 2d data indexes
         debugADS=False
@@ -284,7 +290,7 @@ class KalmanSaver:
             tro.observations_frames, dtype=numpy.uint64)
         obj_id_array = numpy.empty(
             observations_frames.shape, dtype=numpy.uint32)
-        obj_id_array.fill(self.obj_id)
+        obj_id_array.fill(save_obj_id)
         MLE_position = numpy.array(
             tro.MLE_position, dtype=numpy.float32)
         MLE_Lcoords = numpy.array(
@@ -330,7 +336,7 @@ class KalmanSaver:
         P_data_full = P_data_full[cond]
 
         obj_id_array = numpy.empty(frames.shape, dtype=numpy.uint32)
-        obj_id_array.fill(self.obj_id)
+        obj_id_array.fill(save_obj_id)
 
         # one list entry per column
         list_of_xhats = [xhat_data[:,i]
@@ -387,6 +393,13 @@ def kalmanize(src_filename,
         camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
 
         if do_full_kalmanization:
+            if dynamic_model_name is None:
+                if hasattr(results.root,'kalman_estimates'):
+                    if hasattr(results.root.kalman_estimates.attrs,'dynamic_model_name'):
+                        dynamic_model_name = (
+                            results.root.kalman_estimates.attrs.dynamic_model_name)
+                        warnings.warn('dynamic model not specified. '
+                                      'using "%s"'%dynamic_model_name)
             if dynamic_model_name is None:
                 dynamic_model_name = 'EKF mamarama, units: mm'
                 warnings.warn('dynamic model not specified. '
@@ -630,8 +643,7 @@ def kalmanize(src_filename,
                                 else:
                                     process_frame(reconstructor,tracker,
                                                   last_frame,frame_data,camn2cam_id,
-                                                  debug=debug,
-                                                  area_threshold=area_threshold)
+                                                  debug=debug)
                             frame_count += 1
                             if do_full_kalmanization and frame_count%1000==0:
                                 time2 = time.time()
@@ -695,6 +707,7 @@ def kalmanize(src_filename,
                         if 'sumsqf_val' in row.dtype.fields: sumsqf_val = row['sumsqf_val']
                         else: sumsqf_val = None
 
+                        # FIXME: cache this stuff?
                         pmat_inv = reconstructor.get_pmat_inv(cam_id)
                         camera_center = reconstructor.get_camera_center(cam_id)
                         camera_center = numpy.hstack((camera_center[:,0],[1]))

@@ -35,9 +35,11 @@ def get_config_defaults():
             'zoom_factor':5,
             'white_background': False,
             'max_resolution': None,
+            'border_pixels': 0,
             'obj_labels':False,
             'linewidth':1.0,
             'show_cam_id':False,
+            'image_manipulation':'raw',
             }
     default = collections.defaultdict(dict)
     default['what to show']=what
@@ -163,6 +165,7 @@ def make_montage( h5_filename,
                   candidate_index = 0,
                   nth_frame=1,
                   verbose = False,
+                  reconstructor=None,
                   **kwargs):
     config = get_config_defaults()
     if cfg_filename is not None:
@@ -213,7 +216,10 @@ def make_montage( h5_filename,
                 dataqual_raw_3d = None
         else:
             data_raw_3d, dataqual_raw_3d = None, None
-        R = reconstruct.Reconstructor(kalman_filename)
+        if reconstructor is None:
+            R = reconstruct.Reconstructor(kalman_filename)
+        else:
+            R = reconstruct.Reconstructor(reconstructor)
     else:
         data3d = R = data_raw_3d = None
         dataqual_raw_3d = None
@@ -251,6 +257,8 @@ def make_montage( h5_filename,
 
     if len(movie_fnames)==0:
         raise ValueError('no input movies -- nothing to do')
+    elif verbose:
+        print 'movie_fnames:',movie_fnames
 
     if dest_dir is None:
         dest_dir = os.curdir
@@ -331,10 +339,6 @@ def make_montage( h5_filename,
         for movie_idx,ufmf_fname in enumerate(movie_fnames):
             try:
                 frame_data = frame_dict[ufmf_fname]
-                cam_id = frame_data['cam_id']
-                camn = frame_data['camn']
-                image = frame_data['image']
-                del frame_data
             except KeyError:
                 # no data saved (frame skip on Prosilica camera?)
                 if movie_cam_ids is not None:
@@ -347,30 +351,43 @@ def make_montage( h5_filename,
                     image = np.empty((im_h,im_w),dtype=np.uint8); image.fill(255)
                     blank_images[cam_id] = image
                 image = blank_images[cam_id]
+                mean_image = None
+            else:
+                cam_id = frame_data['cam_id']
+                camn = frame_data['camn']
+                image = frame_data['image']
+                if config['what to show']['image_manipulation'] == 'absdiff':
+                    mean_image = frame_data['mean']
+                del frame_data
             save_fname = 'tmp_frame%07d_%s.png'%(frame,cam_id)
             save_fname_path = os.path.join(dest_dir, save_fname)
 
             pixel_aspect = config[cam_id].get('pixel_aspect',1)
             transform = config[cam_id].get('transform','orig')
 
+            border_pixels = config['what to show']['border_pixels']
+
             if config['what to show']['max_resolution'] is not None:
+                b2 = border_pixels*2
                 fix_w, fix_h = config['what to show']['max_resolution']
-                fix_aspect = fix_w/float(fix_h)
+                fix_aspect = (fix_w-b2)/float(fix_h-b2)
                 desire_aspect = image.shape[1]/float(image.shape[0]*pixel_aspect)
                 if desire_aspect >= fix_aspect:
                     # image is wider than resolution given
-                    device_w = fix_w
-                    device_h = fix_w/desire_aspect
-                    device_x = 0
-                    device_y = (fix_h-device_h)/2.0
+                    device_w = fix_w-b2
+                    device_h = (fix_w-b2)/desire_aspect
+                    device_x = border_pixels
+                    device_y = (fix_h-device_h+border_pixels)/2.0
                 else:
                     # image is taller than resolution given
-                    device_h = fix_h
-                    device_w = fix_h*desire_aspect
-                    device_y = 0
-                    device_x = (fix_w-device_w)/2.0
+                    device_h = fix_h-b2
+                    device_w = (fix_h-b2)*desire_aspect
+                    device_y = border_pixels
+                    device_x = (fix_w-device_w+border_pixels)/2.0
                 user_rect = (0,0,image.shape[1],image.shape[0])
             elif config['what to show']['zoom_obj']:
+                if border_pixels != 0:
+                    raise NotImplementedError()
                 device_x = 0
                 device_y = 0
                 device_w = config['what to show']['zoom_orig_pixels']*config['what to show']['zoom_factor']
@@ -393,19 +410,25 @@ def make_montage( h5_filename,
                     # we're not tracking object -- don't draw anything
                     user_rect = (-1000,-1000,10,10)
             else:
-                device_x = 0
-                device_y = 0
+                device_x = border_pixels
+                device_y = border_pixels
                 device_w = image.shape[1]
                 device_h = int(image.shape[0]*pixel_aspect) # compensate for pixel_aspect
-                fix_w = device_w
-                fix_h = device_h
+                fix_w = device_w+2*border_pixels
+                fix_h = device_h+2*border_pixels
                 user_rect = (0,0,image.shape[1],image.shape[0])
 
             canv=benu.Canvas(save_fname_path,fix_w,fix_h)
             device_rect = (device_x,device_y,device_w,device_h)
             with canv.set_user_coords(device_rect, user_rect,
                                       transform=transform):
-                canv.imshow(image,0,0,cmap=colormap)
+                if config['what to show']['image_manipulation'] == 'raw':
+                    canv.imshow(image,0,0,cmap=colormap)
+                if config['what to show']['image_manipulation'] == 'absdiff':
+                    if mean_image is not None:
+                        adsdiff_image = abs(image.astype(np.int16)-mean_image.astype(np.int16))
+                        scaled_show = np.clip((5*adsdiff_image)+127, 0, 255).astype(np.uint8)
+                        canv.imshow(scaled_show,0,0,cmap=colormap)
                 if config['what to show']['show_2d_position'] and camn is not None:
                     cond = tracker_data['camn']==camn
                     this_cam_data = tracker_data[cond]
@@ -604,12 +627,14 @@ show_3d_smoothed_orientation = False
 minimum_display_orientation_quality = 0
 white_background =  False
 max_resolution = None
+border_pixels = 0
 zoom_obj = None
 zoom_orig_pixels = 50
 zoom_factor = 5
 obj_labels = False
 linewidth = 1.0
 show_cam_id = False
+image_manipulation = 'raw'
 
 Config files may also have sections such as:
 
@@ -626,7 +651,11 @@ transform='rot 180' # rotate the image 180 degrees (See transform
 
     parser.add_option('-k', "--kalman-file", dest="kalman_filename",
                       type='string',
-                      help=".h5 file with 3D kalman data and 3D reconstructor")
+                      help=".h5 file with 3D kalman data (and reconstructor if not given)")
+
+    parser.add_option('-R', "--reconstructor", dest="reconstructor",
+                      type='string',
+                      help="reconstructor used for computing 2D coordinates")
 
     parser.add_option("--dest-dir", type='string',
                       help="destination directory to save resulting files")
@@ -653,10 +682,12 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                       help="don't remove intermediate images")
 
     parser.add_option('--movie-fnames', type='string', default=None,
-                      help="names of movie files (don't autodiscover from .h5)")
+                      help=("names of movie files (separator is %r; "
+                            "don't autodiscover from .h5)"%(os.pathsep,)))
 
     parser.add_option('--movie-cam-ids', type='string', default=None,
-                      help="cam_ids of movie files (don't autodiscover from .h5)")
+                      help=("cam_ids of movie files (separator is %r; "
+                            "don't autodiscover from .h5)"%(os.pathsep,)))
 
     parser.add_option("--verbose", action='store_true', default=False,
                       help="verbose mode (help understand autodiscovery)")
@@ -687,6 +718,8 @@ transform='rot 180' # rotate the image 180 degrees (See transform
     if movie_cam_ids is not None:
         movie_cam_ids = movie_cam_ids.split( os.pathsep )
 
+    reconstructor = options.reconstructor
+
     h5_filename = args[0]
     kwargs = core_analysis.get_options_kwargs(options)
     make_montage( h5_filename,
@@ -706,4 +739,5 @@ transform='rot 180' # rotate the image 180 degrees (See transform
                   candidate_index = options.candidate,
                   verbose = options.verbose,
                   nth_frame = options.nth_frame,
+                  reconstructor = reconstructor,
                   **kwargs)
