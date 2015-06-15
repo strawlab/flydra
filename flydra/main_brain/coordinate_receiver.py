@@ -508,8 +508,8 @@ class CoordinateProcessor(threading.Thread):
                 if not self.last_framenumbers_skip[cam_idx]==-1:
                     # this is not the first frame
                     # probably because network buffer filled up before we emptied it
-                    LOG.warn('frame data loss %s' % cam_id)
-                    self.main_brain.queue_error_ros_msgs.put( FlydraError(FlydraError.FRAME_DATA_LOSS,cam_id) )
+                    LOG.warn('frame data loss %s' % msg.cam_id)
+                    self.main_brain.queue_error_ros_msgs.put( FlydraError(FlydraError.FRAME_DATA_LOSS,msg.cam_id) )
 
                 if ATTEMPT_DATA_RECOVERY:
                     if not self.last_framenumbers_skip[cam_idx]==-1:
@@ -521,7 +521,7 @@ class CoordinateProcessor(threading.Thread):
                         with self.request_data_lock:
                             tmp_queue = self.request_data.setdefault(absolute_cam_no,Queue.Queue())
 
-                        tmp_framenumber_offset = self.frame_offsets[cam_id]
+                        tmp_framenumber_offset = self.frame_offsets[msg.cam_id]
                         tmp_queue.put( (msg.cam_id,  tmp_framenumber_offset, missing_frame_numbers) )
                         del tmp_framenumber_offset
                         del tmp_queue # drop reference to queue
