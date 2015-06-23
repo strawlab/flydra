@@ -29,6 +29,7 @@ def get_config_defaults():
             'show_3d_raw_orientation': False,
             'show_3d_raw_chosen_orientation': False,
             'show_3d_smoothed_orientation': False,
+            'show_3d_obj_position_text': False,
             'minimum_display_orientation_quality':0,
             'zoom_obj':None,
             'zoom_orig_pixels':50,
@@ -181,7 +182,9 @@ def make_montage( h5_filename,
         config['what to show']['show_3d_MLE_position'] or
         config['what to show']['show_3d_raw_orientation'] or
         config['what to show']['show_3d_raw_chosen_orientation'] or
-        config['what to show']['show_3d_smoothed_orientation']):
+        config['what to show']['show_3d_smoothed_orientation'] or
+        config['what to show']['show_3d_obj_position_text']
+        ):
         if kalman_filename is None:
             raise ValueError('need kalman filename to show requested 3D data')
 
@@ -569,6 +572,15 @@ def make_montage( h5_filename,
                                        font_size=14,
                                        color_rgba=(1,0,0,1) )
 
+                if config['what to show']['show_3d_obj_position_text'] and camn is not None:
+                    if len(this_frame_3d_data):
+                        X = np.array([this_frame_3d_data['x'], this_frame_3d_data['y'], this_frame_3d_data['z'], np.ones_like(this_frame_3d_data['x'])]).T
+                        xarr,yarr = R.find2d( cam_id, X, distorted = True )
+                        for i in range(len(xarr)):
+                            canv.text( '(%.1f, %.1f, %.1f) mm'%( X[i,0]*1000.0, X[i,1]*1000.0, X[i,2]*1000.0 ), xarr[i]+10, yarr[i],
+                                       font_size=14,
+                                       color_rgba=(0,1,1,1) )
+
                 if config['what to show']['show_cam_id']:
                     canv.text( '%s'%cam_id, 0,20,
                                font_size=14,
@@ -624,6 +636,7 @@ show_3d_smoothed_position = False
 show_3d_raw_orientation = False
 show_3d_raw_chosen_orientation = False
 show_3d_smoothed_orientation = False
+show_3d_obj_position_text = False
 minimum_display_orientation_quality = 0
 white_background =  False
 max_resolution = None
