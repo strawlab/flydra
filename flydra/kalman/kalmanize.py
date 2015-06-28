@@ -157,12 +157,12 @@ option to this program.
     if debug > 5:
         print
         print 'At end of frame %d, all live tracked objects:'%frame
-        _=[tro.debug_info(level=debug) for tro in tracker.live_tracked_objects]
+        tracker.debug_info(level=debug)
         print
         print '-'*80
     elif debug > 2:
         print 'At end of frame %d, all live tracked objects:'%frame
-        _=[tro.debug_info(level=debug) for tro in tracker.live_tracked_objects]
+        tracker.debug_info(level=debug)
         print
 
 class KalmanSaver:

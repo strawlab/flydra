@@ -53,6 +53,14 @@ class Tracker:
         # XXX should we check .kill_me attribute on them?
         return len(self.live_tracked_objects)
 
+    def get_most_recent_data(self):
+        results = [tro.get_most_recent_data() \
+                   for tro in self.live_tracked_objects]
+        return results
+
+    def debug_info(level):
+        _=[tro.debug_info(level=level) for tro in self.live_tracked_objects]
+
     def is_believably_new( self, Xmm, debug=0 ):
 
         """Sometimes the Kalman tracker will not gobble all the points

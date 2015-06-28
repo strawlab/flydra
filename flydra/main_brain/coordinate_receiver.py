@@ -282,10 +282,6 @@ class CoordinateProcessor(threading.Thread):
                 tracker.kill_tracker_callbacks = []
                 if 1:
                     raise NotImplementedError('')
-                else:
-                    # this is the old call, it needs to be fixed...
-                    tracker.live_tracked_objects = []
-                tracker.dead_tracked_objects = []
                 self.data_dict_queue.append( ('tracker',tracker))
 
     def enqueue_finished_tracked_object(self, tracked_object ):
@@ -768,8 +764,7 @@ class CoordinateProcessor(threading.Thread):
 
                                 if self.debug_level.isSet():
                                     LOG.debug('%d live objects:'%self.tracker.how_many_are_living())
-                                    results = [tro.get_most_recent_data() \
-                                                   for tro in self.tracker.live_tracked_objects]
+                                    results = self.tracker.get_most_recent_data()
                                     for result in results:
                                         if result is None:
                                             continue
@@ -813,9 +808,7 @@ class CoordinateProcessor(threading.Thread):
                                     # "hypothesis testing" algorithm on remaining data to see if there
                                     # are new objects.
 
-                                    results = [ tro.get_most_recent_data() \
-                                                    for tro in self.tracker.live_tracked_objects]
-
+                                    results = self.tracker.get_most_recent_data()
                                     Xs = []
                                     for result in results:
                                         if result is None:
@@ -877,8 +870,7 @@ class CoordinateProcessor(threading.Thread):
                                 if 1:
                                     if self.tracker.how_many_are_living():
                                         #publish state to ROS
-                                        results = [tro.get_most_recent_data() \
-                                                       for tro in self.tracker.live_tracked_objects]
+                                        results = self.tracker.get_most_recent_data()
                                         ros_objects = []
                                         for result in results:
                                             if result is None:
