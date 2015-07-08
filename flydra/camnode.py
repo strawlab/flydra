@@ -2793,7 +2793,7 @@ def parse_args_and_run(benchmark, cmdline_args):
     parser.add_option("--emulation-image-sources", type="string",
                       help=("list of image sources for each camera (uses OS-specific "
                             "path separator, ':' for POSIX, ';' for Windows) ends with '.fmf', "
-                            "'.ufmf', or is '<random:params=x>'"))
+                            "'.ufmf', or is '<rng>'"))
 
     parser.add_option("--simulate-point-extraction", type="string",
                       help="list of image sources for each camera")
