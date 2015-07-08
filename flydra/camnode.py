@@ -1742,7 +1742,7 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
 
 class FakeCameraFromRNG(_Camera):
     def __init__(self,guid,frame_size):
-        print guid*10
+
         _Camera.__init__(self, guid)
         self.frame_size = frame_size
         self.last_timestamp = 0.0
