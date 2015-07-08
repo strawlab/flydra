@@ -1259,15 +1259,29 @@ class MainBrain(object):
 
         list_of_textlog_data = [
             (timestamp,cam_id,timestamp,
-             ('MainBrain running at %s fps, (flydra_version %s, '
-              'time_tzname0 %s)'%(
-            str(self.trigger_device.get_frames_per_second()),
-            flydra.version.__version__,
-            time.tzname[0],
-            ))),
-            (timestamp,cam_id,timestamp, 'using flydra version %s'%(
-             flydra.version.__version__,)),
-            ]
+             'MainBrain running at %s fps, (flydra_version %s, time_tzname0 %s)' % (
+                self.trigger_device.get_frames_per_second(),
+                flydra.version.__version__,
+                time.tzname[0])
+            ),
+            (timestamp,cam_id,timestamp,
+             'using flydra version %s' % (flydra.version.__version__,)),
+        ]
+
+        list_of_textlog_data.append(
+            (timestamp,cam_id,timestamp,
+             'using pytables version %s' % tables.__version__))
+
+        for lib in ('hdf5', 'zlib', 'lzo', 'bzip2', 'blosc'):
+            try:
+                _,ver,_ = tables.which_lib_version(lib)
+                list_of_textlog_data.append(
+                    (timestamp,cam_id,timestamp,
+                     'using pytables:%s version %s' % (lib, ver)))
+            except ValueError:
+                #unknown lib
+                pass
+
         for textlog_data in list_of_textlog_data:
             (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
             textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
