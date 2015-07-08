@@ -342,10 +342,11 @@ class MainBrain(object):
 
         def external_quit( self, cam_id):
             with self.cam_info_lock:
-                cam = self.cam_info[cam_id]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['quit']=True
+                if cam_id in self.cam_info:
+                    cam = self.cam_info[cam_id]
+                    cam_lock = cam['lock']
+                    with cam_lock:
+                        cam['commands']['quit']=True
 
         def external_take_background( self, cam_id):
             with self.cam_info_lock:
