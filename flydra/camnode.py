@@ -2367,7 +2367,16 @@ class AppState(object):
     def get_image_controllers(self):
         return self._image_controllers
 
-    def quit_function(self,exit_value):
+    def safe_quit(self):
+        for cam_no, cam_id in enumerate(self.all_cam_ids):
+            cam_id = self.all_cam_ids[cam_no]
+            cam = self.all_cams[cam_no]
+            with cam.lock:
+                cam.close()
+            self.cam_status[cam_no] = 'destroyed'
+            self.main_brain.close(cam_id)
+
+    def quit_function(self, exit_value):
         for globals in self.globals:
             globals['process_quit_event'].set()
 
@@ -2723,6 +2732,7 @@ def main(rospy_init_node=True,cmdline_args=None):
         cmdline_args = rospy.myargv()[1:]
         rospy.init_node('flydra_camera_node',disable_signals=True)
         rosthread = threading.Thread(target=rospy.spin,name='rosthread')
+        rosthread.setDaemon(True)
         rosthread.start()
 
     LOG.info('ROS name: %s' % rospy.get_name())
@@ -2730,14 +2740,20 @@ def main(rospy_init_node=True,cmdline_args=None):
     if cmdline_args is None:
         cmdline_args = sys.argv[1:]
 
-    parse_args_and_run(False, cmdline_args)
+    app,app_state = parse_args(False, cmdline_args)
+
+    #register a shutdown function so we can be cleanly killed by ROS
+    rospy.on_shutdown(app_state.safe_quit)
+
+    app.MainLoop()
+
     if rospy_init_node:
         rospy.signal_shutdown("quit")
 
 def benchmark():
     parse_args_and_run(True, sys.argv[1:])
 
-def parse_args_and_run(benchmark, cmdline_args):
+def parse_args(benchmark, cmdline_args):
     parser = optparse.OptionParser(usage="%prog [options]",
                           version="%prog "+flydra.version.__version__)
 
@@ -2830,6 +2846,11 @@ def parse_args_and_run(benchmark, cmdline_args):
     for (model, controller) in zip(app_state.get_image_sources(),
                                    app_state.get_image_controllers()):
         app.generate_view( model, controller )
+
+    return app,app_state
+
+def parse_args_and_run(benchmark, cmdline_args):
+    app,app_state = parse_args(benchmark, cmdline_args)
     app.MainLoop()
 
 if __name__=='__main__':
