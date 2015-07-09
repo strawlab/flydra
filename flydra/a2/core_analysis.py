@@ -288,10 +288,10 @@ def kalman_smooth(orig_rows,
         warnings.warn('searchsorted is probably very slow because of different dtypes')
     idx = frames.searchsorted(obs_frames)
 
-    x = numpy.ones( frames.shape, dtype=numpy.float )
-    y = numpy.ones( frames.shape, dtype=numpy.float )
-    z = numpy.ones( frames.shape, dtype=numpy.float )
-    R = numpy.ones( (frames.shape[0],3,3), dtype=numpy.float )
+    x = np.nan*numpy.ones( frames.shape, dtype=numpy.float )
+    y = np.nan*numpy.ones( frames.shape, dtype=numpy.float )
+    z = np.nan*numpy.ones( frames.shape, dtype=numpy.float )
+    R = np.nan*numpy.ones( (frames.shape[0],3,3), dtype=numpy.float )
     obj_id_array =  numpy.ma.masked_array( numpy.empty( frames.shape, dtype=numpy.uint32 ),
                                            mask=numpy.ones( frames.shape, dtype=numpy.bool_ ) )
 
