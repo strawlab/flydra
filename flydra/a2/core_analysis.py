@@ -1309,6 +1309,8 @@ class FileContextManager:
         #self._data_file.close()
     def get_unique_obj_ids(self):
         return self._unique_obj_ids
+    def get_all_obj_ids(self):
+        return self._obj_ids
     def get_extra_info(self):
         return self._extra
     def get_reconstructor(self):
@@ -1318,8 +1320,14 @@ class FileContextManager:
     def get_fps(self):
         return flydra.analysis.result_utils.get_fps(self._2d_file,
                                                     fail_on_error=True)
+    def get_tzname0(self):
+        return flydra.analysis.result_utils.get_tzname0(self._2d_file)
+    def get_drift_estimates(self):
+        return flydra.analysis.result_utils.drift_estimates(self._2d_file)
     def read_textlog_header(self):
         return flydra.analysis.result_utils.read_textlog_header(self._data_file)
+    def read_textlog_header_2d(self):
+        return flydra.analysis.result_utils.read_textlog_header( self._2d_file )
     def get_pytable_node(self, table_name, from_2d_file=False, groups=None):
         """read entire table into RAM"""
         if groups is None:
