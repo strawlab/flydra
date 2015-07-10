@@ -1271,6 +1271,10 @@ class MainBrain(object):
 
         list_of_textlog_data.append(
             (timestamp,cam_id,timestamp,
+             'using numpy version %s' % numpy.__version__))
+
+        list_of_textlog_data.append(
+            (timestamp,cam_id,timestamp,
              'using pytables version %s' % tables.__version__))
 
         for lib in ('hdf5', 'zlib', 'lzo', 'bzip2', 'blosc'):
