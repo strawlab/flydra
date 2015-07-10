@@ -108,6 +108,9 @@ class NotEnoughDataToSmoothError(ObjectIDDataError):
 class CouldNotCalculateOrientationError(ObjectIDDataError):
     pass
 
+class DiscontiguousFramesError(ObjectIDDataError):
+    pass
+
 def parse_seq( input ):
     input = input.replace(',',' ')
     seq = map(int,input.split())
@@ -1648,15 +1651,10 @@ class CachingAnalyzer:
                     raise NoObjectIDError('no data from obj_id %d was found'%obj_id)
 
                 if 1:
-                    # Workaround a presumed race condition in mainbrain in which
-                    # (re)synchronizing the cameras does not clear old data.
-                    fmin, fmax = np.min(ML_rows['frame']), np.max(ML_rows['frame'])
                     kframes = kalman_rows['frame']
-                    kmin, kmax = np.min(kframes), np.max(kframes)
-                    if (kmin < fmin) or (kmax > fmax):
-                        warnings.warn('Bad data for obj_id %d' % obj_id)
-                        kr_good = (kframes >= fmin) & (kframes <= fmax)
-                        kalman_rows = kalman_rows[ kr_good ]
+                    kdiff = kframes[1:] - kframes[:-1]
+                    if np.any(kdiff != 1):
+                        raise DiscontiguousFramesError('obj_id %d not contiguous'%obj_id)
 
                 if 1 :
                     # filter out observations in which are nan (only 1 camera contributed)

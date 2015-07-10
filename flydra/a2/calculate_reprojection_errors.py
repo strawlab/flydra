@@ -95,6 +95,8 @@ def calculate_reprojection_errors(h5_filename=None,
                 except core_analysis.NotEnoughDataToSmoothError, err:
                     # OK, we don't have data from this obj_id
                     pass
+                except core_analysis.DiscontiguousFramesError:
+                    pass
 
             for this_3d_row in obj_3d_rows:
                 # iterate over each sample in the current camera

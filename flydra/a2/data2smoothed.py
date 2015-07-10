@@ -245,6 +245,9 @@ def convert(infilename,
                                             dynamic_model_name=dynamic_model_name,
                                             frames_per_second=frames_per_second,
                                             **kwargs)
+            except core_analysis.DiscontiguousFramesError:
+                warnings.warn('discontiguous frames smoothing obj_id %d, skipping.'%(obj_id,))
+                continue
             except core_analysis.NotEnoughDataToSmoothError:
                 #warnings.warn('not enough data to smooth obj_id %d, skipping.'%(obj_id,))
                 continue
