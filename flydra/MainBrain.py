@@ -202,6 +202,7 @@ class MainBrain(object):
         stop_small_recording=(std_srvs.srv.Empty),
         do_synchronization=(std_srvs.srv.Empty),
 
+        log_message=(ros_flydra.srv.MainBrainLogMessage),
         get_version=(ros_flydra.srv.MainBrainGetVersion),
         register_new_camera=(ros_flydra.srv.MainBrainRegisterNewCamera),
         get_listen_address=(ros_flydra.srv.MainBrainGetListenAddress),
@@ -468,10 +469,10 @@ class MainBrain(object):
                     cam['commands'] = {}
             return cmds
 
-        def log_message(self,cam_id,host_timestamp,message):
+        def log_message(self,cam_id,timestamp,message):
             mainbrain_timestamp = time.time()
             LOG.info('received log message from %s: %s'%(cam_id,message))
-            self.message_queue.put( (mainbrain_timestamp,cam_id,host_timestamp,message) )
+            self.message_queue.put( (mainbrain_timestamp,cam_id,timestamp,message) )
 
         def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
@@ -705,6 +706,9 @@ class MainBrain(object):
 
     def get_version(self):
         return std_msgs.msg.String(flydra.version.__version__),
+
+    def log_message(self,cam_id,timestamp,message):
+        self.remote_api.log_message(cam_id.data,timestamp.data,message.data)
 
     def register_new_camera(self,
                             cam_guid,
