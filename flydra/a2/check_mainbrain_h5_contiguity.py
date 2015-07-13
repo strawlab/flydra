@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+from __future__ import print_function
+import tables
+import argparse
+import numpy as np
+import sys
+
+def check_mainbrain_h5_contiguity( filename, slow_but_less_ram=False, shortcircuit=False, verbose=False):
+    failed_obj_ids = []
+    if verbose:
+        print('opening %r'%filename)
+    with tables.openFile( filename, mode='r' ) as f:
+        table = f.root.kalman_estimates
+
+        all_obj_ids = table.cols.obj_id[:]
+        obj_ids = np.unique(all_obj_ids)
+        if verbose:
+            print('checking %d obj_ids'%len(obj_ids))
+        if not slow_but_less_ram:
+            # faster but more RAM
+            all_frames = table.cols.frame[:]
+            for obj_id in obj_ids:
+                frame = all_frames[ all_obj_ids == obj_id ]
+                diff = frame[1:]-frame[:-1]
+                if np.any( diff!=1 ):
+                    failed_obj_ids.append( obj_id )
+                    if verbose:
+                        print('failed: %d'%obj_id)
+                    if shortcircuit:
+                        return failed_obj_ids
+                    else:
+                        break
+        else:
+            # slower but more memory efficient
+            for obj_id in obj_ids:
+                cond = all_obj_ids==obj_id
+                idxs = np.nonzero(cond)[0]
+                frame = table.read_coordinates( idxs, field='frame' )
+                diff = frame[1:]-frame[:-1]
+                if np.any( diff!=1 ):
+                    failed_obj_ids.append( obj_id )
+                    if verbose:
+                        print('failed: %d'%obj_id)
+                    if shortcircuit:
+                        return failed_obj_ids
+                    else:
+                        break
+
+    return failed_obj_ids
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file", type=str, default=None,
+                        help='file to check')
+    parser.add_argument("--verbose", action='store_true', default=False,
+                        help='print stuff')
+    parser.add_argument("--slow-but-less-ram", action='store_true', default=False,
+                        help='print stuff')
+    options = parser.parse_args()
+    failed_obj_ids = check_mainbrain_h5_contiguity( filename=options.file,
+                                                    slow_but_less_ram=options.slow_but_less_ram,
+                                                    shortcircuit=not options.verbose,
+                                                    verbose=options.verbose)
+    if len(failed_obj_ids):
+        if options.verbose:
+            print('some objects failed')
+        sys.exit(1)
+    else:
+        if options.verbose:
+            print('no objects failed')
+        sys.exit(0)
+
+if __name__=='__main__':
+    main()
