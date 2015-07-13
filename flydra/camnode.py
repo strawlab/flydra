@@ -185,6 +185,17 @@ class ROSMainBrain:
         self._close_camera = rospy.ServiceProxy('/flydra_mainbrain/close_camera',
                                              ros_flydra.srv.MainBrainCloseCamera)
 
+        rospy.wait_for_service('/flydra_mainbrain/log_message')
+        self._log_message = rospy.ServiceProxy('/flydra_mainbrain/log_message',
+                                             ros_flydra.srv.MainBrainLogMessage)
+
+    def log_message(self, cam_id, timestamp, message):
+        req = ros_flydra.srv.MainBrainLogMessageRequest()
+        req.cam_id = std_msgs.msg.String(cam_id)
+        req.timestamp = std_msgs.msg.Float32(timestamp)
+        req.message = std_msgs.msg.String(message)
+        self._log_message(req)
+
     def get_version(self):
         return self._get_version().version.data
 
@@ -639,7 +650,7 @@ class ProcessCamClass(rospy.SubscribeListener):
                 posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
                 msg = 'excellent, grab thread running in maximum prioity mode'
             except Exception, x:
-                msg = 'WARNING: could not run in maximum priority mode:', str(x)
+                msg = 'WARNING: could not run in maximum priority mode: %s' % x
             self.log_message_queue.put((self.cam_id,time.time(),msg))
             LOG.info(msg)
 
@@ -1016,6 +1027,23 @@ class FakeProcessCamData(object):
                 #stdout_write('P')
                 buf.processed_points = [ (10,20) ]
 
+class LogMessageSender(threading.Thread):
+    def __init__(self, main_brain, log_message_queue, quit_event):
+        threading.Thread.__init__(self, name='LogMessageSender')
+        self._main_brain = main_brain
+        self._log_message_queue = log_message_queue
+        self._quit_event = quit_event
+
+    def run(self):
+        while not self._quit_event.isSet():
+            try:
+                log_message = self._log_message_queue.get(block=False)
+                self._main_brain.log_message(*log_message)
+            except Queue.Empty:
+                pass
+            #no need for this thread to spin crazy fast.
+            time.sleep(0.2)
+
 class SaveCamData(object):
     def __init__(self,cam_id=None,quit_event=None):
         self._chain = camnode_utils.ChainLink()
@@ -1335,10 +1363,10 @@ class ImageSource(threading.Thread):
                  chain=None,
                  cam=None,
                  buffer_pool=None,
-                 debug_acquire = False,
-                 cam_id = '<unassigned>',
-                 quit_event = None,
-                 ):
+                 debug_acquire=False,
+                 cam_id='<unassigned>',
+                 quit_event=None,
+                 log_message_queue=None):
 
         threading.Thread.__init__(self,name='ImageSource')
         self._chain = chain
@@ -1349,6 +1377,7 @@ class ImageSource(threading.Thread):
         self.debug_acquire = debug_acquire
         self.quit_event = quit_event
         self.cam_id = cam_id
+        self.log_message_queue = log_message_queue
 
     def set_chain(self,new_chain):
         # XXX TODO FIXME: put self._chain behind lock
@@ -1454,31 +1483,30 @@ class ImageSourceFromCamera(ImageSource):
             # semi-evil hack into camera class... Should call a method
             # like self.cam.acquire_thread())
             # self.cam.mythread=threading.currentThread()
-
             try:
                 self.cam.grab_next_frame_into_buf_blocking(_bufim)
             except cam_iface.BuffersOverflowed:
                 if self.debug_acquire:
                     stdout_write('(O%s)'%self.cam_id)
                 now = time.time()
-                msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                self.log_message_queue.put((self.cam_id,now,msg))
+                msg = 'WARN: buffers overflowed on %s at %s' % (self.cam_id, time.asctime(time.localtime(now)))
+                self.log_message_queue.put((self.cam_id, now, msg))
                 LOG.warn(msg)
                 try_again_condition = True
             except cam_iface.FrameDataMissing:
                 if self.debug_acquire:
                     stdout_write('(M%s)'%self.cam_id)
                 now = time.time()
-                msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                #self.log_message_queue.put((self.cam_id,now,msg))
+                msg = 'WARN: frame data missing on %s at %s' % (self.cam_id, time.asctime(time.localtime(now)))
+                self.log_message_queue.put((self.cam_id, now, msg))
                 LOG.warn(msg)
                 try_again_condition = True
             except cam_iface.FrameDataCorrupt:
                 if self.debug_acquire:
                     stdout_write('(C%s)'%self.cam_id)
                 now = time.time()
-                msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                #self.log_message_queue.put((self.cam_id,now,msg))
+                msg = 'WARN: frame data corrupt on %s at %s' % (self.cam_id, time.asctime(time.localtime(now)))
+                self.log_message_queue.put((self.cam_id, now, msg))
                 LOG.warn(msg)
                 try_again_condition = True
             except (cam_iface.FrameSystemCallInterruption, cam_iface.NoFrameReturned):
@@ -1520,7 +1548,9 @@ class ImageSourceFakeCamera(ImageSource):
                 tstop = time.time()
                 dur = tstop-self._tstart
                 fps = self._count/dur
-                LOG.debug('fps: %.1f' % fps)
+
+                #debug message to check log_message_queue is working
+                self.log_message_queue.put((self.cam_id, tstop, 'fps: %.1f' % fps))
 
                 # prepare for next
                 self._tstart = tstop
@@ -2052,13 +2082,13 @@ class AppState(object):
                     l,b,w,h = cam.get_frame_roi()
                 buffer_pool = PreallocatedBufferPool(FastImage.Size(w,h))
                 del l,b,w,h
-                image_source = ImageSourceModel(chain = None,
-                                                cam = cam,
-                                                buffer_pool = buffer_pool,
-                                                debug_acquire = options.debug_acquire,
-                                                cam_id = self.all_cam_ids[cam_no],
-                                                quit_event = globals['process_quit_event'],
-                                                )
+                image_source = ImageSourceModel(chain=None,
+                                                cam=cam,
+                                                buffer_pool=buffer_pool,
+                                                debug_acquire=options.debug_acquire,
+                                                cam_id=self.all_cam_ids[cam_no],
+                                                quit_event=globals['process_quit_event'],
+                                                log_message_queue=self.log_message_queue)
                 if benchmark: # should maybe be for any simulated camera in non-GUI mode?
                     image_source.register_buffer_pool( buffer_pool )
 
@@ -2086,6 +2116,7 @@ class AppState(object):
             if not options.ignore_version:
                 assert main_brain_version == flydra.version.__version__, "version mismatch: %s vs %s"%(main_brain_version,flydra.version.__version__)
 
+            self.main_brain.log_message(rospy.get_name(),time.time(),'using flydra version %s' % flydra.version.__version__)
         ##################################################################
         #
         # Initialize more stuff
@@ -2303,6 +2334,13 @@ class AppState(object):
                     self.all_cam_chains[cam_no]=cam_processor_chain
                     thread = threading.Thread( target = cam_processor.mainloop,
                                                name = 'cam_processor.mainloop')
+                    thread.setDaemon(True)
+                    thread.start()
+                    self.critical_threads.append( thread )
+
+                    thread = LogMessageSender(self.main_brain,
+                                              self.log_message_queue,
+                                              globals['process_quit_event'])
                     thread.setDaemon(True)
                     thread.start()
                     self.critical_threads.append( thread )
