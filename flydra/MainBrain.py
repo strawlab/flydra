@@ -1332,30 +1332,27 @@ class MainBrain(object):
             self.h5data2d.flush()
 
         # ** textlog **
-        # clear queue
-        list_of_textlog_data = []
-        try:
-            while True:
-                tmp = self.remote_api.message_queue.get(0)
-                list_of_textlog_data.append( tmp )
-        except Queue.Empty:
-            pass
-        if 1:
-            for textlog_data in list_of_textlog_data:
-                (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
-                LOG.debug('MESSAGE: %s %s "%s"'%(cam_id, time.asctime(time.localtime(host_timestamp)), message))
-        #   save
-        if self.h5textlog is not None and len(list_of_textlog_data):
-            textlog_row = self.h5textlog.row
-            for textlog_data in list_of_textlog_data:
-                (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
-                textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
-                textlog_row['cam_id'] = cam_id
-                textlog_row['host_timestamp'] = host_timestamp
-                textlog_row['message'] = message
-                textlog_row.append()
+        if self.h5textlog is not None:
+            #we don't want to miss messages, so wait until we are saving
+            list_of_textlog_data = []
+            try:
+                while True:
+                    tmp = self.remote_api.message_queue.get(0)
+                    list_of_textlog_data.append( tmp )
+            except Queue.Empty:
+                pass
 
-            self.h5textlog.flush()
+            if list_of_textlog_data:
+                textlog_row = self.h5textlog.row
+                for textlog_data in list_of_textlog_data:
+                    (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
+                    textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
+                    textlog_row['cam_id'] = cam_id
+                    textlog_row['host_timestamp'] = host_timestamp
+                    textlog_row['message'] = message
+                    textlog_row.append()
+
+                self.h5textlog.flush()
 
         if 1:
             # ** 3d data - kalman **
