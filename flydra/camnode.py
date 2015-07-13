@@ -1672,18 +1672,23 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         # auto select format7_0 mode
         N_modes = cam_iface.get_num_modes(cam_no)
         use_mode = None
+        use_mode_string = 'UNKNOWN'
         if self._show_cam_details:
             LOG.info('camera info: %s' % (cam_iface.get_camera_info(cam_no),))
         for i in range(N_modes):
             mode_string = cam_iface.get_mode_string(cam_no,i)
             if self._show_cam_details:
                 LOG.info('  mode %d: %s'%(i,mode_string))
-            if 'format7_0' in mode_string.lower():
+
+            if ('format7_0' in mode_string.lower()) and ('MONO8' in mode_string):
                 use_mode = i
+                use_mode_string = mode_string
+
         if use_mode is None:
             use_mode = 0
 
         cam_iface.Camera.__init__(self,cam_no,num_buffers,use_mode)
+        LOG.info('Opened cam_iface camera %d with mode %d (%s)' % (cam_no, use_mode, use_mode_string))
 
         # cache trigger mode names
         self._trigger_mode_numbers_from_name = {}
