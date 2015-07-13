@@ -1377,7 +1377,9 @@ class ImageSource(threading.Thread):
         self.debug_acquire = debug_acquire
         self.quit_event = quit_event
         self.cam_id = cam_id
+
         self.log_message_queue = log_message_queue
+        self.log_message_queue.put((self.cam_id,time.time(),"camera instance: %s" % self.cam.desc))
 
     def set_chain(self,new_chain):
         # XXX TODO FIXME: put self._chain behind lock
@@ -1609,8 +1611,9 @@ class _Camera(object):
 
     ROS_PROPERTIES = {}
 
-    def __init__(self, guid):
+    def __init__(self, guid, desc=''):
         self.guid = guid
+        self.desc = desc if desc else self.__class__.__name__
         self.lock = threading.Lock()
 
     def start_camera(self):
@@ -1687,8 +1690,10 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         if use_mode is None:
             use_mode = 0
 
+        desc = "CamifaceCamera #%d mode %d='%s'" % (cam_no, use_mode, use_mode_string)
+
         cam_iface.Camera.__init__(self,cam_no,num_buffers,use_mode)
-        LOG.info('Opened cam_iface camera %d with mode %d (%s)' % (cam_no, use_mode, use_mode_string))
+        LOG.info('Opened %s' % desc)
 
         # cache trigger mode names
         self._trigger_mode_numbers_from_name = {}
@@ -1712,7 +1717,7 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
             self._prop_numbers_from_name[name] = i
             self._prop_names_from_numbers[i] = name
 
-        _Camera.__init__(self, guid)
+        _Camera.__init__(self, guid, desc=desc)
 
     def _get_rosparam_path(self, paramname):
         return "%s/%s" % (self.guid, paramname)
