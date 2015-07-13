@@ -1449,9 +1449,6 @@ class ImageSource(threading.Thread):
                 chainbuf._i_promise_to_return_buffer_to_the_pool = True
                 self._chain.fire( chainbuf )
 
-class ImageSourceBaseController(object):
-    pass
-
 class ImageSourceFromCamera(ImageSource):
     def __init__(self,*args,**kwargs):
         ImageSource.__init__(self,*args,**kwargs)
@@ -1459,10 +1456,6 @@ class ImageSourceFromCamera(ImageSource):
     def _block_until_ready(self):
         # no-op for realtime camera processing
         pass
-
-    def spawn_controller(self):
-        controller = ImageSourceBaseController()
-        return controller
 
     def _grab_buffer_quick(self):
         try:
@@ -1539,6 +1532,9 @@ class ImageSourceFakeCamera(ImageSource):
         self._count = 0
         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
 
+        #start 'acquisition'
+        self._do_step.set()
+
     def _block_until_ready(self):
         while 1:
             if self.quit_event.isSet():
@@ -1573,27 +1569,6 @@ class ImageSourceFakeCamera(ImageSource):
     def register_buffer_pool( self, buffer_pool ):
         assert self._buffer_pool is None,'buffer pool may only be set once'
         self._buffer_pool = buffer_pool
-
-    def spawn_controller(self):
-        class ImageSourceFakeCameraController(ImageSourceBaseController):
-            def __init__(self, do_step=None, fake_cam=None, quit_event=None):
-                self._do_step = do_step
-                self._fake_cam = fake_cam
-                self._quit_event = quit_event
-            def trigger_single_frame_start(self):
-                self._do_step.set()
-            def set_to_frame_0(self):
-                self._fake_cam.set_to_frame_0()
-            def is_finished(self):
-                return self._fake_cam.is_finished()
-            def quit_now(self):
-                self._quit_event.set()
-            def get_n_frames(self):
-                return self._fake_cam.get_n_frames()
-        controller = ImageSourceFakeCameraController(self._do_step,
-                                                     self._fake_cam,
-                                                     self.quit_event)
-        return controller
 
     def _grab_buffer_quick(self):
         time.sleep(0.05)
@@ -1928,11 +1903,6 @@ class ConsoleApp(object):
         self.quit_now = True
         self.exit_value = exit_value
 
-    def generate_view(self, model, controller ):
-        if hasattr(controller, 'trigger_single_frame_start' ):
-            warnings.warn('no control in ConsoleApp for %s'%controller)
-            controller.trigger_single_frame_start()
-
 class AppState(object):
     """This class handles all camera states, properties, etc."""
     def __init__(self,
@@ -2002,7 +1972,6 @@ class AppState(object):
         self.all_cam_ids = [None]*num_cams
 
         self._image_sources = [None]*num_cams
-        self._image_controllers = [None]*num_cams
         initial_images = [None]*num_cams
         self.critical_threads = []
 
@@ -2102,14 +2071,10 @@ class AppState(object):
                 if benchmark: # should maybe be for any simulated camera in non-GUI mode?
                     image_source.register_buffer_pool( buffer_pool )
 
-                controller = image_source.spawn_controller()
-
                 image_source.setDaemon(True)
                 self._image_sources[cam_no] = image_source
-                self._image_controllers[cam_no]= controller
             else:
                 self._image_sources[cam_no] = None
-                self._image_controllers[cam_no]= None
 
         ##################################################################
         #
@@ -2411,9 +2376,6 @@ class AppState(object):
 
     def get_image_sources(self):
         return self._image_sources
-
-    def get_image_controllers(self):
-        return self._image_controllers
 
     def safe_quit(self):
         for cam_no, cam_id in enumerate(self.all_cam_ids):
@@ -2890,10 +2852,6 @@ def parse_args(benchmark, cmdline_args):
 
     app=ConsoleApp(call_often = app_state.main_thread_task)
     app_state.set_quit_function( app.OnQuit )
-
-    for (model, controller) in zip(app_state.get_image_sources(),
-                                   app_state.get_image_controllers()):
-        app.generate_view( model, controller )
 
     return app,app_state
 
