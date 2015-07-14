@@ -54,20 +54,24 @@ def main():
                         help='file to check')
     parser.add_argument("--verbose", action='store_true', default=False,
                         help='print stuff')
+    parser.add_argument("--findall", action='store_true', default=False,
+                        help='continue after first hit (only make sense with verbose or output-log)')
     parser.add_argument("--slow-but-less-ram", action='store_true', default=False,
                         help='print stuff')
+    parser.add_argument("--no-output-log", action='store_true', default=False,
+                        help='do not print a final summary')
     options = parser.parse_args()
     failed_obj_ids = check_mainbrain_h5_contiguity( filename=options.file,
                                                     slow_but_less_ram=options.slow_but_less_ram,
-                                                    shortcircuit=not options.verbose,
+                                                    shortcircuit=not options.findall,
                                                     verbose=options.verbose)
     if len(failed_obj_ids):
-        if options.verbose:
-            print('some objects failed')
+        if not options.no_output_log:
+            print('%s some objects failed: %r' % (options.file, failed_obj_ids))
         sys.exit(1)
     else:
-        if options.verbose:
-            print('no objects failed')
+        if not options.no_output_log:
+            print('%s no objects failed' % options.file)
         sys.exit(0)
 
 if __name__=='__main__':
