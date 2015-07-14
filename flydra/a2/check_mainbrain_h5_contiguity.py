@@ -48,6 +48,7 @@ def check_mainbrain_h5_contiguity( filename, slow_but_less_ram=False, shortcircu
 
     return failed_obj_ids
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("file", type=str, default=None,
@@ -73,6 +74,17 @@ def main():
         if not options.no_output_log:
             print('%s no objects failed' % options.file)
         sys.exit(0)
+
+
+def cls(root='/mnt/strawscience/data/auto_pipeline/raw_archive/by_date'):
+    """Generates example command lines amenable to use, for example, with GNU parallel."""
+    from itertools import product
+    import os.path as op
+    for year, month in product((2015, 2014, 2013, 2012), ['%02d' % d for d in xrange(1, 13)]):
+        print("find %s -iname '*.mainbrain.h5' "
+              "-exec flydra_analysis_check_mainbrain_h5_contiguity {} \; "
+              "&>~/%d-%s.log" % (op.join(root, str(year), month), year, month))
+
 
 if __name__=='__main__':
     main()
