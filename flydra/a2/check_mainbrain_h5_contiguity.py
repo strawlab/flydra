@@ -28,8 +28,6 @@ def check_mainbrain_h5_contiguity( filename, slow_but_less_ram=False, shortcircu
                         print('failed: %d'%obj_id)
                     if shortcircuit:
                         return failed_obj_ids
-                    else:
-                        break
         else:
             # slower but more memory efficient
             for obj_id in obj_ids:
@@ -43,8 +41,6 @@ def check_mainbrain_h5_contiguity( filename, slow_but_less_ram=False, shortcircu
                         print('failed: %d'%obj_id)
                     if shortcircuit:
                         return failed_obj_ids
-                    else:
-                        break
 
     return failed_obj_ids
 
@@ -82,7 +78,7 @@ def cls(root='/mnt/strawscience/data/auto_pipeline/raw_archive/by_date'):
     import os.path as op
     for year, month in product((2015, 2014, 2013, 2012), ['%02d' % d for d in xrange(1, 13)]):
         print("find %s -iname '*.mainbrain.h5' "
-              "-exec flydra_analysis_check_mainbrain_h5_contiguity {} \; "
+              "-exec flydra_analysis_check_mainbrain_h5_contiguity --findall {} \; "
               "&>~/%d-%s.log" % (op.join(root, str(year), month), year, month))
 
 
