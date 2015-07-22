@@ -1,5 +1,7 @@
 import math
+
 import h5py
+import numpy as np
 
 def get_valid_userblock_size( min ):
     result = 2**int(math.ceil(math.log( min, 2)))
@@ -7,6 +9,34 @@ def get_valid_userblock_size( min ):
         result = 512
     return result
 
+def get_flydra_hdf5_datatypes():
+    """
+    Returns a 3-tuple (traj_datatypes, traj_start_datatypes, experiment_info_datatypes)
+    Useful to created numpy record arrays of the correct type
+    """
+
+    traj_datatypes = [
+        ("obj_id", np.uint32),
+        ("framenumber", np.int64),
+        ("x", np.float64),
+        ("y", np.float64),
+        ("z", np.float64),
+        ("covariance_x", np.float64),
+        ("covariance_y", np.float64),
+        ("covariance_z", np.float64),
+    ]
+
+    traj_start_datatypes = [
+        ("obj_id", np.uint32),
+        ("first_timestamp_secs", np.uint64),
+        ("first_timestamp_nsecs", np.uint64),
+    ]
+
+    experiment_info_datatypes = [
+        ("uuid", '|S32'),
+    ]
+
+    return traj_datatypes, traj_start_datatypes, experiment_info_datatypes
 
 def save_as_flydra_hdf5(newfilename, data, tzname, fps, smoothed_source=None,
                         smoothed_data_filename=None, raw_data_filename=None,
