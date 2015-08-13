@@ -242,9 +242,11 @@ def print_summarize_file(fname):
 
     orig_store = pandas.HDFStore(fname,mode='r')
     orig_df = orig_store['reprojection']
+    cam_df = orig_store['cameras']
     print fname,'-'*50
-    for x,y in orig_df.groupby('camn'):
-        print x, y.dist.mean()
+    print cam_df
+    for camn, y in orig_df.groupby('camn'):
+        print camn, y.dist.mean()
 
 if __name__=='__main__':
     main()
