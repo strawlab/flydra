@@ -205,7 +205,7 @@ def main():
     parser.add_argument('-k', "--kalman-file",
                         help="file with 3D data (if different that file with data2d_distorted)")
     parser.add_argument("--output-h5", type=str,
-                        help="filename for output .h5 file with data2d_distorted")
+                        help="filename for output .h5 file")
     parser.add_argument("--start", type=int, default=None,
                         help="frame number to begin analysis on")
     parser.add_argument("--stop", type=int, default=None,
