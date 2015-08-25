@@ -550,6 +550,7 @@ class MainBrain(object):
         self.reconstructor = None
 
         # Attributes which come in use when saving data occurs
+        self.close_pending = False
         self._service_save_data_lock = threading.Lock()
         self.h5file = None
         self.h5filename = ''
@@ -1102,6 +1103,8 @@ class MainBrain(object):
 
         # send params over to realtime coords thread
         self.coord_processor.set_new_tracker(kalman_model=dynamic_model)
+        self.coord_processor.tracker.clear_flushed_callbacks()
+        self.coord_processor.tracker.set_flushed_callback(self.finally_close_save_files)
 
         self.config['kalman_model'] = kalman_model_name
         self.save_config()
@@ -1205,7 +1208,19 @@ class MainBrain(object):
 
         self.save_config()
 
+        # force all new tracked objects by killing existing tracks
+        self.coord_processor.tracker.kill_all_trackers()
+
     def stop_saving_data(self):
+        self.close_pending = True
+        self.coord_processor.tracker.kill_all_trackers()
+        # eventually this will trigger a call to self.finally_close_save_files()
+
+    def finally_close_save_files(self):
+      if not self.close_pending:
+        return
+      self.close_pending = False # after the following, we will already be closed...
+
       with self._service_save_data_lock:
         LOG.info('entering final save data service call')
         self._service_save_data() # we absolutely want to save

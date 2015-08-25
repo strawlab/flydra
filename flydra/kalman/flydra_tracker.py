@@ -40,6 +40,7 @@ class Tracker:
         self.live_tracked_objects = []
         self.dead_tracked_objects = [] # save for getting data out
         self.kill_tracker_callbacks = []
+        self.flushed_callbacks = []
         self.disable_image_stat_gating = disable_image_stat_gating
         self.orientation_consensus = orientation_consensus
         self.fake_timestamp = fake_timestamp
@@ -222,9 +223,15 @@ class Tracker:
         self._flush_dead_queue()
     def set_killed_tracker_callback(self,callback):
         self.kill_tracker_callbacks.append( callback )
+    def set_flushed_callback(self,callback):
+        self.flushed_callbacks.append( callback )
+    def clear_flushed_callbacks(self):
+        self.flushed_callbacks = []
 
     def _flush_dead_queue(self):
         while len(self.dead_tracked_objects):
             tro = self.dead_tracked_objects.pop(0)
             for callback in self.kill_tracker_callbacks:
                 callback(tro)
+        for callback in self.flushed_callbacks:
+            callback()
