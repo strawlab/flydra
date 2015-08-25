@@ -106,7 +106,7 @@ def decode_url(url, required=False):
     if nodename:
         #rospy returns rully resolved name, so remove first char (~,/) and
         #return only the first fragment
-        nodename = nodename[1:].split(roslib.names.SEP)[-1]
+        nodename = nodename[1:].split(' ')[-1]
     else:
         nodename = ''
 
