@@ -165,6 +165,9 @@ def doit(filename=None,
 
     if show:
         import matplotlib.pyplot as plt
+        from pymvg.plot_utils import plot_system
+        from mpl_toolkits.mplot3d import Axes3D
+
         fig = plt.figure()
 
         ax1 = fig.add_subplot(221)
@@ -186,6 +189,17 @@ def doit(filename=None,
         ax4.plot( aligned_data[:,0], aligned_data[:,2], 'b.' )
         ax4.set_xlabel('x')
         ax4.set_ylabel('z')
+
+        fig2 = plt.figure('cameras')
+        ax = fig2.add_subplot(111, projection='3d')
+        system = r2.convert_to_pymvg(ignore_water=True)
+        plot_system( ax, system )
+        x = np.linspace( -0.1, 0.1, 10 )
+        y = np.linspace( -0.1, 0.1, 10 )
+        X, Y = np.meshgrid(x,y)
+        Z = np.zeros_like(X)
+        ax.plot( X.ravel(), Y.ravel(), Z.ravel(), 'b.' )
+        ax.set_title('aligned camera positions')
 
         plt.show()
 
