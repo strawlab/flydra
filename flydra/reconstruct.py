@@ -2156,5 +2156,11 @@ def align_calibration():
 
      print "wrote", dst
 
+def print_cam_centers():
+    filename = sys.argv[1]
+    R = flydra.reconstruct.Reconstructor(filename)
+    for cam_id in R.cam_ids:
+        print cam_id, R.get_camera_center(cam_id)[:,0]
+
 if __name__=='__main__':
     test()
