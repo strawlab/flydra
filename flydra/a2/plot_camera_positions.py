@@ -14,6 +14,9 @@ def show_flydra_cal( flydra_filename ):
     system = R.convert_to_pymvg(ignore_water=True)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('z')
     plot_system( ax, system )
     plt.show()
 
