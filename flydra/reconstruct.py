@@ -2162,5 +2162,22 @@ def print_cam_centers():
     for cam_id in R.cam_ids:
         print cam_id, R.get_camera_center(cam_id)[:,0]
 
+def flip_calibration():
+    import pymvg.multi_camera_system
+
+    filename = sys.argv[1]
+    R = flydra.reconstruct.Reconstructor(filename)
+    if R.wateri:
+        warnings.warn('ignoring water in reconstructor')
+    system = R.convert_to_pymvg(ignore_water=True)
+    new_cams = []
+    for cam_name in system.get_camera_dict():
+        new_cams.append( system.get_camera(cam_name).get_flipped_camera() )
+    flipped = pymvg.multi_camera_system.MultiCameraSystem( new_cams )
+    Rflipped = Reconstructor.from_pymvg(flipped)
+
+    flipped_fname = os.path.splitext(filename)[0] + '-flipped.xml'
+    Rflipped.save_to_xml_filename(flipped_fname)
+
 if __name__=='__main__':
     test()
