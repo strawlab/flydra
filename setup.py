@@ -181,6 +181,7 @@ setup(name='flydra',
     'flydra_analysis_calibration_to_xml = flydra.a2.calibration_to_xml:main',
     'flydra_analysis_water_surface_align = flydra.a2.water_surface_align:main',
     'flydra_analysis_print_cam_centers = flydra.reconstruct:print_cam_centers',
+    'flydra_analysis_plot_camera_positions = flydra.a2.plot_camera_positions:main',
 
 # camera calibration - radial distortion stuff
     'flydra_visualize_distortions = flydra.radial_distortion.visualize_distortions:main',
