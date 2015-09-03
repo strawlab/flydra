@@ -624,6 +624,8 @@ class SingleCameraCalibration:
             assert np.allclose(np.dot(K2,R2), np.dot(K,R))
             K,R = K2,R2
 
+        K = K/K[2,2] # normalize
+
         P = np.zeros((3,4))
         P[:3,:3] = K
         KK = self.helper.get_K()
