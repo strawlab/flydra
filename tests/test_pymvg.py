@@ -89,6 +89,8 @@ def check_pymvg_roundtrip2(cam_opts):
     try:
         flydra_cam = reconstruct.SingleCameraCalibration.from_pymvg( pymvg_camera )
     except UnsupportedConversion as err:
+        # Because we start with an arbitrary PyMVG camera, there is no
+        # guarantee it can be losslessly converted to flydra.
         raise SkipTest(str(err))
     flydra_R = reconstruct.Reconstructor( [flydra_cam] )
     #flydra_R.save_to_xml_filename('/tmp/last.xml')
@@ -147,10 +149,16 @@ def test_pymvg_roundtrip():
             assert np.allclose(v1,v2)
             assert np.allclose(v1,v3)
 
-    # ------------ with distortion at different focal length ------
+def test_pymvg_roundtrip3():
     mydir = os.path.dirname(reconstruct.__file__)
-    caldir = os.path.join(mydir,'sample_calibration')
-    R3 = Reconstructor(caldir)
+    source1 = os.path.join(mydir,'sample_calibration')
+    yield check_pymvg_roundtrip3, source1
+
+    source2 = os.path.join(mydir,'a2', 'sample_calibration.xml')
+    yield check_pymvg_roundtrip3, source2
+
+def check_pymvg_roundtrip3(source):
+    R3 = Reconstructor(source)
     mvg3 = R3.convert_to_pymvg()
     R4 = Reconstructor.from_pymvg(mvg3)
     mvg3b = MultiCameraSystem.from_mcsc( caldir )
@@ -169,4 +177,5 @@ if __name__=='__main__':
     test_to_pymvg()
     test_pymvg_roundtrip()
     test_pymvg_roundtrip2()
+    test_pymvg_roundtrip3()
     test_distortion()
