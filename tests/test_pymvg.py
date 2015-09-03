@@ -133,17 +133,17 @@ def test_pymvg_roundtrip():
     print caldir
     R3 = Reconstructor(caldir)
     mvg3 = R3.convert_to_pymvg()
-    #R4 = Reconstructor.from_pymvg(mvg3)
+    R4 = Reconstructor.from_pymvg(mvg3)
     mvg3b = MultiCameraSystem.from_mcsc( caldir )
 
     for distorted in [True,False]:
         for cam_id in R3.cam_ids:
             v1 = R3.find2d(   cam_id, lookat, distorted=distorted )
             v2 = mvg3.find2d( cam_id, lookat, distorted=distorted )
-            #v3 = R4.find2d(   cam_id, lookat, distorted=distorted )
+            v3 = R4.find2d(   cam_id, lookat, distorted=distorted )
             v4 = mvg3b.find2d( cam_id, lookat, distorted=distorted )
             assert np.allclose(v1,v2)
-            #assert np.allclose(v1,v3)
+            assert np.allclose(v1,v3)
             assert np.allclose(v1,v4)
 
 if __name__=='__main__':
