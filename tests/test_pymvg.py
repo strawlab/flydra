@@ -10,7 +10,7 @@ from pymvg.multi_camera_system import MultiCameraSystem
 sample_cal = pkg_resources.resource_filename('flydra.a2',
                                              'sample_calibration.xml')
 
-def test_pymvg():
+def test_to_pymvg():
     R1 = reconstruct.Reconstructor(sample_cal)
     R2 = R1.convert_to_pymvg()
 
@@ -147,6 +147,6 @@ def test_pymvg_roundtrip():
             assert np.allclose(v1,v4)
 
 if __name__=='__main__':
-    test_pymvg()
+    test_to_pymvg()
     test_pymvg_roundtrip()
     test_distortion()
