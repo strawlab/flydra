@@ -446,6 +446,8 @@ class SingleCameraCalibration:
                  helper=None,
                  no_error_on_intrinsic_parameter_problem = False,
                  ):
+        if type(cam_id) == unicode:
+            cam_id = cam_id.encode('ascii', errors='strict')
         if type(cam_id) != str:
             raise TypeError('cam_id must be string')
         pm = numpy.asarray(Pmat)
