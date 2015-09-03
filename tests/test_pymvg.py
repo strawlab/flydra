@@ -1,11 +1,12 @@
 import flydra.reconstruct as reconstruct
-from flydra.reconstruct import Reconstructor
+from flydra.reconstruct import Reconstructor, UnsupportedConversion
 import os
 import pkg_resources
 import numpy as np
 import pymvg
 from pymvg.camera_model import CameraModel
 from pymvg.multi_camera_system import MultiCameraSystem
+from nose.plugins.skip import SkipTest
 
 sample_cal = pkg_resources.resource_filename('flydra.a2',
                                              'sample_calibration.xml')
@@ -74,6 +75,26 @@ def test_distortion():
         mvg_cam = cam_system.get_camera_dict()[cam_id]
         assert np.allclose(mvg_cam.distortion, nl_params)
 
+def test_pymvg_roundtrip2():
+    from pymvg.test.utils import get_default_options
+
+    all_options = get_default_options()
+    for opts in all_options:
+        yield check_pymvg_roundtrip2, opts
+
+def check_pymvg_roundtrip2(cam_opts):
+    from pymvg.test.utils import _build_test_camera
+
+    pymvg_camera = _build_test_camera(**cam_opts)
+    try:
+        flydra_cam = reconstruct.SingleCameraCalibration.from_pymvg( pymvg_camera )
+    except UnsupportedConversion as err:
+        raise SkipTest(str(err))
+    flydra_R = reconstruct.Reconstructor( [flydra_cam] )
+    #flydra_R.save_to_xml_filename('/tmp/last.xml')
+    pymvg_camera_2 = flydra_cam.convert_to_pymvg()
+    assert pymvg_camera == pymvg_camera_2
+
 def test_pymvg_roundtrip():
     from pymvg.camera_model import CameraModel
     from pymvg.multi_camera_system import MultiCameraSystem
@@ -129,8 +150,6 @@ def test_pymvg_roundtrip():
     # ------------ with distortion at different focal length ------
     mydir = os.path.dirname(reconstruct.__file__)
     caldir = os.path.join(mydir,'sample_calibration')
-    print mydir
-    print caldir
     R3 = Reconstructor(caldir)
     mvg3 = R3.convert_to_pymvg()
     R4 = Reconstructor.from_pymvg(mvg3)
@@ -149,4 +168,5 @@ def test_pymvg_roundtrip():
 if __name__=='__main__':
     test_to_pymvg()
     test_pymvg_roundtrip()
+    test_pymvg_roundtrip2()
     test_distortion()

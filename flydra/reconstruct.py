@@ -34,6 +34,9 @@ L_j = nx.array([1,2,3,2,1,3])
 
 NO_BACKWARDS_COMPAT = int(os.environ.get('FLYDRA_NO_BACKWARDS_COMPAT','0'))
 
+class UnsupportedConversion(ValueError):
+    pass
+
 def mat2quat(m):
     """Initialize q from either a mat3 or mat4 and returns self."""
     # XXX derived from cgkit-1.2.0/cgtypes.pyx
@@ -496,30 +499,64 @@ class SingleCameraCalibration:
     def from_pymvg(cls, pymvg_cam):
         pmat = pymvg_cam.get_M()
         camdict = pymvg_cam.to_dict()
-        if np.sum(abs(np.array(camdict['D']))) != 0:
-            rect = np.array(pymvg_cam.to_dict()['R'])
-            rdiff = rect - np.eye(3)
-            rsum = np.sum(abs(rdiff.ravel()))
-            if rsum != 0:
-                raise NotImplementedError('no support for rectification')
-            d = np.array(camdict['D'])
-            assert d.ndim==1
-            assert d.shape==(5,)
-            #fc1, fc1, cc1, cc2
-            r1, r2, t1, t2, r3 = d[:5]
-            K = pymvg_cam.get_K()
-            fc1 = K[0,0]
-            fc2 = K[1,1]
-            cc1 = K[0,2]
-            cc2 = K[1,2]
-            helper = reconstruct_utils.ReconstructHelper(fc1,fc2, # focal length
-                                                         cc1,cc2, # image center
-                                                         r1,r2, # radial distortion
-                                                         t1,t2, # tangential distortion
-                                                         k3=r3, # more radial distortion
-                                                         )
-        else:
-            helper = None
+        rect = np.array(pymvg_cam.to_dict()['R']).T
+        K = pymvg_cam.get_K()
+        if not np.allclose( pymvg_cam.P[:,:3], K ):
+            raise UnsupportedConversion(
+                'Cannot convert this PyMVG camera to flydra '
+                'because it has a different projection matrix P'
+                'from its camera matrix K. This is not supported '
+                'by the flydra camera model.')
+
+        d = np.array(camdict['D']) # distortion
+        assert d.ndim==1
+        assert d.shape==(5,)
+        distortion = d
+        del d
+
+        if 1:
+            # Extract parameters we know about assuming this about rect:
+
+            #     [[ ex/fx,     0, (bx+Sx-cx)/fx ],
+            #      [     0, ey/fy, (by+Sy-cy)/fy ],
+            #      [     0,     0,       1       ]])
+
+            ex_on_fx = rect[0,0]; rect[0,0] = 1
+            bx_minus_cx_on_fx = rect[0,2]; rect[0,2] = 0
+            ey_on_fy = rect[1,1]; rect[1,1] = 1
+            by_minus_cy_on_fy = rect[1,2]; rect[1,2] = 0
+
+            rdiff2 = rect - np.eye(3)
+            rsum2 = np.sum(abs(rdiff2.ravel()))
+            if rsum2 != 0:
+                raise NotImplementedError('no support for general rectification')
+
+            P = pymvg_cam.P
+            ex = P[0,0]
+            bx = P[0,2]
+            Sx = P[0,3]
+            ey = P[1,1]
+            by = P[1,2]
+            Sy = P[1,3]
+
+            fx = ex/ex_on_fx
+            cx = bx-bx_minus_cx_on_fx*fx
+            fy = ey/ey_on_fy
+            cy = by-by_minus_cy_on_fy*fy
+
+        # else:
+        #     K = pymvg_cam.get_K()
+        #     fx = K[0,0]
+        #     fy = K[1,1]
+        #     cx = K[0,2]
+        #     cy = K[1,2]
+        r1, r2, t1, t2, r3 = distortion
+        helper = reconstruct_utils.ReconstructHelper(fx,fy, # focal length
+                                                     cx,cy, # image center
+                                                     r1,r2, # radial distortion
+                                                     t1,t2, # tangential distortion
+                                                     k3=r3, # more radial distortion
+                                                     )
         cam_id = camdict['name']
         result = cls( cam_id=cam_id,
                       Pmat=pmat,
