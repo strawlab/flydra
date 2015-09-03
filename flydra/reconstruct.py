@@ -506,7 +506,7 @@ class SingleCameraCalibration:
         if not np.allclose( pymvg_cam.P[:,:3], K ):
             raise UnsupportedConversion(
                 'Cannot convert this PyMVG camera to flydra '
-                'because it has a different projection matrix P'
+                'because it has a different projection matrix P '
                 'from its camera matrix K. This is not supported '
                 'by the flydra camera model.')
 
