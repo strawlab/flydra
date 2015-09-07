@@ -1208,13 +1208,15 @@ class MainBrain(object):
 
         self.save_config()
 
-        # force all new tracked objects by killing existing tracks
-        self.coord_processor.tracker.kill_all_trackers()
+        if self.coord_processor.tracker is not None:
+            # force all new tracked objects by killing existing tracks
+            self.coord_processor.tracker.kill_all_trackers()
 
     def stop_saving_data(self):
         self.close_pending = True
-        self.coord_processor.tracker.kill_all_trackers()
-        # eventually this will trigger a call to self.finally_close_save_files()
+        if self.coord_processor.tracker is not None:
+            # eventually this will trigger a call to self.finally_close_save_files()
+            self.coord_processor.tracker.kill_all_trackers()
 
     def finally_close_save_files(self):
       if not self.close_pending:
