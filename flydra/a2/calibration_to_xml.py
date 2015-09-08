@@ -11,7 +11,12 @@ def doit(calsource,options=None):
     r.add_element(root)
     child = root[0]
     result = reconstruct.pretty_dump(child,ind='  ')
-    print result
+    if options.dest:
+	with open(options.dest, 'wb') as the_file:
+		the_file.write(result)
+	print 'saved calibration to %s' %options.dest
+    else:
+	print result
 
 def main():
     usage = '%prog CALSOURCE [options]'
@@ -20,6 +25,8 @@ def main():
 
     parser.add_option("--scaled", action='store_true',
                       default=False)
+
+    parser.add_option("--dest", type='string', help='file to save calibration to (e.g.test.xml)')
 
     (options, args) = parser.parse_args()
     calsource = args[0]
