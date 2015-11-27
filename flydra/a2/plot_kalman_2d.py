@@ -2,6 +2,7 @@
 from __future__ import division, with_statement
 import numpy
 import numpy as np
+import warnings
 from numpy import nan, pi
 import tables as PT
 import tables.flavor
