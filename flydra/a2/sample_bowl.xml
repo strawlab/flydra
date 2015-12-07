@@ -3,6 +3,34 @@
     <origin>0 0 0</origin>
     <axis>0 0 1</axis>
     <diameter>0.33</diameter>
-    <height>0.005</height>
+    <height>0.001</height>
   </cylindrical_arena>
 </stimxml>
+<!--
+Some sphere math and numbers from immersive display (the company we got the sphere from)
+
+SPHERE:
+r = 0.203125 m
+
+fill with 4500ml water
+v = 0.0045 l
+
+
+# from 2.3 http://www.vsmp.ch/bulletin/Artikel/124/124_Jaggi.pdf 
+h = 2*r*math.cos((math.acos(1-((3*v)/(2*math.pi*r**3)))+4*math.pi)/3) +r
+h = 0.09105250976633318
+'''''''''''''''''''''''
+
+center of sphere M if z=0 is water
+M = r-h
+M = 0.11207249023366682
+'''''''''''''''''''''''
+
+r2 at watersurface
+# from https://en.wikipedia.org/wiki/Spherical_cap
+r2 = r*math.sin(math.acos((-h+r)/r))*2
+r2*2 = 0.33881866865817567
+''''''''''''''''''''''''''
+
+###
+-->
