@@ -90,7 +90,6 @@ setup(name='flydra',
     'flydra_camera_node = flydra.camnode:main',
 # benchmarking/testing
     'flydra_bench = flydra.camnode:benchmark',
-    'flydra_LED_test_latency = flydra.LEDdriver.LED_test_latency:main',
     'flydra_simulator = flydra.flydra_simulator:main',
 
 # analysis - ufmf care and feeding
@@ -148,7 +147,6 @@ setup(name='flydra',
     'flydra_analysis_orientation_is_fit = flydra.a2.orientation_ekf_fitter:is_orientation_fit_sysexit',
 
 # upload firmware to USB devices
-    'flydra_LED_driver_enter_dfu_mode = flydra.LEDdriver.LEDdriver:enter_dfu_mode',
     'flydra_trigger_enter_dfu_mode = flydra.trigger:enter_dfu_mode',
 
 # trigger device

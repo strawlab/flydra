@@ -237,15 +237,12 @@ probably knock off another 5 msec.
 
 .. image:: overall_latency_20071115_baslerA602f.png
 
-As of Feb. 20, 2008, the |LED_test_latency| script was used to test
+As of Feb. 20, 2008, the `LED_test_latency` script was used to test
 total latency from LED on to UDP packets with position
 information. This total latency was between 34-70 msec, with the 3D
 reconstruction latency being from about 25-45 msec. Note that these
 are from the initial onset of illumination, which may have different
 amounts of latencies than ongoing tracking.
-
-.. |LED_test_latency| sourcelink:: flydra/LEDdriver/LED_test_latency.py
-  :command: LED_test_latency.py
 
 Profiling
 ---------
