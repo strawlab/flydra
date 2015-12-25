@@ -1,6 +1,4 @@
 #emacs, this is -*-Python-*- mode
-# $Id: $
-#cimport c_lib
 
 import numpy
 import numpy.dual
