@@ -185,6 +185,17 @@ class ROSMainBrain:
         self._close_camera = rospy.ServiceProxy('/flydra_mainbrain/close_camera',
                                              ros_flydra.srv.MainBrainCloseCamera)
 
+        rospy.wait_for_service('/flydra_mainbrain/log_message')
+        self._log_message = rospy.ServiceProxy('/flydra_mainbrain/log_message',
+                                             ros_flydra.srv.MainBrainLogMessage)
+
+    def log_message(self, cam_id, timestamp, message):
+        req = ros_flydra.srv.MainBrainLogMessageRequest()
+        req.cam_id = std_msgs.msg.String(cam_id)
+        req.timestamp = std_msgs.msg.Float32(timestamp)
+        req.message = std_msgs.msg.String(message)
+        self._log_message(req)
+
     def get_version(self):
         return self._get_version().version.data
 
@@ -639,7 +650,7 @@ class ProcessCamClass(rospy.SubscribeListener):
                 posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
                 msg = 'excellent, grab thread running in maximum prioity mode'
             except Exception, x:
-                msg = 'WARNING: could not run in maximum priority mode:', str(x)
+                msg = 'WARNING: could not run in maximum priority mode: %s' % x
             self.log_message_queue.put((self.cam_id,time.time(),msg))
             LOG.info(msg)
 
@@ -1016,6 +1027,23 @@ class FakeProcessCamData(object):
                 #stdout_write('P')
                 buf.processed_points = [ (10,20) ]
 
+class LogMessageSender(threading.Thread):
+    def __init__(self, main_brain, log_message_queue, quit_event):
+        threading.Thread.__init__(self, name='LogMessageSender')
+        self._main_brain = main_brain
+        self._log_message_queue = log_message_queue
+        self._quit_event = quit_event
+
+    def run(self):
+        while not self._quit_event.isSet():
+            try:
+                log_message = self._log_message_queue.get(block=False)
+                self._main_brain.log_message(*log_message)
+            except Queue.Empty:
+                pass
+            #no need for this thread to spin crazy fast.
+            time.sleep(0.2)
+
 class SaveCamData(object):
     def __init__(self,cam_id=None,quit_event=None):
         self._chain = camnode_utils.ChainLink()
@@ -1335,10 +1363,10 @@ class ImageSource(threading.Thread):
                  chain=None,
                  cam=None,
                  buffer_pool=None,
-                 debug_acquire = False,
-                 cam_id = '<unassigned>',
-                 quit_event = None,
-                 ):
+                 debug_acquire=False,
+                 cam_id='<unassigned>',
+                 quit_event=None,
+                 log_message_queue=None):
 
         threading.Thread.__init__(self,name='ImageSource')
         self._chain = chain
@@ -1349,6 +1377,9 @@ class ImageSource(threading.Thread):
         self.debug_acquire = debug_acquire
         self.quit_event = quit_event
         self.cam_id = cam_id
+
+        self.log_message_queue = log_message_queue
+        self.log_message_queue.put((self.cam_id,time.time(),"camera instance: %s" % self.cam.desc))
 
     def set_chain(self,new_chain):
         # XXX TODO FIXME: put self._chain behind lock
@@ -1418,9 +1449,6 @@ class ImageSource(threading.Thread):
                 chainbuf._i_promise_to_return_buffer_to_the_pool = True
                 self._chain.fire( chainbuf )
 
-class ImageSourceBaseController(object):
-    pass
-
 class ImageSourceFromCamera(ImageSource):
     def __init__(self,*args,**kwargs):
         ImageSource.__init__(self,*args,**kwargs)
@@ -1428,10 +1456,6 @@ class ImageSourceFromCamera(ImageSource):
     def _block_until_ready(self):
         # no-op for realtime camera processing
         pass
-
-    def spawn_controller(self):
-        controller = ImageSourceBaseController()
-        return controller
 
     def _grab_buffer_quick(self):
         try:
@@ -1454,31 +1478,30 @@ class ImageSourceFromCamera(ImageSource):
             # semi-evil hack into camera class... Should call a method
             # like self.cam.acquire_thread())
             # self.cam.mythread=threading.currentThread()
-
             try:
                 self.cam.grab_next_frame_into_buf_blocking(_bufim)
             except cam_iface.BuffersOverflowed:
                 if self.debug_acquire:
                     stdout_write('(O%s)'%self.cam_id)
                 now = time.time()
-                msg = 'ERROR: buffers overflowed on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                self.log_message_queue.put((self.cam_id,now,msg))
+                msg = 'WARN: buffers overflowed on %s at %s' % (self.cam_id, time.asctime(time.localtime(now)))
+                self.log_message_queue.put((self.cam_id, now, msg))
                 LOG.warn(msg)
                 try_again_condition = True
             except cam_iface.FrameDataMissing:
                 if self.debug_acquire:
                     stdout_write('(M%s)'%self.cam_id)
                 now = time.time()
-                msg = 'Warning: frame data missing on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                #self.log_message_queue.put((self.cam_id,now,msg))
+                msg = 'WARN: frame data missing on %s at %s' % (self.cam_id, time.asctime(time.localtime(now)))
+                self.log_message_queue.put((self.cam_id, now, msg))
                 LOG.warn(msg)
                 try_again_condition = True
             except cam_iface.FrameDataCorrupt:
                 if self.debug_acquire:
                     stdout_write('(C%s)'%self.cam_id)
                 now = time.time()
-                msg = 'Warning: frame data corrupt on %s at %s'%(self.cam_id,time.asctime(time.localtime(now)))
-                #self.log_message_queue.put((self.cam_id,now,msg))
+                msg = 'WARN: frame data corrupt on %s at %s' % (self.cam_id, time.asctime(time.localtime(now)))
+                self.log_message_queue.put((self.cam_id, now, msg))
                 LOG.warn(msg)
                 try_again_condition = True
             except (cam_iface.FrameSystemCallInterruption, cam_iface.NoFrameReturned):
@@ -1509,6 +1532,9 @@ class ImageSourceFakeCamera(ImageSource):
         self._count = 0
         super( ImageSourceFakeCamera, self).__init__(*args,**kw)
 
+        #start 'acquisition'
+        self._do_step.set()
+
     def _block_until_ready(self):
         while 1:
             if self.quit_event.isSet():
@@ -1520,7 +1546,9 @@ class ImageSourceFakeCamera(ImageSource):
                 tstop = time.time()
                 dur = tstop-self._tstart
                 fps = self._count/dur
-                LOG.debug('fps: %.1f' % fps)
+
+                #debug message to check log_message_queue is working
+                self.log_message_queue.put((self.cam_id, tstop, 'fps: %.1f' % fps))
 
                 # prepare for next
                 self._tstart = tstop
@@ -1542,27 +1570,6 @@ class ImageSourceFakeCamera(ImageSource):
         assert self._buffer_pool is None,'buffer pool may only be set once'
         self._buffer_pool = buffer_pool
 
-    def spawn_controller(self):
-        class ImageSourceFakeCameraController(ImageSourceBaseController):
-            def __init__(self, do_step=None, fake_cam=None, quit_event=None):
-                self._do_step = do_step
-                self._fake_cam = fake_cam
-                self._quit_event = quit_event
-            def trigger_single_frame_start(self):
-                self._do_step.set()
-            def set_to_frame_0(self):
-                self._fake_cam.set_to_frame_0()
-            def is_finished(self):
-                return self._fake_cam.is_finished()
-            def quit_now(self):
-                self._quit_event.set()
-            def get_n_frames(self):
-                return self._fake_cam.get_n_frames()
-        controller = ImageSourceFakeCameraController(self._do_step,
-                                                     self._fake_cam,
-                                                     self.quit_event)
-        return controller
-
     def _grab_buffer_quick(self):
         time.sleep(0.05)
 
@@ -1579,8 +1586,9 @@ class _Camera(object):
 
     ROS_PROPERTIES = {}
 
-    def __init__(self, guid):
+    def __init__(self, guid, desc=''):
         self.guid = guid
+        self.desc = desc if desc else self.__class__.__name__
         self.lock = threading.Lock()
 
     def start_camera(self):
@@ -1642,18 +1650,25 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
         # auto select format7_0 mode
         N_modes = cam_iface.get_num_modes(cam_no)
         use_mode = None
+        use_mode_string = 'UNKNOWN'
         if self._show_cam_details:
             LOG.info('camera info: %s' % (cam_iface.get_camera_info(cam_no),))
         for i in range(N_modes):
             mode_string = cam_iface.get_mode_string(cam_no,i)
             if self._show_cam_details:
                 LOG.info('  mode %d: %s'%(i,mode_string))
-            if 'format7_0' in mode_string.lower():
+
+            if ('format7_0' in mode_string.lower()) and ('MONO8' in mode_string):
                 use_mode = i
+                use_mode_string = mode_string
+
         if use_mode is None:
             use_mode = 0
 
+        desc = "CamifaceCamera #%d mode %d='%s'" % (cam_no, use_mode, use_mode_string)
+
         cam_iface.Camera.__init__(self,cam_no,num_buffers,use_mode)
+        LOG.info('Opened %s' % desc)
 
         # cache trigger mode names
         self._trigger_mode_numbers_from_name = {}
@@ -1677,7 +1692,7 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
             self._prop_numbers_from_name[name] = i
             self._prop_names_from_numbers[i] = name
 
-        _Camera.__init__(self, guid)
+        _Camera.__init__(self, guid, desc=desc)
 
     def _get_rosparam_path(self, paramname):
         return "%s/%s" % (self.guid, paramname)
@@ -1742,7 +1757,7 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
 
 class FakeCameraFromRNG(_Camera):
     def __init__(self,guid,frame_size):
-        print guid*10
+
         _Camera.__init__(self, guid)
         self.frame_size = frame_size
         self.last_timestamp = 0.0
@@ -1888,11 +1903,6 @@ class ConsoleApp(object):
         self.quit_now = True
         self.exit_value = exit_value
 
-    def generate_view(self, model, controller ):
-        if hasattr(controller, 'trigger_single_frame_start' ):
-            warnings.warn('no control in ConsoleApp for %s'%controller)
-            controller.trigger_single_frame_start()
-
 class AppState(object):
     """This class handles all camera states, properties, etc."""
     def __init__(self,
@@ -1962,7 +1972,6 @@ class AppState(object):
         self.all_cam_ids = [None]*num_cams
 
         self._image_sources = [None]*num_cams
-        self._image_controllers = [None]*num_cams
         initial_images = [None]*num_cams
         self.critical_threads = []
 
@@ -2052,24 +2061,20 @@ class AppState(object):
                     l,b,w,h = cam.get_frame_roi()
                 buffer_pool = PreallocatedBufferPool(FastImage.Size(w,h))
                 del l,b,w,h
-                image_source = ImageSourceModel(chain = None,
-                                                cam = cam,
-                                                buffer_pool = buffer_pool,
-                                                debug_acquire = options.debug_acquire,
-                                                cam_id = self.all_cam_ids[cam_no],
-                                                quit_event = globals['process_quit_event'],
-                                                )
+                image_source = ImageSourceModel(chain=None,
+                                                cam=cam,
+                                                buffer_pool=buffer_pool,
+                                                debug_acquire=options.debug_acquire,
+                                                cam_id=self.all_cam_ids[cam_no],
+                                                quit_event=globals['process_quit_event'],
+                                                log_message_queue=self.log_message_queue)
                 if benchmark: # should maybe be for any simulated camera in non-GUI mode?
                     image_source.register_buffer_pool( buffer_pool )
 
-                controller = image_source.spawn_controller()
-
                 image_source.setDaemon(True)
                 self._image_sources[cam_no] = image_source
-                self._image_controllers[cam_no]= controller
             else:
                 self._image_sources[cam_no] = None
-                self._image_controllers[cam_no]= None
 
         ##################################################################
         #
@@ -2086,6 +2091,7 @@ class AppState(object):
             if not options.ignore_version:
                 assert main_brain_version == flydra.version.__version__, "version mismatch: %s vs %s"%(main_brain_version,flydra.version.__version__)
 
+            self.main_brain.log_message(rospy.get_name(),time.time(),'using flydra version %s' % flydra.version.__version__)
         ##################################################################
         #
         # Initialize more stuff
@@ -2307,6 +2313,13 @@ class AppState(object):
                     thread.start()
                     self.critical_threads.append( thread )
 
+                    thread = LogMessageSender(self.main_brain,
+                                              self.log_message_queue,
+                                              globals['process_quit_event'])
+                    thread.setDaemon(True)
+                    thread.start()
+                    self.critical_threads.append( thread )
+
                     if 1:
                         save_cam = SaveCamData()
                         self.all_savers[cam_no]= save_cam
@@ -2364,10 +2377,16 @@ class AppState(object):
     def get_image_sources(self):
         return self._image_sources
 
-    def get_image_controllers(self):
-        return self._image_controllers
+    def safe_quit(self):
+        for cam_no, cam_id in enumerate(self.all_cam_ids):
+            cam_id = self.all_cam_ids[cam_no]
+            cam = self.all_cams[cam_no]
+            with cam.lock:
+                cam.close()
+            self.cam_status[cam_no] = 'destroyed'
+            self.main_brain.close(cam_id)
 
-    def quit_function(self,exit_value):
+    def quit_function(self, exit_value):
         for globals in self.globals:
             globals['process_quit_event'].set()
 
@@ -2723,6 +2742,7 @@ def main(rospy_init_node=True,cmdline_args=None):
         cmdline_args = rospy.myargv()[1:]
         rospy.init_node('flydra_camera_node',disable_signals=True)
         rosthread = threading.Thread(target=rospy.spin,name='rosthread')
+        rosthread.setDaemon(True)
         rosthread.start()
 
     LOG.info('ROS name: %s' % rospy.get_name())
@@ -2730,14 +2750,20 @@ def main(rospy_init_node=True,cmdline_args=None):
     if cmdline_args is None:
         cmdline_args = sys.argv[1:]
 
-    parse_args_and_run(False, cmdline_args)
+    app,app_state = parse_args(False, cmdline_args)
+
+    #register a shutdown function so we can be cleanly killed by ROS
+    rospy.on_shutdown(app_state.safe_quit)
+
+    app.MainLoop()
+
     if rospy_init_node:
         rospy.signal_shutdown("quit")
 
 def benchmark():
     parse_args_and_run(True, sys.argv[1:])
 
-def parse_args_and_run(benchmark, cmdline_args):
+def parse_args(benchmark, cmdline_args):
     parser = optparse.OptionParser(usage="%prog [options]",
                           version="%prog "+flydra.version.__version__)
 
@@ -2793,7 +2819,7 @@ def parse_args_and_run(benchmark, cmdline_args):
     parser.add_option("--emulation-image-sources", type="string",
                       help=("list of image sources for each camera (uses OS-specific "
                             "path separator, ':' for POSIX, ';' for Windows) ends with '.fmf', "
-                            "'.ufmf', or is '<random:params=x>'"))
+                            "'.ufmf', or is '<rng>'"))
 
     parser.add_option("--simulate-point-extraction", type="string",
                       help="list of image sources for each camera")
@@ -2827,9 +2853,10 @@ def parse_args_and_run(benchmark, cmdline_args):
     app=ConsoleApp(call_often = app_state.main_thread_task)
     app_state.set_quit_function( app.OnQuit )
 
-    for (model, controller) in zip(app_state.get_image_sources(),
-                                   app_state.get_image_controllers()):
-        app.generate_view( model, controller )
+    return app,app_state
+
+def parse_args_and_run(benchmark, cmdline_args):
+    app,app_state = parse_args(benchmark, cmdline_args)
     app.MainLoop()
 
 if __name__=='__main__':

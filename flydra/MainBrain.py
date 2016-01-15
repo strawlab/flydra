@@ -202,6 +202,7 @@ class MainBrain(object):
         stop_small_recording=(std_srvs.srv.Empty),
         do_synchronization=(std_srvs.srv.Empty),
 
+        log_message=(ros_flydra.srv.MainBrainLogMessage),
         get_version=(ros_flydra.srv.MainBrainGetVersion),
         register_new_camera=(ros_flydra.srv.MainBrainRegisterNewCamera),
         get_listen_address=(ros_flydra.srv.MainBrainGetListenAddress),
@@ -342,10 +343,11 @@ class MainBrain(object):
 
         def external_quit( self, cam_id):
             with self.cam_info_lock:
-                cam = self.cam_info[cam_id]
-                cam_lock = cam['lock']
-                with cam_lock:
-                    cam['commands']['quit']=True
+                if cam_id in self.cam_info:
+                    cam = self.cam_info[cam_id]
+                    cam_lock = cam['lock']
+                    with cam_lock:
+                        cam['commands']['quit']=True
 
         def external_take_background( self, cam_id):
             with self.cam_info_lock:
@@ -467,10 +469,10 @@ class MainBrain(object):
                     cam['commands'] = {}
             return cmds
 
-        def log_message(self,cam_id,host_timestamp,message):
+        def log_message(self,cam_id,timestamp,message):
             mainbrain_timestamp = time.time()
             LOG.info('received log message from %s: %s'%(cam_id,message))
-            self.message_queue.put( (mainbrain_timestamp,cam_id,host_timestamp,message) )
+            self.message_queue.put( (mainbrain_timestamp,cam_id,timestamp,message) )
 
         def close(self,cam_id):
             """gracefully say goodbye (caller: remote camera)"""
@@ -704,6 +706,9 @@ class MainBrain(object):
 
     def get_version(self):
         return std_msgs.msg.String(flydra.version.__version__),
+
+    def log_message(self,cam_id,timestamp,message):
+        self.remote_api.log_message(cam_id.data,timestamp.data,message.data)
 
     def register_new_camera(self,
                             cam_guid,
@@ -1259,15 +1264,33 @@ class MainBrain(object):
 
         list_of_textlog_data = [
             (timestamp,cam_id,timestamp,
-             ('MainBrain running at %s fps, (flydra_version %s, '
-              'time_tzname0 %s)'%(
-            str(self.trigger_device.get_frames_per_second()),
-            flydra.version.__version__,
-            time.tzname[0],
-            ))),
-            (timestamp,cam_id,timestamp, 'using flydra version %s'%(
-             flydra.version.__version__,)),
-            ]
+             'MainBrain running at %s fps, (flydra_version %s, time_tzname0 %s)' % (
+                self.trigger_device.get_frames_per_second(),
+                flydra.version.__version__,
+                time.tzname[0])
+            ),
+            (timestamp,cam_id,timestamp,
+             'using flydra version %s' % (flydra.version.__version__,)),
+        ]
+
+        list_of_textlog_data.append(
+            (timestamp,cam_id,timestamp,
+             'using numpy version %s' % numpy.__version__))
+
+        list_of_textlog_data.append(
+            (timestamp,cam_id,timestamp,
+             'using pytables version %s' % tables.__version__))
+
+        for lib in ('hdf5', 'zlib', 'lzo', 'bzip2', 'blosc'):
+            try:
+                _,ver,_ = tables.which_lib_version(lib)
+                list_of_textlog_data.append(
+                    (timestamp,cam_id,timestamp,
+                     'using pytables:%s version %s' % (lib, ver)))
+            except ValueError:
+                #unknown lib
+                pass
+
         for textlog_data in list_of_textlog_data:
             (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
             textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
@@ -1309,30 +1332,27 @@ class MainBrain(object):
             self.h5data2d.flush()
 
         # ** textlog **
-        # clear queue
-        list_of_textlog_data = []
-        try:
-            while True:
-                tmp = self.remote_api.message_queue.get(0)
-                list_of_textlog_data.append( tmp )
-        except Queue.Empty:
-            pass
-        if 1:
-            for textlog_data in list_of_textlog_data:
-                (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
-                LOG.debug('MESSAGE: %s %s "%s"'%(cam_id, time.asctime(time.localtime(host_timestamp)), message))
-        #   save
-        if self.h5textlog is not None and len(list_of_textlog_data):
-            textlog_row = self.h5textlog.row
-            for textlog_data in list_of_textlog_data:
-                (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
-                textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
-                textlog_row['cam_id'] = cam_id
-                textlog_row['host_timestamp'] = host_timestamp
-                textlog_row['message'] = message
-                textlog_row.append()
+        if self.h5textlog is not None:
+            #we don't want to miss messages, so wait until we are saving
+            list_of_textlog_data = []
+            try:
+                while True:
+                    tmp = self.remote_api.message_queue.get(0)
+                    list_of_textlog_data.append( tmp )
+            except Queue.Empty:
+                pass
 
-            self.h5textlog.flush()
+            if list_of_textlog_data:
+                textlog_row = self.h5textlog.row
+                for textlog_data in list_of_textlog_data:
+                    (mainbrain_timestamp,cam_id,host_timestamp,message) = textlog_data
+                    textlog_row['mainbrain_timestamp'] = mainbrain_timestamp
+                    textlog_row['cam_id'] = cam_id
+                    textlog_row['host_timestamp'] = host_timestamp
+                    textlog_row['message'] = message
+                    textlog_row.append()
+
+                self.h5textlog.flush()
 
         if 1:
             # ** 3d data - kalman **
