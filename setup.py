@@ -1,21 +1,10 @@
+# A special note about building a source package: just do it with git archive.
+
 from setuptools import setup, find_packages
 from distutils.core import Extension # actually monkey-patched by setuptools
 from Cython.Build import cythonize
+import os
 import sys
-
-# Set this to true to compile the extensions that depend on FastImage.
-# Those are not strictly necessary for running some of the analysis tools.
-# (the immediate motivation is to be able to use part of Flydra's functionalities
-#  on OS X)
-LIGHT_INSTALL = False
-
-try:
-    import motmot.FastImage.FastImage as FastImage
-except ImportError:
-    print("I cannot import motmot.FastImage --- will do a light install without"\
-          " compiling some extensions.\n")
-    raw_input('Press any key to continue...')
-    LIGHT_INSTALL = True
 
 import flydra.version
 version = flydra.version.__version__
@@ -24,7 +13,12 @@ import numpy as np
 
 ext_modules = []
 
+LIGHT_INSTALL = int(os.environ.get('LIGHT_INSTALL','0'))
+
 if not LIGHT_INSTALL:
+    import motmot.FastImage.FastImage # set LIGHT_INSTALL env variable to skip
+    FastImage = motmot.FastImage.FastImage
+
     major,minor,build = FastImage.get_IPP_version()
     import motmot.FastImage.util as FastImage_util
 
@@ -41,8 +35,6 @@ if not LIGHT_INSTALL:
     ipp_define_macros = vals.get('ipp_define_macros',[])
     ipp_extra_link_args = vals.get('extra_link_args',[])
     ipp_extra_compile_args = vals.get('extra_compile_args',[])
-
-
 
     ext_modules.append(Extension(name='flydra.camnode_colors',
                                  sources=['flydra/camnode_colors.pyx','flydra/colors.c']+ipp_sources,
