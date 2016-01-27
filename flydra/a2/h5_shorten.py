@@ -64,7 +64,7 @@ def copy_selective(src_h5,input_node,output_group,options):
 
         startrow, stoprow= get_start_stop( src_h5, input_node.name,
                                            options.start, options.stop)
-        print '  copying data for frames %d - %d (rows %d - %d)' % (
+        print '  copying data for frames %s - %s (rows %s - %s)' % (
             options.start, options.stop, startrow, stoprow )
         input_node._f_copy(output_group,
                            start=startrow,
