@@ -194,7 +194,7 @@ class ROSMainBrain:
         req.cam_id = std_msgs.msg.String(cam_id)
         req.timestamp = std_msgs.msg.Float32(timestamp)
         req.message = std_msgs.msg.String(message)
-        self._log_message(req)
+        self._log_message(req) # ROS errors here might be fixed by updating ros_flydra
 
     def get_version(self):
         return self._get_version().version.data
