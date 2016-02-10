@@ -194,7 +194,7 @@ class ROSMainBrain:
         req.cam_id = std_msgs.msg.String(cam_id)
         req.timestamp = std_msgs.msg.Float32(timestamp)
         req.message = std_msgs.msg.String(message)
-        self._log_message(req) # ROS errors here might be fixed by updating ros_flydra
+        self._log_message(req)
 
     def get_version(self):
         return self._get_version().version.data
@@ -1041,6 +1041,9 @@ class LogMessageSender(threading.Thread):
                 self._main_brain.log_message(*log_message)
             except Queue.Empty:
                 pass
+            except Exception as e:
+                LOG.warn("could not send log message '%r' (%s)" % (log_message, e))
+                self._log_message_queue.put(log_message)
             #no need for this thread to spin crazy fast.
             time.sleep(0.2)
 
