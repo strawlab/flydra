@@ -17,7 +17,7 @@ import flydra.water as water
 import flydra.align
 import xml.etree.ElementTree as ET
 import StringIO, warnings
-import cgtypes # ubuntu: python-cgkit1
+import cgtypes # ubuntu: python-cgkit1 or "pip install cgkit1"
 from optparse import OptionParser
 
 R2D = 180.0/np.pi
