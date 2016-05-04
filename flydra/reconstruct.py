@@ -1119,8 +1119,6 @@ class Reconstructor:
             next_self = Reconstructor.from_pymvg(mvg)
             cam_ids = next_self.cam_ids
         elif self.cal_source_type == 'pytables':
-            import tables as PT # PyTables
-            assert type(use_cal_source)==PT.File
             results = use_cal_source
             nodes = results.root.calibration.pmat._f_listNodes()
             cam_ids = []
@@ -1215,6 +1213,8 @@ class Reconstructor:
                 self._helper[cam_id] = reconstruct_utils.make_ReconstructHelper_from_rad_file(filename)
 
         elif self.cal_source_type == 'pytables':
+            import tables as PT # pytables
+
             for cam_id in cam_ids:
                 pmat = nx.array(results.root.calibration.pmat.__getattr__(cam_id))
                 res = tuple(results.root.calibration.resolution.__getattr__(cam_id))
