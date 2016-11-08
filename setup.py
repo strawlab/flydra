@@ -19,13 +19,13 @@ if not LIGHT_INSTALL:
     import motmot.FastImage.FastImage # set LIGHT_INSTALL env variable to skip
     FastImage = motmot.FastImage.FastImage
 
-    major,minor,build = FastImage.get_IPP_version()
     import motmot.FastImage.util as FastImage_util
+    IPPROOT = os.environ['IPPROOT']
 
     # build with same IPP as FastImage
     vals = FastImage_util.get_build_info(ipp_static=FastImage.get_IPP_static(),
-                                         ipp_version='%d.%d'%(major,minor),
                                          ipp_arch=FastImage.get_IPP_arch(),
+                                         ipp_root=IPPROOT,
                                          )
 
     ipp_sources = vals.get('ipp_sources',[])
