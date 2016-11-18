@@ -36,9 +36,9 @@ import math
 
 if os.name == 'posix' and sys.platform.startswith('linux'):
     # FIXME: hacked .so names for OpenCV 2.3/2.4
-    _cxDLL = cdll.LoadLibrary('libopencv_core.so')
-    _cvDLL = cdll.LoadLibrary('libopencv_core.so')
-    _hgDLL = cdll.LoadLibrary('libopencv_highgui.so')
+    _cxDLL = cdll.LoadLibrary('/usr/lib/x86_64-linux-gnu/libopencv_core.so')
+    _cvDLL = cdll.LoadLibrary('/usr/lib/x86_64-linux-gnu/libopencv_core.so')
+    _hgDLL = cdll.LoadLibrary('/usr/lib/x86_64-linux-gnu/libopencv_highgui.so.2.4')
     ALL_OPENCV_DLLs = [_cxDLL, _cvDLL, _hgDLL,
                        'libopencv_imgproc.so',
                        ]
