@@ -28,22 +28,13 @@ if not LIGHT_INSTALL:
                                          ipp_root=IPPROOT,
                                          )
 
-    ipp_sources = vals.get('ipp_sources',[])
-    ipp_include_dirs = vals.get('ipp_include_dirs',[])
-    ipp_library_dirs = vals.get('ipp_library_dirs',[])
-    ipp_libraries = vals.get('ipp_libraries',[])
-    ipp_define_macros = vals.get('ipp_define_macros',[])
-    ipp_extra_link_args = vals.get('extra_link_args',[])
-    ipp_extra_compile_args = vals.get('extra_compile_args',[])
-
     ext_modules.append(Extension(name='flydra.camnode_colors',
-                                 sources=['flydra/camnode_colors.pyx','flydra/colors.c']+ipp_sources,
-                                 include_dirs=ipp_include_dirs,
-                                 library_dirs=ipp_library_dirs,
-                                 libraries=ipp_libraries,
-                                 define_macros=ipp_define_macros,
-                                 extra_link_args=ipp_extra_link_args,
-                                 extra_compile_args=ipp_extra_compile_args,
+                                 sources=['flydra/camnode_colors.pyx','flydra/colors.c'],
+                                 include_dirs=vals['ipp_include_dirs'],
+                                 library_dirs=vals['ipp_library_dirs'],
+                                 libraries=vals['ipp_libraries'],
+                                 define_macros=vals['ipp_define_macros'],
+                                 extra_link_args=vals['extra_link_args'],
                                  ))
 
 ext_modules.append(Extension(name='flydra._reconstruct_utils',
