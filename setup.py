@@ -23,7 +23,7 @@ if not LIGHT_INSTALL:
     IPPROOT = os.environ['IPPROOT']
 
     # build with same IPP as FastImage
-    vals = FastImage_util.get_build_info(ipp_static=FastImage.get_IPP_static(),
+    vals = FastImage_util.get_build_info(ipp_static=False, # use dynamic linking
                                          ipp_arch=FastImage.get_IPP_arch(),
                                          ipp_root=IPPROOT,
                                          )
