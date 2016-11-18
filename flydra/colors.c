@@ -96,9 +96,9 @@ int mono8_bggr_to_red_color( Ipp8u* im, int step, IppiSize sz, int color_range_1
 
   CHK(ippiCopy_8u_C1R(hue_im, hue_step,
 		      im, step, sz ));
-  ippiFree(color_im);
-  ippiFree(hue_im);
-  ippiFree(lum_im);
-  ippiFree(hls_im);
+  ippFree(color_im);
+  ippFree(hue_im);
+  ippFree(lum_im);
+  ippFree(hls_im);
   return 0;
 }
