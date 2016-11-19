@@ -5,6 +5,7 @@ from distutils.core import Extension # actually monkey-patched by setuptools
 from Cython.Build import cythonize
 import os
 import sys
+import motmot.FastImage as fi_mod
 
 import flydra.version
 version = flydra.version.__version__
@@ -30,7 +31,7 @@ if not LIGHT_INSTALL:
 
     ext_modules.append(Extension(name='flydra.camnode_colors',
                                  sources=['flydra/camnode_colors.pyx','flydra/colors.c'],
-                                 include_dirs=vals['ipp_include_dirs'],
+                                 include_dirs=vals['ipp_include_dirs']+[np.get_include(), fi_mod.get_include()],
                                  library_dirs=vals['ipp_library_dirs'],
                                  libraries=vals['ipp_libraries'],
                                  define_macros=vals['ipp_define_macros'],

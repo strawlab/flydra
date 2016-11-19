@@ -1,6 +1,6 @@
 cimport motmot.FastImage.FastImage as FastImage
 import motmot.FastImage.FastImage as FastImage
-cimport motmot.FastImage.ipp as ipp
+cimport cython_ipp.ipp as ipp
 
 cdef extern from "colors.h":
     int mono8_bggr_to_red_color(ipp.Ipp8u* im, int step, ipp.IppiSize, int color_range_1, int color_range_2, int color_range_3, int sat_thresh) nogil
