@@ -8,7 +8,7 @@ import scipy.misc
 import flydra.a2.ufmf_tools as ufmf_tools
 import scipy.ndimage
 import flydra.data_descriptions
-from tables_tools import openFileSafe
+from tables_tools import open_file_safe
 import motmot.FastImage.FastImage as FastImage
 import motmot.realtime_image_analysis.realtime_image_analysis \
        as realtime_image_analysis
@@ -83,7 +83,7 @@ def retrack_movies( h5_filename,
     retrack_cam_ids = [ufmf_tools.get_cam_id_from_ufmf_fname(f)
                        for f in ufmf_filenames]
 
-    with openFileSafe( h5_filename, mode='r' ) as h5:
+    with open_file_safe( h5_filename, mode='r' ) as h5:
 
         # Find camns in original data
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
@@ -98,7 +98,7 @@ def retrack_movies( h5_filename,
                                                          prefix='retrack')
         os.fdopen(tmp_fd).close()
 
-        with openFileSafe( tmp_output_h5_filename, mode='w',
+        with open_file_safe( tmp_output_h5_filename, mode='w',
                            delete_on_error=True) as output_h5:
 
             out_data2d = output_h5.create_table(

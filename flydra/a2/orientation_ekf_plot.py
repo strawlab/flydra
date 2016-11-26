@@ -9,7 +9,7 @@ import flydra.reconstruct as reconstruct
 import collections, time, sys, os
 from optparse import OptionParser
 
-from tables_tools import clear_col, openFileSafe
+from tables_tools import clear_col, open_file_safe
 import flydra.kalman.ekf as kalman_ekf
 import flydra.analysis.PQmath as PQmath
 import flydra.geom as geom
@@ -64,7 +64,7 @@ def plot_ori(kalman_filename=None,
             dynamic_model = dynamic_model[4:]
         print '  for smoothing, will use dynamic model "%s"'%dynamic_model
 
-    with openFileSafe( kalman_filename,
+    with open_file_safe( kalman_filename,
                        mode='r') as kh5:
         if fps is None:
             fps = result_utils.get_fps( kh5, fail_on_error=True )

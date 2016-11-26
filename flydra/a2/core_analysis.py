@@ -25,7 +25,7 @@ from flydra.kalman.ori_smooth import ori_smooth
 import flydra.analysis.result_utils
 import flydra.reconstruct
 import flydra.analysis.PQmath as PQmath
-from flydra.a2.tables_tools import openFileSafe
+from flydra.a2.tables_tools import open_file_safe
 import cgtypes # cgkit 1.x
 
 import weakref
@@ -1291,12 +1291,12 @@ def detect_saccades(rows,
 class FileContextManager:
     def __init__(self,ca,filename,data2d_fname=None,mode='r'):
         self._ca = ca
-        self._ctx = openFileSafe(filename,mode=mode)
+        self._ctx = open_file_safe(filename,mode=mode)
         if (data2d_fname is None) or \
            (os.path.abspath(filename) == os.path.abspath( data2d_fname )):
             self._ctx2d = None
         else:
-            self._ctx2d = openFileSafe(data2d_fname,mode='r')
+            self._ctx2d = open_file_safe(data2d_fname,mode='r')
     def __enter__(self):
         self._data_file = self._ctx.__enter__()
         if self._ctx2d is not None:

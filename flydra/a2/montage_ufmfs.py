@@ -18,7 +18,7 @@ import flydra.geom as geom
 import cherrypy  # ubuntu: install python-cherrypy3
 import benu
 
-from tables_tools import openFileSafe
+from tables_tools import open_file_safe
 
 def get_config_defaults():
     # keep in sync with usage in main() below
@@ -63,7 +63,7 @@ def montage(fnames, title, target):
     subprocess.check_call(CMD,shell=True)
 
 def load_3d_raw_data(kalman_filename,require_qual=True,**kwargs):
-    with openFileSafe( kalman_filename, mode='r' ) as kh5:
+    with open_file_safe( kalman_filename, mode='r' ) as kh5:
         ca = core_analysis.get_global_CachingAnalyzer()
         all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
                      ca.initial_file_load(kalman_filename)
@@ -102,7 +102,7 @@ def is_obj_in_frame_range( obj_id, all_obj_ids, frames, start=None, stop=None):
     return bool(np.sum(valid_obj_ids==obj_id))
 
 def load_3d_data(kalman_filename,start=None,stop=None,require_qual=True,**kwargs):
-    with openFileSafe( kalman_filename, mode='r' ) as kh5:
+    with open_file_safe( kalman_filename, mode='r' ) as kh5:
         ca = core_analysis.get_global_CachingAnalyzer()
         all_obj_ids, obj_ids, is_mat_file, data_file, extra = \
                      ca.initial_file_load(kalman_filename)
@@ -281,7 +281,7 @@ def make_montage( h5_filename,
         caminfo_h5_filename = h5_filename
 
     if caminfo_h5_filename is not None:
-        with openFileSafe( caminfo_h5_filename, mode='r' ) as h5:
+        with open_file_safe( caminfo_h5_filename, mode='r' ) as h5:
             camn2cam_id, tmp = result_utils.get_caminfo_dicts(h5)
             del tmp
     else:

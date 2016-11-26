@@ -22,7 +22,7 @@ import flydra.version
 from flydra.data_descriptions import TextLogDescription
 from flydra.reconstruct import do_3d_operations_on_2d_point
 import flydra.a2.utils as utils
-from flydra.a2.tables_tools import openFileSafe
+from flydra.a2.tables_tools import open_file_safe
 
 # Not really "observations" but ML estimates
 FilteredObservations = flydra_kalman_utils.FilteredObservations
@@ -389,7 +389,7 @@ def kalmanize(src_filename,
         assert isinstance(reconstructor, flydra.reconstruct.Reconstructor )
         assert reconstructor_filename is None
 
-    with openFileSafe(src_filename,mode='r') as results:
+    with open_file_safe(src_filename,mode='r') as results:
         camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
 
         if do_full_kalmanization:
@@ -459,7 +459,7 @@ def kalmanize(src_filename,
             raise ValueError('%s already exists. Will not '
                              'overwrite.'%dest_filename)
 
-        with openFileSafe(dest_filename, mode="w", title="tracked Flydra data file",
+        with open_file_safe(dest_filename, mode="w", title="tracked Flydra data file",
                           delete_on_error=True) as h5file:
 
             if 'experiment_info' in results.root:

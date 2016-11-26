@@ -8,7 +8,6 @@ import warnings
 
 import flydra.a2.core_analysis as core_analysis
 import flydra.analysis.result_utils as result_utils
-from flydra.a2.tables_tools import openFileSafe
 import flydra.reconstruct as reconstruct
 
 class StringWidget(progressbar.Widget):

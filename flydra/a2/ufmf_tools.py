@@ -12,7 +12,7 @@ import scipy.misc
 import subprocess
 import motmot.imops.imops as imops
 
-from tables_tools import openFileSafe
+from tables_tools import open_file_safe
 
 ufmf_fname_regex = re.compile(r'small_([0-9]+)_([0-9]+)_(.*)')
 def get_cam_id_from_ufmf_fname(ufmf_fname):
@@ -143,7 +143,7 @@ def iterate_frames(h5_filename,
     ufmf_fnames.sort()
     cam_ids.sort()
 
-    with openFileSafe( h5_filename, mode='r' ) as h5:
+    with open_file_safe( h5_filename, mode='r' ) as h5:
         if camn2cam_id is None:
             camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
         parsed = result_utils.read_textlog_header(h5)

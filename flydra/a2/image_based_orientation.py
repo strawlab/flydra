@@ -27,7 +27,7 @@ import cairo
 import benu
 import adskalman.adskalman
 
-from tables_tools import clear_col, openFileSafe
+from tables_tools import clear_col, open_file_safe
 
 font_size=14
 
@@ -305,13 +305,13 @@ def doit(h5_filename=None,
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
             "will not overwrite old file '%s'"%output_h5_filename)
-    with openFileSafe( output_h5_filename, delete_on_error=True,
+    with open_file_safe( output_h5_filename, delete_on_error=True,
                        mode='w') as output_h5:
         if save_image_dir is not None:
             if not os.path.exists( save_image_dir ):
                 os.mkdir( save_image_dir )
 
-        with openFileSafe( h5_filename, mode='r' ) as h5:
+        with open_file_safe( h5_filename, mode='r' ) as h5:
 
             fps = result_utils.get_fps( h5, fail_on_error=True )
 

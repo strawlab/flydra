@@ -9,7 +9,7 @@ import tables
 import flydra
 import flydra.a2.core_analysis as core_analysis
 import flydra.analysis.result_utils as result_utils
-from flydra.a2.tables_tools import openFileSafe
+from flydra.a2.tables_tools import open_file_safe
 import flydra.reconstruct as reconstruct
 import flydra.kalman.dynamic_models as dynamic_models
 from flydra.kalman.kalmanize import KalmanSaver
@@ -69,7 +69,7 @@ def retrack_reuse_data_association(h5_filename=None,
             'reconstructor file: %s'%(kalman_filename,),
             ]
 
-        with openFileSafe(output_h5_filename, mode="w", title="tracked Flydra data file",
+        with open_file_safe(output_h5_filename, mode="w", title="tracked Flydra data file",
                           delete_on_error=True) as output_h5:
 
             h5saver = KalmanSaver(output_h5,

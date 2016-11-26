@@ -9,7 +9,7 @@ import flydra.reconstruct as reconstruct
 import collections, time, sys, os
 from optparse import OptionParser
 
-from tables_tools import clear_col, openFileSafe
+from tables_tools import clear_col, open_file_safe
 import flydra.kalman.ekf as kalman_ekf
 import flydra.analysis.PQmath as PQmath
 import flydra.geom as geom
@@ -315,12 +315,12 @@ def doit(output_h5_filename=None,
             "will not overwrite old file '%s'"%output_h5_filename)
 
     ca = core_analysis.get_global_CachingAnalyzer()
-    with openFileSafe( output_h5_filename,
+    with open_file_safe( output_h5_filename,
                        mode='w') as output_h5:
 
-        with openFileSafe( kalman_filename,
+        with open_file_safe( kalman_filename,
                            mode='r') as kh5:
-            with openFileSafe( data2d_filename,
+            with open_file_safe( data2d_filename,
                                mode='r') as h5:
                 for input_node in kh5.root._f_iter_nodes():
                     # copy everything from source to dest
@@ -912,7 +912,7 @@ def doit(output_h5_filename=None,
         plt.show()
 
 def is_orientation_fit(filename):
-    with openFileSafe( filename, mode='r') as h5:
+    with open_file_safe( filename, mode='r') as h5:
         if hasattr(h5.root.ML_estimates.attrs,'ori_ekf_time'):
             ori_ekf_time = h5.root.ML_estimates.attrs.ori_ekf_time
             return True

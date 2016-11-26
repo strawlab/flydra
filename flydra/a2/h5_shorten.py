@@ -3,7 +3,7 @@ import argparse
 import warnings
 import numpy as np
 
-from flydra.a2.tables_tools import openFileSafe
+from flydra.a2.tables_tools import open_file_safe
 import flydra.kalman.flydra_kalman_utils as flydra_kalman_utils
 
 def get_start_stop(src_h5,name,start,stop):
@@ -94,8 +94,8 @@ def copy_selective(src_h5,input_node,output_group,options):
         input_node._f_copy(output_group,recursive=True)
 
 def h5_shorten(input_filename, output_filename, options):
-    with openFileSafe(input_filename,mode='r') as h5:
-        with openFileSafe( output_filename, mode='w', delete_on_error=True ) as output_h5:
+    with open_file_safe(input_filename,mode='r') as h5:
+        with open_file_safe( output_filename, mode='w', delete_on_error=True ) as output_h5:
             if not options.data2d_only:
                 do_data_association_tables(h5, output_h5, options)
             for node in h5.root._f_iter_nodes():

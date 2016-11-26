@@ -23,7 +23,7 @@ def clear_col(dest_table, colname, fill_value=np.nan):
             row.update()
 
 @contextlib.contextmanager
-def openFileSafe(filename,delete_on_error=False,**kwargs):
+def open_file_safe(filename,delete_on_error=False,**kwargs):
     """open a file that will be closed when it goes out of scope
 
     This is very similar to contextlib.closing(), but optionally
