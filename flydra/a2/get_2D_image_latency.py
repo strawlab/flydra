@@ -19,7 +19,7 @@ def main():
     args = docopt(__doc__)
 
     filename = args['FILENAME']
-    results = tables.openFile(filename,mode='r')
+    results = tables.open_file(filename,mode='r')
     time_model=result_utils.get_time_model_from_data(results,debug=False)
     worst_sync_dict = get_clock_sync.get_worst_sync_dict(results)
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)

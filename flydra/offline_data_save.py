@@ -8,7 +8,7 @@ import flydra.version
 
 Info2D = flydra.data_descriptions.Info2D
 if LooseVersion(tables.__version__) < LooseVersion('3.0.0'):
-    Info2DCol_description = tables.Description(Info2D().columns)._v_nestedDescr
+    Info2DCol_description = tables.Description(Info2D().columns)._v_nested_descr
 else:
     Info2DCol_description = tables.Description(Info2D().columns)._v_nested_descr
 CamSyncInfo = flydra.data_descriptions.CamSyncInfo
@@ -46,12 +46,12 @@ def startup_message(h5textlog, fps):
 
 def save_data( fname, data2d, reconstructor, fps, eccentricity ):
     assert isinstance(reconstructor, Reconstructor)
-    with PT.openFile(fname,
+    with PT.open_file(fname,
                      mode="w",
                      title="Flydra data file") as h5file:
         reconstructor.save_to_h5file(h5file)
 
-        ct = h5file.createTable # shorthand
+        ct = h5file.create_table # shorthand
         root = h5file.root # shorthand
         h5textlog = ct(root,'textlog', TextLogDescription,
                        "text log")

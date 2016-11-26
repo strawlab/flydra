@@ -6,7 +6,7 @@ from result_utils import model_remote_to_local, drift_estimates
 
 def main():
     fname = sys.argv[1]
-    results = tables.openFile(fname,mode='r')
+    results = tables.open_file(fname,mode='r')
     d = drift_estimates(results)
     hostnames = d['hostnames']
     gain = {}; offset = {};
@@ -63,7 +63,7 @@ def main():
     
 def main_old():
     fname = sys.argv[1]
-    results = tables.openFile(fname,mode='r')
+    results = tables.open_file(fname,mode='r')
     d = drift_estimates(results)
     hostnames = d['hostnames']
     for i,hostname in enumerate(hostnames):

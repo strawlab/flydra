@@ -315,7 +315,7 @@ def doit(h5_filename=None,
 
             fps = result_utils.get_fps( h5, fail_on_error=True )
 
-            for input_node in h5.root._f_iterNodes():
+            for input_node in h5.root._f_iter_nodes():
                 # copy everything from source to dest
                 input_node._f_copy(output_h5.root,recursive=True)
             print 'done copying'

@@ -70,7 +70,7 @@ def interpolate_P( results, start_frame, stop_frame, typ='best' ):
 
         # delete old row
         if old_nrow is not None:
-            data3d.removeRows(start=old_nrow,stop=None)
+            data3d.remove_rows(start=old_nrow,stop=None)
 
         X = newP
         line3d = [nan]*6 # fill with nans

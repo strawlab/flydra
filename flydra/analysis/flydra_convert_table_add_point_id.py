@@ -8,12 +8,12 @@ NewInfo2D = flydra.data_descriptions.Info2D
 def main():
     filename = sys.argv[1]
 
-    results = tables.openFile(filename,mode='r+')
+    results = tables.open_file(filename,mode='r+')
     chunksize = 10000
     start_idx = 0
     results.root.data2d_distorted._f_rename('orig_data2d')
     orig_data2d = results.root.orig_data2d
-    data2d_distorted = results.createTable(
+    data2d_distorted = results.create_table(
         results.root,'data2d_distorted', NewInfo2D, "2d data",
         expectedrows=orig_data2d.nrows)
 

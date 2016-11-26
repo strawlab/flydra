@@ -9,7 +9,7 @@ by_version = {'0.4.28': pkg_resources.resource_filename('flydra.a2','sample_data
 def test_read_header():
     for expected_version in by_version:
         fname = by_version[expected_version]
-        with tables.openFile(fname,mode='r') as h5:
+        with tables.open_file(fname,mode='r') as h5:
             parsed = result_utils.read_textlog_header(h5)
             actual_version = parsed['flydra_version']
             assert actual_version==expected_version

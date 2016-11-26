@@ -41,7 +41,7 @@ def plot_ori(kalman_filename=None,
 
     fps = None
     if h5 is not None:
-        h5f = tables.openFile(h5,mode='r')
+        h5f = tables.open_file(h5,mode='r')
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5f)
         fps = result_utils.get_fps( h5f )
         h5f.close()
@@ -82,8 +82,8 @@ def plot_ori(kalman_filename=None,
         # walk all tables to get all obj_ids
         all_obj_ids = {}
         parent = kh5.root.ori_ekf_qual
-        for group in parent._f_iterNodes():
-            for table in group._f_iterNodes():
+        for group in parent._f_iter_nodes():
+            for table in group._f_iter_nodes():
                 assert table.name.startswith('obj')
                 obj_id = int(table.name[3:])
                 all_obj_ids[obj_id] = table

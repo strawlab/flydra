@@ -251,7 +251,7 @@ def main():
     options = args # optparse OptionParser backwards compatibility
 
     # Is the input an h5 file?
-    if tables.isHDF5File(args.filename):
+    if tables.is_hdf5_file(args.filename):
         h5_filename=args.filename
     else:
         h5_filename=None

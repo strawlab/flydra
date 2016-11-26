@@ -1092,7 +1092,7 @@ class Reconstructor:
         close_cal_source = False
         if self.cal_source_type == 'pytables filename':
             import tables as PT # PyTables
-            use_cal_source = PT.openFile(self.cal_source,mode='r')
+            use_cal_source = PT.open_file(self.cal_source,mode='r')
             close_cal_source = True
             self.cal_source_type = 'pytables'
         else:
@@ -1120,7 +1120,7 @@ class Reconstructor:
             cam_ids = next_self.cam_ids
         elif self.cal_source_type == 'pytables':
             results = use_cal_source
-            nodes = results.root.calibration.pmat._f_listNodes()
+            nodes = results.root.calibration.pmat._f_list_nodes()
             cam_ids = []
             for node in nodes:
                 cam_ids.append( node.name )
@@ -1451,7 +1451,7 @@ class Reconstructor:
             plane_dist_from_origin = PT.Float64Col()
 
         pytables_filt = numpy.asarray
-        ct = h5file.createTable # shorthand
+        ct = h5file.create_table # shorthand
         root = h5file.root # shorthand
 
         cam_ids = self.Pmat.keys()
@@ -1459,29 +1459,29 @@ class Reconstructor:
 
         if hasattr(root,'calibration'):
             if OK_to_delete_old_calibration:
-                h5file.removeNode( root.calibration, recursive=True )
+                h5file.remove_node( root.calibration, recursive=True )
             else:
                 raise RuntimeError('not deleting old calibration.')
 
-        cal_group = h5file.createGroup(root,'calibration')
+        cal_group = h5file.create_group(root,'calibration')
 
-        pmat_group = h5file.createGroup(cal_group,'pmat')
+        pmat_group = h5file.create_group(cal_group,'pmat')
         for cam_id in cam_ids:
-            h5file.createArray(pmat_group, cam_id,
+            h5file.create_array(pmat_group, cam_id,
                                pytables_filt(self.get_pmat(cam_id)))
-        res_group = h5file.createGroup(cal_group,'resolution')
+        res_group = h5file.create_group(cal_group,'resolution')
         for cam_id in cam_ids:
             res = self.get_resolution(cam_id)
-            h5file.createArray(res_group, cam_id, pytables_filt(res))
+            h5file.create_array(res_group, cam_id, pytables_filt(res))
 
-        intlin_group = h5file.createGroup(cal_group,'intrinsic_linear')
+        intlin_group = h5file.create_group(cal_group,'intrinsic_linear')
         for cam_id in cam_ids:
             intlin = self.get_intrinsic_linear(cam_id)
-            h5file.createArray(intlin_group, cam_id, pytables_filt(intlin))
+            h5file.create_array(intlin_group, cam_id, pytables_filt(intlin))
 
-        intnonlin_group = h5file.createGroup(cal_group,'intrinsic_nonlinear')
+        intnonlin_group = h5file.create_group(cal_group,'intrinsic_nonlinear')
         for cam_id in cam_ids:
-            h5file.createArray(intnonlin_group, cam_id,
+            h5file.create_array(intnonlin_group, cam_id,
                                pytables_filt(self.get_intrinsic_nonlinear(cam_id)))
 
         h5additional_info = ct(cal_group,'additional_info', AdditionalInfo,

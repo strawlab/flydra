@@ -193,9 +193,9 @@ current list of 2D points
             if self.reconstructor is None:
                 raise RuntimeError('will not save .h5 file without 3D data')
 
-            with contextlib.closing(tables.openFile(fname,mode='w')) as h5file:
+            with contextlib.closing(tables.open_file(fname,mode='w')) as h5file:
                 self.reconstructor.save_to_h5file(h5file)
-                ct = h5file.createTable # shorthand
+                ct = h5file.create_table # shorthand
                 root = h5file.root # shorthand
                 h5data3d = ct(root,'kalman_estimates',
                               KalmanEstimatesVelOnly,"3d data")
@@ -232,7 +232,7 @@ current list of 2D points
             if os.path.abspath(kalman_filename) == os.path.abspath(filename):
                 kresults = results
             else:
-                kresults = PT.openFile(kalman_filename,mode='r')
+                kresults = PT.open_file(kalman_filename,mode='r')
                 opened_kresults = True
 
             # copied from plot_timeseries_2d_3d.py
@@ -299,14 +299,14 @@ current list of 2D points
 
         if frame_start is not None:
             print 'selecting frames after start'
-            #after_start = data2d.getWhereList( 'frame>=frame_start')
+            #after_start = data2d.get_where_list( 'frame>=frame_start')
             after_start = numpy.nonzero(frames>=frame_start)[0]
         else:
             after_start = None
 
         if frame_stop is not None:
             print 'selecting frames before stop'
-            #before_stop = data2d.getWhereList( 'frame<=frame_stop')
+            #before_stop = data2d.get_where_list( 'frame<=frame_stop')
             before_stop = numpy.nonzero(frames<=frame_stop)[0]
         else:
             before_stop = None
@@ -324,13 +324,13 @@ current list of 2D points
         # OK, we have data coords, plot
 
         print 'reading cameras'
-        frames = frames[use_idxs]#data2d.readCoordinates( use_idxs, field='frame')
+        frames = frames[use_idxs]#data2d.read_coordinates( use_idxs, field='frame')
         if len(frames):
             print 'frame range: %d - %d (%d frames total)'%(
                 frames[0], frames[-1],len(frames) )
         camns = data2d.read(field='camn')
         camns = camns[use_idxs]
-        #camns = data2d.readCoordinates( use_idxs, field='camn')
+        #camns = data2d.read_coordinates( use_idxs, field='camn')
         unique_camns = numpy.unique(camns)
         unique_cam_ids = list(set([camn2cam_id[camn] for camn in unique_camns]))
         unique_cam_ids.sort()
@@ -389,18 +389,18 @@ current list of 2D points
             ax = self.subplot_by_cam_id[cam_id]
             this_camn_idxs = use_idxs[camns == camn]
 
-            xs = data2d.readCoordinates( this_camn_idxs, field='x')
+            xs = data2d.read_coordinates( this_camn_idxs, field='x')
 
             valid_idx = numpy.nonzero( ~numpy.isnan(xs) )[0]
             if not len(valid_idx):
                 continue
-            ys = data2d.readCoordinates( this_camn_idxs, field='y')
+            ys = data2d.read_coordinates( this_camn_idxs, field='y')
             if options.show_orientation:
-                slope = data2d.readCoordinates( this_camn_idxs, field='slope')
+                slope = data2d.read_coordinates( this_camn_idxs, field='slope')
 
             idx_first_valid = valid_idx[0]
             idx_last_valid = valid_idx[-1]
-            tmp_frames = data2d.readCoordinates( this_camn_idxs, field='frame')
+            tmp_frames = data2d.read_coordinates( this_camn_idxs, field='frame')
 
             ax.plot([xs[idx_first_valid]],[ys[idx_first_valid]],
                     'ro',label='first point')
@@ -507,7 +507,7 @@ current list of 2D points
 
                 this_use_idxs = use_idxs[frames==kframe]
 
-                d2d = data2d.readCoordinates( this_use_idxs )
+                d2d = data2d.read_coordinates( this_use_idxs )
                 for this_camn,this_camn_idx in zip(this_camns,this_camn_idxs):
                     this_idxs_tmp = numpy.nonzero(d2d['camn'] == this_camn)[0]
                     this_camn_d2d = d2d[d2d['camn'] == this_camn]

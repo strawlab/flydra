@@ -230,7 +230,7 @@ def check_is_mat_file(data_file):
 def _initial_file_load(filename):
     if os.path.splitext(filename)[1] == '.mat':
         raise ValueError('.mat files no longer supported')
-    kresults = tables.openFile(filename,mode='r')
+    kresults = tables.open_file(filename,mode='r')
     return kresults
 
 def _get_initial_file_info(kresults):
@@ -238,7 +238,7 @@ def _get_initial_file_info(kresults):
     extra['frames_per_second'] = flydra.analysis.result_utils.get_fps(
         kresults, fail_on_error=False)
     if hasattr(kresults.root,'textlog'):
-        textlog = kresults.root.textlog.readCoordinates([0])
+        textlog = kresults.root.textlog.read_coordinates([0])
         infostr = textlog['message'].tostring().strip('\x00')
         header = flydra.analysis.result_utils.read_textlog_header(
             kresults, fail_on_error=False)
@@ -787,7 +787,7 @@ class PreSmoothedDataCache(object):
                             mode='r'
                         else:
                             mode='r+'
-                        cache_h5file = tables.openFile(cache_h5file_name, mode=mode)
+                        cache_h5file = tables.open_file(cache_h5file_name, mode=mode)
                     except IOError, err:
                         warnings.warn(
                             'Broken cache file %s. Deleting'%cache_h5file_name)
@@ -891,13 +891,13 @@ class PreSmoothedDataCache(object):
 
                 # creating cache file
                 try:
-                    cache_h5file = tables.openFile( cache_h5file_name, mode='w',
+                    cache_h5file = tables.open_file( cache_h5file_name, mode='w',
                                                     title=expected_title )
                 except IOError, err:
                     tmp_trash, cache_h5file_name = tempfile.mkstemp('.h5')
                     # HDF5 doesn't like pre-existing non-HDF5 file
                     os.unlink(cache_h5file_name)
-                    cache_h5file = tables.openFile( cache_h5file_name, mode='w',
+                    cache_h5file = tables.open_file( cache_h5file_name, mode='w',
                                                     title=expected_title )
                 except:
                     warnings.warn('error creating cache_h5file %s'%(
@@ -916,7 +916,7 @@ class PreSmoothedDataCache(object):
             groupnum = obj_id//2000
             groupname = 'group%d'%groupnum
             if not hasattr(h5file.root,groupname):
-                h5file.createGroup(h5file.root,groupname,'cache data')
+                h5file.create_group(h5file.root,groupname,'cache data')
             return getattr(h5file.root,groupname)
 
         h5group = _get_group_for_obj(obj_id)
@@ -1051,7 +1051,7 @@ class PreSmoothedDataCache(object):
                     filters = tables.Filters(0)
 
                 try:
-                    h5file.createTable(h5group,
+                    h5file.create_table(h5group,
                                        save_tablename,
                                        rows,
                                        filters=filters)
@@ -1491,11 +1491,11 @@ class CachingAnalyzer:
             idxs = numpy.concatenate( idxs )
 
         try:
-            rows = kresults.root.ML_estimates.readCoordinates(idxs)
+            rows = kresults.root.ML_estimates.read_coordinates(idxs)
         except tables.exceptions.NoSuchNodeError, err1:
             #backwards compatibility
             try:
-                rows = kresults.root.kalman_observations.readCoordinates(idxs)
+                rows = kresults.root.kalman_observations.read_coordinates(idxs)
             except tables.exceptions.NoSuchNodeError, err2:
                 raise err1
 
@@ -1603,7 +1603,7 @@ class CachingAnalyzer:
                     for oi in obj_id:
                         idxs.append( numpy.nonzero(obj_ids == oi)[0] )
                     idxs = numpy.concatenate( idxs )
-                kalman_rows = kresults.root.kalman_estimates.readCoordinates(idxs)
+                kalman_rows = kresults.root.kalman_estimates.read_coordinates(idxs)
 
             if use_kalman_smoothing:
                 obs_obj_ids = preloaded_dict['obs_obj_ids']
@@ -1640,10 +1640,10 @@ class CachingAnalyzer:
                 # Kalman observations are already always in meters, no
                 # scale factor needed
                 try:
-                    ML_rows = kresults.root.ML_estimates.readCoordinates(
+                    ML_rows = kresults.root.ML_estimates.read_coordinates(
                         obs_idxs)
                 except tables.exceptions.NoSuchNodeError, err:
-                    ML_rows = kresults.root.kalman_observations.readCoordinates(
+                    ML_rows = kresults.root.kalman_observations.read_coordinates(
                         obs_idxs)
 
 
@@ -2249,10 +2249,10 @@ class TestCoreAnalysis:
                 # Kalman observations are already always in meters, no
                 # scale factor needed
                 try:
-                    orig_rows = data_file.root.ML_estimates.readCoordinates(
+                    orig_rows = data_file.root.ML_estimates.read_coordinates(
                         obs_idxs)
                 except tables.exceptions.NoSuchNodeError, err:
-                    orig_rows = data_file.root.kalman_observations.readCoordinates(
+                    orig_rows = data_file.root.kalman_observations.read_coordinates(
                         obs_idxs)
 
                 ######## 2. perform Kalman smoothing

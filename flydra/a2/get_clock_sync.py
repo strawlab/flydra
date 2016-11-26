@@ -10,7 +10,7 @@ def get_worst_sync_dict(filename_or_h5_file):
         kresults = filename_or_h5_file
         opened = False
     else:
-        kresults = tables.openFile(filename_or_h5_file,mode="r")
+        kresults = tables.open_file(filename_or_h5_file,mode="r")
         opened = True
 
     hci = kresults.root.host_clock_info

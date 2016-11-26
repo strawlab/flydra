@@ -189,7 +189,7 @@ class KalmanSaver:
 
         self.h5file = h5file
         reconstructor.save_to_h5file(self.h5file)
-        self.h5_xhat = self.h5file.createTable(
+        self.h5_xhat = self.h5file.create_table(
             self.h5file.root,'kalman_estimates',
             kalman_estimates_description,
             "Kalman a posteriori estimates of tracked object",
@@ -197,7 +197,7 @@ class KalmanSaver:
         self.h5_xhat.attrs.dynamic_model_name = dynamic_model_name
         self.h5_xhat.attrs.dynamic_model = dynamic_model
 
-        self.h5_obs = self.h5file.createTable(
+        self.h5_obs = self.h5file.create_table(
             self.h5file.root,'ML_estimates', FilteredObservations,
             "observations of tracked object",filters=filters)
 
@@ -206,7 +206,7 @@ class KalmanSaver:
         # Note that ML_estimates_2d_idxs_type() should
         # match dtype with tro.observations_2d.
 
-        self.h5_2d_obs = self.h5file.createVLArray(
+        self.h5_2d_obs = self.h5file.create_vlarray(
             self.h5file.root,
             'ML_estimates_2d_idxs',
             ML_estimates_2d_idxs_type(),
@@ -214,7 +214,7 @@ class KalmanSaver:
 
         self.obj_id = 0
 
-        self.h5textlog = self.h5file.createTable(
+        self.h5textlog = self.h5file.create_table(
             self.h5file.root,'textlog',TextLogDescription,'text log')
 
         if 1:
@@ -409,7 +409,7 @@ def kalmanize(src_filename,
 
             if reconstructor_filename is not None:
                 if reconstructor_filename.endswith('h5'):
-                    with PT.openFile(reconstructor_filename,mode='r') as fd:
+                    with PT.open_file(reconstructor_filename,mode='r') as fd:
                         reconstructor = flydra.reconstruct.Reconstructor(
                             fd,
                             minimum_eccentricity=options.force_minimum_eccentricity)
@@ -786,16 +786,16 @@ def kalmanize(src_filename,
                 timestamp = timestamps[idx]
                 all_timestamps[i,j]=timestamp
 
-        h5 = tables.openFile( accum_frame_spread_filename, mode='w')
-        h5.createArray( h5.root, 'spread', accum_frame_spread,
+        h5 = tables.open_file( accum_frame_spread_filename, mode='w')
+        h5.create_array( h5.root, 'spread', accum_frame_spread,
                         'frame timestamp spreads (sec)')
-        h5.createArray( h5.root, 'framenumber', accum_frame_spread_fno,
+        h5.create_array( h5.root, 'framenumber', accum_frame_spread_fno,
                         'frame number')
-        h5.createArray( h5.root, 'all_timestamps', all_timestamps,
+        h5.create_array( h5.root, 'all_timestamps', all_timestamps,
                         'all timestamps')
-        h5.createArray( h5.root, 'camn_order', camn_order,
+        h5.create_array( h5.root, 'camn_order', camn_order,
                         'camn_order')
-        h5.createArray( h5.root, 'cam_id_array', cam_id_array,
+        h5.create_array( h5.root, 'cam_id_array', cam_id_array,
                         'cam_id_array')
         h5.close()
         print 'saved %s'%accum_frame_spread_filename

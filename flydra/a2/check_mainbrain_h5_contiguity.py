@@ -9,7 +9,7 @@ def check_mainbrain_h5_contiguity( filename, slow_but_less_ram=False, shortcircu
     failed_obj_ids = []
     if verbose:
         print('opening %r'%filename)
-    with tables.openFile( filename, mode='r' ) as f:
+    with tables.open_file( filename, mode='r' ) as f:
         table = f.root.kalman_estimates
 
         all_obj_ids = table.cols.obj_id[:]

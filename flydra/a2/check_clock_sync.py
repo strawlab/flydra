@@ -4,7 +4,7 @@ import pylab
 
 if __name__=='__main__':
     filename='DATA20070214_192124.h5'
-    kresults = tables.openFile(filename,mode="r")
+    kresults = tables.open_file(filename,mode="r")
 
 
     hci = kresults.root.host_clock_info

@@ -26,7 +26,7 @@ def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000
         print('hmm, not plotting 3d or 2d data. nothing to do')
         return
 
-    with tables.openFile(fname, mode='r') as h5:
+    with tables.open_file(fname, mode='r') as h5:
         if do_2d_latency:
             d2d = h5.root.data2d_distorted[:end_idx]
         if do_3d_latency:

@@ -228,7 +228,7 @@ def get_group_for_obj(obj_id,h5,writeable=False):
     parent_name = 'ori_ekf_qual'
     if not hasattr(h5.root,parent_name):
         if writeable:
-            h5.createGroup(h5.root,parent_name,'ori EKF quality')
+            h5.create_group(h5.root,parent_name,'ori EKF quality')
         else:
             raise ValueError('no group %s, and cannot create'%parent_name)
     parent = getattr(h5.root,parent_name)
@@ -236,7 +236,7 @@ def get_group_for_obj(obj_id,h5,writeable=False):
     groupname = 'group%d'%groupnum
     if not hasattr(parent,groupname):
         if writeable:
-            h5.createGroup(parent,groupname,'ori EKF data')
+            h5.create_group(parent,groupname,'ori EKF data')
         else:
             raise ValueError('no group %s, and cannot create'%groupname)
     return getattr(parent,groupname)
@@ -322,7 +322,7 @@ def doit(output_h5_filename=None,
                            mode='r') as kh5:
             with openFileSafe( data2d_filename,
                                mode='r') as h5:
-                for input_node in kh5.root._f_iterNodes():
+                for input_node in kh5.root._f_iter_nodes():
                     # copy everything from source to dest
                     input_node._f_copy(output_h5.root,recursive=True)
 
@@ -856,7 +856,7 @@ def doit(output_h5_filename=None,
                         arrays.append(arr)
                     save_recarray = np.rec.fromarrays(arrays,names=names)
                     h5group = get_group_for_obj(obj_id,output_h5,writeable=True)
-                    output_h5.createTable(h5group,
+                    output_h5.create_table(h5group,
                                           'obj%d'%obj_id,
                                           save_recarray,
                                           filters=tables.Filters(1, complib='lzo'))

@@ -185,7 +185,7 @@ def plot_timeseries(subplot=None,options = None):
         options.ori_qual = None
 
     if options.timestamp_file is not None:
-        h5 = tables.openFile(options.timestamp_file,mode='r')
+        h5 = tables.open_file(options.timestamp_file,mode='r')
         print 'reading timestamps and frames'
         table_data2d_frames=h5.root.data2d_distorted.read(field='frame')
         table_data2d_timestamps=h5.root.data2d_distorted.read(field='timestamp')

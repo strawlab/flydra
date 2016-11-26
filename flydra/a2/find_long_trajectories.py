@@ -18,7 +18,7 @@ def main(files=None,
 
         for filename in filenames:
             print 'filename',filename
-            kresults = PT.openFile(filename,mode="r")
+            kresults = PT.open_file(filename,mode="r")
             obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
             use_obj_ids = obj_ids
             
@@ -37,11 +37,11 @@ def main(files=None,
                 else:
                     obj_id_find=obj_id
 
-                observation_frame_idxs = kresults.root.ML_estimates.getWhereList(
+                observation_frame_idxs = kresults.root.ML_estimates.get_where_list(
                     kresults.root.ML_estimates.cols.obj_id==obj_id_find,
                     flavor='numpy')
                 
-                observation_frames = kresults.root.ML_estimates.readCoordinates(
+                observation_frames = kresults.root.ML_estimates.read_coordinates(
                     observation_frame_idxs,
                     field='frame',
                     flavor='numpy')

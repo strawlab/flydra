@@ -118,8 +118,8 @@ def show_it(fig,
         xbins = numpy.linspace(0,w,40)
         ybins = numpy.linspace(0,h,30)
 
-        xs = data2d.readCoordinates( this_camn_idxs, field='x')
-        ys = data2d.readCoordinates( this_camn_idxs, field='y')
+        xs = data2d.read_coordinates( this_camn_idxs, field='x')
+        ys = data2d.read_coordinates( this_camn_idxs, field='y')
 
         hist, xedges, yedges = numpy.histogram2d( xs, ys, bins=(xbins,ybins) )
         hist = numpy.ma.masked_where( hist == 0, hist )
@@ -143,20 +143,20 @@ def show_it(fig,
     if kalman_filename is None:
         return
 
-    kresults = PT.openFile(kalman_filename,mode='r')
+    kresults = PT.open_file(kalman_filename,mode='r')
     kobs = kresults.root.ML_estimates
     kframes = kobs.read(field='frame')
     if frame_start is not None:
         k_after_start = numpy.nonzero( kframes>=frame_start )[0]
-        #k_after_start = kobs.readCoordinates(idxs)
-        #k_after_start = kobs.getWhereList(
+        #k_after_start = kobs.read_coordinates(idxs)
+        #k_after_start = kobs.get_where_list(
         #    'frame>=frame_start')
     else:
         k_after_start = None
     if frame_stop is not None:
         k_before_stop = numpy.nonzero( kframes<=frame_stop )[0]
-        #k_before_stop = kobs.readCoordinates(idxs)
-        #k_before_stop = kobs.getWhereList(
+        #k_before_stop = kobs.read_coordinates(idxs)
+        #k_before_stop = kobs.get_where_list(
         #    'frame<=frame_stop')
     else:
         k_before_stop = None
@@ -171,12 +171,12 @@ def show_it(fig,
         k_use_idxs = numpy.arange(kobs.nrows)
 
     obj_ids = kobs.read(field='obj_id')[k_use_idxs]
-    #obj_ids = kobs.readCoordinates( k_use_idxs,
+    #obj_ids = kobs.read_coordinates( k_use_idxs,
     #                                field='obj_id')
     obs_2d_idxs = kobs.read(field='obs_2d_idx')[k_use_idxs]
-    #obs_2d_idxs = kobs.readCoordinates( k_use_idxs,
+    #obs_2d_idxs = kobs.read_coordinates( k_use_idxs,
     #                                    field='obs_2d_idx')
-    kframes = kframes[k_use_idxs]#kobs.readCoordinates( k_use_idxs,
+    kframes = kframes[k_use_idxs]#kobs.read_coordinates( k_use_idxs,
                                   # field='frame')
 
     kobs_2d = kresults.root.ML_estimates_2d_idxs
@@ -198,7 +198,7 @@ def show_it(fig,
             print kframe,'==============='
             print 'this_use_idxs', this_use_idxs
 
-        d2d = data2d.readCoordinates( this_use_idxs )
+        d2d = data2d.read_coordinates( this_use_idxs )
         if debugADS:
             print 'd2d ---------------'
             for row in d2d:

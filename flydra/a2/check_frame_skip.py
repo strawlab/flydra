@@ -14,7 +14,7 @@ if __name__=='__main__':
     print 'filename',filename
     n_cams = 4
     print 'n_cams',n_cams
-    kresults = tables.openFile(filename,mode="r")
+    kresults = tables.open_file(filename,mode="r")
     camn2cam_id, cam_id2camns = get_caminfo_dicts(kresults)
     data2d = kresults.root.data2d_distorted
 
@@ -56,7 +56,7 @@ if __name__=='__main__':
             if 1:
                 # test assumption
                 assert numpy.alltrue(allframes[idxs] == frame)
-            framedata = data2d.readCoordinates(idxs,flavor='numpy')
+            framedata = data2d.read_coordinates(idxs,flavor='numpy')
             camns = framedata.field('camn')
             test_ucamns = numpy.unique(camns)
             if len(test_ucamns) < n_cams:

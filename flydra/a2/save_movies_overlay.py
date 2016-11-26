@@ -120,7 +120,7 @@ def doit(fmf_filename=None,
     else:
         fmf = FMF.FlyMovie(fmf_filename)
     fmf_timestamps = fmf.get_all_timestamps()
-    h5 = PT.openFile( h5_filename, mode='r' )
+    h5 = PT.open_file( h5_filename, mode='r' )
 
     bg_fmf_filename = os.path.splitext(fmf_filename)[0] + '_mean.fmf'
     cmp_fmf_filename = os.path.splitext(fmf_filename)[0] + '_sumsqf.fmf'
@@ -262,7 +262,7 @@ def doit(fmf_filename=None,
         #print repr(timestamp), repr(timestamp_idx)
         idxs = numpy.intersect1d( camn_idx, timestamp_idx )
         if len(idxs):
-            rows = h5.root.data2d_distorted.readCoordinates( idxs )
+            rows = h5.root.data2d_distorted.read_coordinates( idxs )
             frame_match_h5 = rows['frame'][0]
             if start is None:
                 start = frame_match_h5
@@ -383,7 +383,7 @@ def doit(fmf_filename=None,
             idxs = numpy.intersect1d( camn_idx, timestamp_idx )
             rows = None
             if len(idxs):
-                rows = h5.root.data2d_distorted.readCoordinates( idxs )
+                rows = h5.root.data2d_distorted.read_coordinates( idxs )
                 mainbrain_timestamp = rows['cam_received_timestamp'][0]
 
             del fmf_fno

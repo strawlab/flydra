@@ -5,7 +5,7 @@ from optparse import OptionParser
 import scipy.misc.pilutil
 
 def doit(filename=None):
-    results = tables.openFile(filename,mode='r')
+    results = tables.open_file(filename,mode='r')
     image_table = results.root.images
 
     for row in results.root.cam_info:

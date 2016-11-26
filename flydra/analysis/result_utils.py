@@ -156,32 +156,32 @@ def get_caminfo_dicts(results):
     return camn2cam_id, cam_id2camns
 
 def get_results(filename,mode='r+',create_camera_summary=False):
-    h5file = PT.openFile(filename,mode=mode)
+    h5file = PT.open_file(filename,mode=mode)
     if hasattr(h5file.root,'data3d_best'):
         frame_col = h5file.root.data3d_best.cols.frame
         if frame_col.index is None:
             print 'creating index on data3d_best.cols.frame ...'
-            frame_col.createIndex()
+            frame_col.create_index()
             print 'done'
 
     if False and hasattr(h5file.root,'data2d'):
         frame_col = h5file.root.data2d.cols.frame
         if frame_col.index is None:
             print 'creating index on data2d.cols.frame ...'
-            frame_col.createIndex()
+            frame_col.create_index()
             print 'done'
 
 ##        timestamp_col = h5file.root.data2d.cols.timestamp
 ##        if timestamp_col.index is None:
 ##            print 'creating index on data2d.cols.timestamp ...'
-##            timestamp_col.createIndex()
+##            timestamp_col.create_index()
 ##            print 'done'
 
     if hasattr(h5file.root,'data2d_distorted'):
     ##        timestamp_col = h5file.root.data2d_distorted.cols.timestamp
     ##        if timestamp_col.index is None:
     ##            print 'creating index on data2d_distorted.cols.timestamp ...'
-    ##            timestamp_col.createIndex()
+    ##            timestamp_col.create_index()
     ##            print 'done'
         pass
 
@@ -306,7 +306,7 @@ def create_data2d_camera_summary(results):
 
     data2d = results.root.data2d_distorted # make sure we have 2d data table
     camn2cam_id, cam_id2camns = get_caminfo_dicts(results)
-    table = results.createTable( results.root, 'data2d_camera_summary',
+    table = results.create_table( results.root, 'data2d_camera_summary',
                                  Data2DCameraSummary, 'data2d camera summary' )
     for camn in camn2cam_id:
         cam_id = camn2cam_id[camn]
@@ -371,7 +371,7 @@ def frame2timestamp_command():
     h5_filename, frame_str = sys.argv[1:3]
     frame = int(frame_str)
     assert len(sys.argv)==3
-    results = tables.openFile(h5_filename,mode='r')
+    results = tables.open_file(h5_filename,mode='r')
     model = get_time_model_from_data(results)
     print repr(model.framestamp2timestamp(frame))
     results.close()
@@ -380,7 +380,7 @@ def timestamp2frame_command():
     h5_filename, timestamp_str = sys.argv[1:3]
     timestamp = float(timestamp_str)
     assert len(sys.argv)==3
-    results = tables.openFile(h5_filename,mode='r')
+    results = tables.open_file(h5_filename,mode='r')
     model = get_time_model_from_data(results)
     print repr(model.timestamp2framestamp(timestamp))
     results.close()
@@ -393,7 +393,7 @@ class TextlogParseError(Exception):
 
 def read_textlog_header(results,fail_on_error=True):
     try:
-        textlog1 = results.root.textlog.readCoordinates([0])
+        textlog1 = results.root.textlog.read_coordinates([0])
     except PT.exceptions.NoSuchNodeError, err:
         if fail_on_error:
             raise
@@ -420,7 +420,7 @@ def read_textlog_header(results,fail_on_error=True):
     if 'flydra_version' not in parsed:
         # get second line of text log, if it exists
         try:
-            textlog2 = results.root.textlog.readCoordinates([1])
+            textlog2 = results.root.textlog.read_coordinates([1])
         except IndexError as err:
             pass
         else:
@@ -559,14 +559,14 @@ def drift_estimates(results):
 
     for hostname in hostnames:
         if LooseVersion(tables.__version__) < LooseVersion('3.0.0'):
-            row_idx = table.getWhereList('remote_hostname == hostname')
+            row_idx = table.get_where_list('remote_hostname == hostname')
         else:
             row_idx = table.get_where_list('remote_hostname == hostname',
                                            condvars={'hostname':hostname})
         assert len(row_idx)>0
-        start_timestamp = np.asarray(table.readCoordinates(row_idx,field='start_timestamp'))
-        stop_timestamp = np.asarray(table.readCoordinates(row_idx,field='stop_timestamp'))
-        remote_timestamp = np.asarray(table.readCoordinates(row_idx,field='remote_timestamp'))
+        start_timestamp = np.asarray(table.read_coordinates(row_idx,field='start_timestamp'))
+        stop_timestamp = np.asarray(table.read_coordinates(row_idx,field='stop_timestamp'))
+        remote_timestamp = np.asarray(table.read_coordinates(row_idx,field='remote_timestamp'))
 
         measurement_error = stop_timestamp-start_timestamp
         clock_diff = stop_timestamp-remote_timestamp
@@ -603,7 +603,7 @@ def make_exact_movie_info2(results,movie_dir=None):
         cam_id, camn = row['cam_id'], row['camn']
         camn2cam_id[camn]=cam_id
 
-    exact_movie_info = results.createTable(results.root,'exact_movie_info',ExactMovieInfo,'')
+    exact_movie_info = results.create_table(results.root,'exact_movie_info',ExactMovieInfo,'')
 
     for row in movie_info:
         cam_id = row['cam_id']

@@ -13,7 +13,7 @@ def convert(infilename,
             outfilename,
             ):
 
-    results = tables.openFile(infilename,mode='r')
+    results = tables.open_file(infilename,mode='r')
     ra = results.root.textlog[:]
     results.close()
     mlab.rec2csv( ra, outfilename)

@@ -90,10 +90,10 @@ def doit(
         if figtitle != '':
             pylab.figtext(0.01,0.01,figtitle,verticalalignment='bottom')
 
-        with PT.openFile( filename, mode='r' ) as h5:
+        with PT.open_file( filename, mode='r' ) as h5:
             timezone = result_utils.get_tz( h5 )
             if options.spreadh5 is not None:
-                h5spread = PT.openFile(options.spreadh5, mode='r')
+                h5spread = PT.open_file(options.spreadh5, mode='r')
             else:
                 h5spread = None
 

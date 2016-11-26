@@ -92,7 +92,7 @@ def flydra_source_factory(source_string):
 
     elif ext.lower() == '.h5':
         import tables # pytables
-        h5 = tables.openFile(abspath,mode='r')
+        h5 = tables.open_file(abspath,mode='r')
         if (hasattr(h5.root,'data2d_distorted') and
             hasattr(h5.root,'kalman_estimates')):
             if is_orientation_fit(abspath):

@@ -102,7 +102,7 @@ h5_obs_names = tables.Description(FilteredObservations().columns)._v_names
 
 # allow rapid building of numpy.rec.array:
 if LooseVersion(tables.__version__) < LooseVersion('3.0.0'):
-    Info2DCol_description = tables.Description(Info2D().columns)._v_nestedDescr
+    Info2DCol_description = tables.Description(Info2D().columns)._v_nested_descr
 else:
     Info2DCol_description = tables.Description(Info2D().columns)._v_nested_descr
 
@@ -998,7 +998,7 @@ class MainBrain(object):
                     assert approx_stop_framei == approx_stop_frame
 
                     new_columns = numpy.rec.fromarrays([[approx_stop_framei]], formats='i8')
-                    self.h5movie_info.modifyColumns(start=nrowi, columns=new_columns, names=['approx_stop_frame'])
+                    self.h5movie_info.modify_columns(start=nrowi, columns=new_columns, names=['approx_stop_frame'])
                 else:
                     raise RuntimeError("could not find row to save movie stop frame.")
 
@@ -1155,9 +1155,9 @@ class MainBrain(object):
         self.pub_data_file.publish(self.h5filename)
 
         self.block_triggerbox_activity = True
-        self.h5file = tables.openFile(self.h5filename, mode="w", title="Flydra data file")
+        self.h5file = tables.open_file(self.h5filename, mode="w", title="Flydra data file")
         expected_rows = int(1e6)
-        ct = self.h5file.createTable # shorthand
+        ct = self.h5file.create_table # shorthand
         root = self.h5file.root # shorthand
         self.h5data2d   = ct(root,'data2d_distorted', Info2D, "2d data",
                              expectedrows=expected_rows*5)
@@ -1187,7 +1187,7 @@ class MainBrain(object):
                 self.h5data3d_ML_estimates = ct(root,'ML_estimates', FilteredObservations,
                                                        'dynamics-free maximum liklihood estimates',
                                                        expectedrows=expected_rows)
-                self.h5_2d_obs = self.h5file.createVLArray(self.h5file.root,
+                self.h5_2d_obs = self.h5file.create_vlarray(self.h5file.root,
                                                            'ML_estimates_2d_idxs',
                                                            ML_estimates_2d_idxs_type(), # dtype should match with tro.observations_2d
                                                            "camns and idxs")
@@ -1203,13 +1203,13 @@ class MainBrain(object):
         self.h5cam_info.flush()
 
         # save raw image from each camera
-        img = self.h5file.createGroup(root,'images','sample images')
+        img = self.h5file.create_group(root,'images','sample images')
         cam_ids = self.remote_api.external_get_cam_ids()
         for cam_id in cam_ids:
             image, fps, points_distorted, image_coords = self.get_last_image_fps(cam_id)
             if image is None:
                 raise ValueError('image cannot be None')
-            self.h5file.createArray( img, cam_id, image, 'sample image from %s'%cam_id )
+            self.h5file.create_array( img, cam_id, image, 'sample image from %s'%cam_id )
 
         self.save_config()
 

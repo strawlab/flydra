@@ -23,13 +23,13 @@ def do_filter(filename,
     KalmanEstimates = flydra_kalman_utils.KalmanEstimates
     FilteredObservations = flydra_kalman_utils.FilteredObservations
 
-    output = PT.openFile(filename+'.output',mode="w")
-    output_xhat = output.createTable(output.root,'kalman_estimates', KalmanEstimates,
+    output = PT.open_file(filename+'.output',mode="w")
+    output_xhat = output.create_table(output.root,'kalman_estimates', KalmanEstimates,
                                      "Kalman a posteri estimates of tracked object")
-    output_obs = output.createTable(output.root,'ML_estimates', FilteredObservations,
+    output_obs = output.create_table(output.root,'ML_estimates', FilteredObservations,
                                     "observations of tracked object")
 
-    kresults = PT.openFile(filename,mode="r")
+    kresults = PT.open_file(filename,mode="r")
 
     reconst = flydra.reconstruct.Reconstructor(kresults)
     reconst.save_to_h5file(output)
@@ -55,15 +55,15 @@ def do_filter(filename,
         else:
             obj_id_find=obj_id
 
-        observation_frame_idxs = kresults.root.ML_estimates.getWhereList(
+        observation_frame_idxs = kresults.root.ML_estimates.get_where_list(
             'obj_id==obj_id_find')
-        observation_frames = kresults.root.ML_estimates.readCoordinates(
+        observation_frames = kresults.root.ML_estimates.read_coordinates(
             observation_frame_idxs,
             field='frame')
         max_observation_frame=observation_frames.max()
 
         row_idxs = numpy.nonzero( obj_ids == obj_id )[0]
-        estimate_frames = kresults.root.kalman_estimates.readCoordinates(row_idxs,field='x')
+        estimate_frames = kresults.root.kalman_estimates.read_coordinates(row_idxs,field='x')
         valid_condition = estimate_frames <= max_observation_frame
         row_idxs = row_idxs[valid_condition]
         n_observations = len( observation_frames )
@@ -75,10 +75,10 @@ def do_filter(filename,
             print 'obj_id %d: %d observation frames, skipping'%(obj_id,n_observations,)
             continue
 
-        obs_recarray = kresults.root.ML_estimates.readCoordinates(
+        obs_recarray = kresults.root.ML_estimates.read_coordinates(
             observation_frame_idxs)
         output_obs.append( obs_recarray )
-        xhats_recarray = kresults.root.kalman_estimates.readCoordinates(row_idxs)
+        xhats_recarray = kresults.root.kalman_estimates.read_coordinates(row_idxs)
         output_xhat.append( xhats_recarray )
     output_xhat.flush()
     output_obs.flush()

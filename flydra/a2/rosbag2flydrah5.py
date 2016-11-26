@@ -88,8 +88,8 @@ def convert_to_flydrah5(bag_file, topic_name='pointcloud', out_h5=None, reconstr
 
     bag = rosbag.Bag( bag_file, 'r')
 
-    h5file = tables.openFile(out_h5, mode="w", title="Flydra data file (from ROS bag)")
-    ct = h5file.createTable # shorthand
+    h5file = tables.open_file(out_h5, mode="w", title="Flydra data file (from ROS bag)")
+    ct = h5file.create_table # shorthand
     root = h5file.root # shorthand
 
     # save data as both "observations" (ML estimates) and "kalman estimates" (MAP estimates)

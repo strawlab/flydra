@@ -11,7 +11,7 @@ if 1:
     tables.flavor.restrict_flavors(keep=['numpy'])
 
 def get_h5_start_stop(filename,careful=True):
-    h5 = tables.openFile(filename,mode='r')
+    h5 = tables.open_file(filename,mode='r')
     try:
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
     except:
@@ -58,7 +58,7 @@ def find_ufmfs(filename,ufmf_dir=None,careful=True,verbose=False):
 
     possible_ufmfs = []
 
-    with tables.openFile(filename,mode='r') as h5:
+    with tables.open_file(filename,mode='r') as h5:
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
     cam_ids = cam_id2camns.keys()
 

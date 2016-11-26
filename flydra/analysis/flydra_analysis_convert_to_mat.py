@@ -50,7 +50,7 @@ def do_it(filename=None,
         extra_vars = {}
 
     if filename is not None:
-        kresults = PT.openFile(filename,mode="r")
+        kresults = PT.open_file(filename,mode="r")
         print 'reading files...'
         table1 = kresults.root.kalman_estimates.read()
         if not ignore_observations:

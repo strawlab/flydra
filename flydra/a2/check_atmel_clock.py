@@ -21,7 +21,7 @@ if __name__=='__main__':
 #    filename = 'DATA20080220_182114.h5'
 #    filename = 'DATA20080715_181455.h5'
     filename = '/home/astraw/DATA20081004_185032.h5'
-    kresults = tables.openFile(filename,mode="r")
+    kresults = tables.open_file(filename,mode="r")
     time_model, full_output = flydra.analysis.result_utils.get_time_model_from_data(kresults,
                                                                                     debug=True,
                                                                                     full_output=True)

@@ -6,7 +6,7 @@ import numpy as np
 DEFAULT_MOVIE_SUBDIR = '~/FLYDRA_MOVIES'
 
 def get_uuid(filename):
-    with tables.openFile(filename,mode='r') as h5file_raw:
+    with tables.open_file(filename,mode='r') as h5file_raw:
         table_experiment = h5file_raw.root.experiment_info
         result = table_experiment.read(field='uuid')
     uuids = np.unique(result)

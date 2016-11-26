@@ -7,14 +7,14 @@ import tempfile
 
 def clear_col(dest_table, colname, fill_value=np.nan):
     if 0:
-        objcol = dest_table._getColumnInstance(colname)
-        descr = [objcol._v_parent._v_nestedDescr[objcol._v_pos]]
+        objcol = dest_table._get_column_instance(colname)
+        descr = [objcol._v_parent._v_nested_descr[objcol._v_pos]]
         dtype = descr[0][1]
 
         nancol = np.ones( (dest_table.nrows,), dtype=dtype)
         #recarray = np.rec.array( nancol, dtype=descr)
 
-        dest_table.modifyColumn(column=nancol, colname='x')
+        dest_table.modify_column(column=nancol, colname='x')
         dest_table.flush()
     else:
         warnings.warn('slow implementation of column clearing')
@@ -41,7 +41,7 @@ def openFileSafe(filename,delete_on_error=False,**kwargs):
     else:
         use_fname = filename
 
-    result = tables.openFile(use_fname,**kwargs)
+    result = tables.open_file(use_fname,**kwargs)
     try:
         yield result
     except:

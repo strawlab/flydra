@@ -39,7 +39,7 @@ def do_data_association_tables(src_h5, output_file, options):
         new_obs_rows.append(idx2d)
     # Save data association information.
     ML_estimates_2d_idxs_type = flydra_kalman_utils.ML_estimates_2d_idxs_type
-    h5_2d_obs = output_file.createVLArray(output_file.root,
+    h5_2d_obs = output_file.create_vlarray(output_file.root,
                                           'ML_estimates_2d_idxs',
                                           ML_estimates_2d_idxs_type(), # dtype should match with tro.observations_2d
                                           "camns and idxs")
@@ -48,7 +48,7 @@ def do_data_association_tables(src_h5, output_file, options):
     h5_2d_obs.flush()
 
     # Save ML_estimates.
-    ct = output_file.createTable # shorthand
+    ct = output_file.create_table # shorthand
     root = output_file.root # shorthand
     FilteredObservations = flydra_kalman_utils.FilteredObservations
     h5data3d_ML_estimates = ct(root,'ML_estimates', FilteredObservations,
@@ -98,7 +98,7 @@ def h5_shorten(input_filename, output_filename, options):
         with openFileSafe( output_filename, mode='w', delete_on_error=True ) as output_h5:
             if not options.data2d_only:
                 do_data_association_tables(h5, output_h5, options)
-            for node in h5.root._f_iterNodes():
+            for node in h5.root._f_iter_nodes():
                 if (hasattr(node,'name') and
                     node.name in ['data2d_distorted','kalman_estimates']):
                     if options.data2d_only:

@@ -101,7 +101,7 @@ def retrack_movies( h5_filename,
         with openFileSafe( tmp_output_h5_filename, mode='w',
                            delete_on_error=True) as output_h5:
 
-            out_data2d = output_h5.createTable(
+            out_data2d = output_h5.create_table(
                 output_h5.root,
                 'data2d_distorted',
                 Info2D, "2d data",
@@ -121,7 +121,7 @@ def retrack_movies( h5_filename,
                 # And save original data for untouched camns
                 out_data2d.append( orig_data2d )
 
-            for input_node in h5.root._f_iterNodes():
+            for input_node in h5.root._f_iter_nodes():
                 if input_node._v_name not in ['data2d_distorted',
                                               'kalman_estimates',
                                               'ML_estimates',

@@ -356,8 +356,8 @@ def are_pytables_close(filename1, filename2):
     def are_pytables_groups_close(g1,g2):
         result = True
 
-        for f1_node in g1._f_iterNodes():
-            f2_node = g2._f_getChild(f1_node._v_name)
+        for f1_node in g1._f_iter_nodes():
+            f2_node = g2._f_get_child(f1_node._v_name)
 
             if isinstance(f1_node,tables.Group):
                 is_close = are_pytables_groups_close(f1_node,f2_node)
@@ -407,8 +407,8 @@ def are_pytables_close(filename1, filename2):
                 break
         return result
 
-    f1 = tables.openFile(filename1,mode='r')
-    f2 = tables.openFile(filename2,mode='r')
+    f1 = tables.open_file(filename1,mode='r')
+    f2 = tables.open_file(filename2,mode='r')
     result = are_pytables_groups_close( f1.root, f2.root )
     f1.close()
     f2.close()
