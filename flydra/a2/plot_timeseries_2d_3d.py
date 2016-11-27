@@ -543,8 +543,12 @@ def doit(
                     obs_2d_row = kobs_2d[int(obs_2d_idx)]
                     #print kframe,obs_2d_row
                     for camn in obs_2d_row[::2]:
-                        cam_id = camn2cam_id[camn]
-                        used_cam_ids[cam_id].append(kframe)
+                        try:
+                            cam_id = camn2cam_id[camn]
+                        except KeyError:
+                            cam_id = None
+                        if cam_id is not None:
+                            used_cam_ids[cam_id].append(kframe)
                 for cam_id,kframes_used in used_cam_ids.iteritems():
                     kframes_used = numpy.array(kframes_used)
                     yval = -99*numpy.ones_like(kframes_used)
