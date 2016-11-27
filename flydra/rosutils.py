@@ -1,6 +1,6 @@
 import roslib
 import roslib.packages
-import roslib.rosenv
+import rospkg
 
 roslib.load_manifest('rospy')
 roslib.load_manifest('rosgraph')
@@ -112,7 +112,7 @@ def decode_url(url, required=False):
 
     url = string.Template(url).safe_substitute(
                                 NODE_NAME=nodename,
-                                ROS_HOME=roslib.rosenv.get_ros_home())
+                                ROS_HOME=rospkg.get_ros_home())
 
     url = os.path.abspath(url)
     if required and not os.path.exists(url):
