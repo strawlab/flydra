@@ -1,6 +1,6 @@
 import aggdraw
 import numpy as np
-import scipy.misc.pilutil
+import scipy.misc
 import warnings
 
 def _flat_to_xy(coords_in):
@@ -11,9 +11,9 @@ def _flat_to_xy(coords_in):
 
 class Xform(object):
     def transform_image(self,im):
-        arr = scipy.misc.pilutil.fromimage(im)
+        arr = scipy.misc.fromimage(im)
         arr_out = self._transform_image_dowork(arr)
-        im_out = scipy.misc.pilutil.toimage(arr_out)
+        im_out = scipy.misc.toimage(arr_out)
         return im_out
     def __call__(self,coords_in):
         xin,yin = _flat_to_xy(coords_in)

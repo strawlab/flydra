@@ -11,8 +11,8 @@ def get_fraction_similar( im1_filename, im2_filename,
     pix_diff_threshold, and return the fraction of similar pixels.
 
     """
-    im1 = scipy.misc.pilutil.imread(im1_filename)
-    im2 = scipy.misc.pilutil.imread(im2_filename)
+    im1 = scipy.misc.imread(im1_filename)
+    im2 = scipy.misc.imread(im2_filename)
     if im1.ndim != im2.ndim:
         raise ValueError('images have different ndim')
     if im1.shape != im2.shape:

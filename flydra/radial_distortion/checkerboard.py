@@ -9,7 +9,6 @@ import numpy
 import numpy as np
 import pylab
 import scipy.optimize
-import scipy.misc.pilutil
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import motmot.imops.imops as imops
 from matplotlib import delaunay

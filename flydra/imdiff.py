@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 def main():
     pix_diff_threshold=5.0
 
-    im1=scipy.misc.pilutil.imread(sys.argv[1])
-    im2=scipy.misc.pilutil.imread(sys.argv[2])
+    im1=scipy.misc.imread(sys.argv[1])
+    im2=scipy.misc.imread(sys.argv[2])
 
     di = abs(im1.astype(np.float)-im2.astype(np.float) )
     if di.ndim==3:

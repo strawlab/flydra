@@ -48,7 +48,7 @@ import numpy
 import numpy as nx
 import numpy as np
 import errno
-import scipy.misc.pilutil
+import scipy.misc
 import numpy.dual
 import json
 
@@ -2143,7 +2143,7 @@ class AppState(object):
                     mask_image_fname = mask_images[cam_no]
                     print("----------------------------------------------------------------------------------------------------")
                     print("Camera guid ='%s' \n has mask image: '%s'" % (self.all_cam_ids[cam_no], mask_image_fname))
-                    im = scipy.misc.pilutil.imread( mask_image_fname )
+                    im = scipy.misc.imread( mask_image_fname )
                     if len(im.shape) != 3:
                         raise ValueError('mask image must have color channels')
                     if im.shape[2] != 4:

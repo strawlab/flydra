@@ -17,7 +17,6 @@ import motmot.imops.imops as imops
 import flydra.a2.utils as utils
 import flydra.analysis.result_utils as result_utils
 import core_analysis
-import scipy.misc.pilutil
 import scipy.ndimage
 import motmot.FastImage.FastImage as FastImage
 import motmot.realtime_image_analysis.realtime_image_analysis \
