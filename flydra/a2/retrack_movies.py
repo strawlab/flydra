@@ -58,6 +58,13 @@ def retrack_movies( h5_filename,
     if len(ufmf_filenames)==0:
         raise RuntimeError('nothing to do (autodetection of .ufmf files failed)')
 
+    if ufmf_dir is not None:
+        if (not ufmf_filenames[0].startswith('/')) and (not os.path.isfile(ufmf_filenames[0])):
+            # filenames are not absolute and are not present, convert
+            ufmf_filenames = [ os.path.join(ufmf_dir, fname) for fname in ufmf_filenames ]
+        else:
+            raise RuntimeError('ufmf_dir given but ufmf_filenames exist without it')
+
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
             "will not overwrite old file '%s'"%output_h5_filename)
