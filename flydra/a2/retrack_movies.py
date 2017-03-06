@@ -101,9 +101,8 @@ def retrack_movies( h5_filename,
         all_camns = camn2cam_id.keys()
 
         # Save results to temporary file. Copy to real location on success.
-        tmp_fd,tmp_output_h5_filename = tempfile.mkstemp(suffix='.h5',
-                                                         prefix='retrack')
-        os.fdopen(tmp_fd).close()
+        tmpdir = tempfile.mkdtemp()
+        tmp_output_h5_filename = os.path.join(tmpdir,'retrack.h5')
 
         with open_file_safe( tmp_output_h5_filename, mode='w',
                            delete_on_error=True) as output_h5:
