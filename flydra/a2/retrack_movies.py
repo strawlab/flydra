@@ -58,6 +58,13 @@ def retrack_movies( h5_filename,
     if len(ufmf_filenames)==0:
         raise RuntimeError('nothing to do (autodetection of .ufmf files failed)')
 
+    if ufmf_dir is not None:
+        if (not ufmf_filenames[0].startswith('/')) and (not os.path.isfile(ufmf_filenames[0])):
+            # filenames are not absolute and are not present, convert
+            ufmf_filenames = [ os.path.join(ufmf_dir, fname) for fname in ufmf_filenames ]
+        else:
+            raise RuntimeError('ufmf_dir given but ufmf_filenames exist without it')
+
     if os.path.exists( output_h5_filename ):
         raise RuntimeError(
             "will not overwrite old file '%s'"%output_h5_filename)
@@ -94,9 +101,8 @@ def retrack_movies( h5_filename,
         all_camns = camn2cam_id.keys()
 
         # Save results to temporary file. Copy to real location on success.
-        tmp_fd,tmp_output_h5_filename = tempfile.mkstemp(suffix='.h5',
-                                                         prefix='retrack')
-        os.fdopen(tmp_fd).close()
+        tmpdir = tempfile.mkdtemp()
+        tmp_output_h5_filename = os.path.join(tmpdir,'retrack.h5')
 
         with open_file_safe( tmp_output_h5_filename, mode='w',
                            delete_on_error=True) as output_h5:
