@@ -63,7 +63,13 @@ import flydra.flydra_socket as flydra_socket
 #DebugLock = flydra.debuglock.DebugLock
 
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
-import motmot.cam_iface.cam_iface_ctypes as cam_iface
+import os
+
+PYCI2 = int(os.environ.get('FLYDRA_PYCI2',0))
+if PYCI2:
+    import pyci2.core as cam_iface
+else:
+    import motmot.cam_iface.cam_iface_ctypes as cam_iface
 import camnode_colors
 
 import roslib;
@@ -1736,10 +1742,7 @@ class CamifaceCamera(cam_iface.Camera, _Camera):
                 LOG.warn("invalid trigger name: %s" % trigger)
                 trigger_mode_number = -1
 
-        if trigger_mode_number < 0:
-            LOG.info("trigger_mode number not set or correct (%s), setting camera to max framerate" % trigger_mode_number)
-            cam_iface.Camera.set_framerate(self, 999)
-        else:
+        if trigger_mode_number >= 0:
             LOG.info("setting trigger_mode number = %s (trigger=%s)" %(trigger_mode_number,trigger))
             cam_iface.Camera.set_trigger_mode_number(self, trigger_mode_number)
 
