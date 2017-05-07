@@ -65,6 +65,7 @@ PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_I
 class RealtimeROSSenderThread(threading.Thread):
     """a class to send realtime data from a separate thread"""
     def __init__(self,ros_path,ros_klass,ros_send_array,queue,quit_event,name):
+        warnings.warn('Should convert RealtimeROSSenderThread to ROS publisher with queue_size!=None')
         threading.Thread.__init__(self,name=name)
         self.daemon = True
         self._queue = queue
@@ -73,7 +74,7 @@ class RealtimeROSSenderThread(threading.Thread):
         self._ros_klass = ros_klass
         self._ros_send_array = ros_send_array
         try:
-            self._pub = rospy.Publisher(self._ros_path,self._ros_klass,tcp_nodelay=True)
+            self._pub = rospy.Publisher(self._ros_path,self._ros_klass,queue_size=1,tcp_nodelay=True)
         except Exception as err:
             rospy.logwarn('could not start coordinate publisher: %r'%(err,))
             self._pub = None
@@ -118,6 +119,7 @@ class CoordinateProcessor(threading.Thread):
         if rospy.core.is_initialized():
             self.sync_cam_pub = rospy.Publisher("~synchronized_cameras",
                                                 CameraList,
+                                                queue_size=1,
                                                 latch=True)
 
         self.save_profiling_data = save_profiling_data

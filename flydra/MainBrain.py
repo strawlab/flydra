@@ -597,16 +597,19 @@ class MainBrain(object):
         self.pub_data_file = rospy.Publisher(
                                 '~data_file',
                                 std_msgs.msg.String,
+                                queue_size=0,
                                 latch=True)
         self.pub_data_file.publish('')
         self.pub_calib_file = rospy.Publisher(
                                 '~calibration',
                                 std_msgs.msg.String,
+                                queue_size=0,
                                 latch=True)
         self.pub_calib_file.publish('')
         self.pub_num_cams = rospy.Publisher(
                                 '~num_cameras',
                                 std_msgs.msg.UInt32,
+                                queue_size=0,
                                 latch=True)
         self.pub_num_cams.publish(0)
 

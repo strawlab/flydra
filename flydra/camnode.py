@@ -434,12 +434,14 @@ class ProcessCamClass(rospy.SubscribeListener):
         self.pub_img = rospy.Publisher('%s/image_raw'%self.ros_namespace,
                                          sensor_msgs.msg.Image,
                                          subscriber_listener=self,
+                                         queue_size=1,
                                          tcp_nodelay=True)
         self.pub_img_rate = float(options.rosrate)
         self.pub_img_lasttime = time.time()
 
         self.pub_rate = rospy.Publisher('%s/framerate'%self.ros_namespace,
                                          std_msgs.msg.Float32,
+                                         queue_size=1,
                                          tcp_nodelay=True)
         self.pub_rate_lasttime = time.time()
         self.pub_rate_lastframe = 0
