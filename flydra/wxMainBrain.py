@@ -557,11 +557,6 @@ class wxMainBrainApp(wx.App):
         ctrl.SetValue( str( val ) )
         wx.EVT_TEXT(ctrl, ctrl.GetId(), self.OnSetCameraNSigma)
         
-        n_erode_absdiff = xrc.XRCCTRL(previewPerCamPanel,"n_erode_absdiff")
-        val = scalar_control_info['n_erode_absdiff']
-        n_erode_absdiff.SetValue( str( val ) )
-        wx.EVT_TEXT(n_erode_absdiff, n_erode_absdiff.GetId(), self.OnSetErode)
-        
         color_range_1 = xrc.XRCCTRL(previewPerCamPanel,"color_range_1")
         val = scalar_control_info['color_range_1']
         color_range_1.SetValue( str( val ) )
@@ -706,9 +701,6 @@ class wxMainBrainApp(wx.App):
         elif param == 'n_sigma':
             ctrl = xrc.XRCCTRL(previewPerCamPanel,"n_sigma")
             ctrl.SetValue( str( value ) )
-        elif param == 'n_erode_absdiff':
-            n_erode_absdiff = xrc.XRCCTRL(previewPerCamPanel,"n_erode_absdiff")
-            n_erode_absdiff.SetValue( str( value ) )
         elif param == 'color_range_1':
             color_range_1 = xrc.XRCCTRL(previewPerCamPanel,"color_range_1")
             color_range_1.SetValue( str( value ) )
@@ -1536,13 +1528,6 @@ class wxMainBrainApp(wx.App):
             value = float(value)
             self.main_brain.send_set_camera_property(cam_id,'n_sigma',value)
             
-    def OnSetErode(self, event):
-        cam_id = self._get_cam_id_for_button(event.GetEventObject())
-        value = event.GetString()
-        if value:
-            value = float(value)
-            self.main_brain.send_set_camera_property(cam_id,'n_erode_absdiff',value)
-
     def OnSetColorR1(self, event):
         cam_id = self._get_cam_id_for_button(event.GetEventObject())
         value = event.GetString()

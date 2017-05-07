@@ -342,12 +342,6 @@
                 <flag>wxTOP|wxRIGHT</flag>
                 <border>3</border>
               </object>
-              <object class="sizeritem">
-                <object class="wxTextCtrl" name="n_erode_absdiff">
-                  <size>40,20</size>
-                  <value>?</value>
-                </object>
-              </object>
             </object>
           </object>
           <object class="sizeritem">
