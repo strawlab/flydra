@@ -5,7 +5,6 @@ from distutils.core import Extension # actually monkey-patched by setuptools
 from Cython.Build import cythonize
 import os
 import sys
-import motmot.FastImage as fi_mod
 
 import flydra.version
 version = flydra.version.__version__
@@ -15,9 +14,11 @@ import numpy as np
 ext_modules = []
 
 LIGHT_INSTALL = int(os.environ.get('LIGHT_INSTALL','0'))
+print('LIGHT_INSTALL',LIGHT_INSTALL)
 
 if not LIGHT_INSTALL:
     import motmot.FastImage.FastImage # set LIGHT_INSTALL env variable to skip
+    import motmot.FastImage as fi_mod
     FastImage = motmot.FastImage.FastImage
 
     import motmot.FastImage.util as FastImage_util
