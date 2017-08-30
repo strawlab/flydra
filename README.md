@@ -53,6 +53,6 @@ conditions.
 
 ## Code of conduct
 
-Anyone who interacts with bui-backend in any space including but not
+Anyone who interacts with flydra in any space including but not
 limited to this GitHub repository is expected to follow our [code of
 conduct](https://github.com/strawlab/flydra/blob/master/code_of_conduct.md).
