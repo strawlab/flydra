@@ -12,6 +12,14 @@ data association algorithm.
 For questions or discussion, please use [the "multicams" Google
 Group](https://groups.google.com/forum/#!forum/multicams).
 
+## Installation
+
+For installation, we recommend using [our Ansible
+playbooks](https://github.com/strawlab/strawlab-ansible-roles.git). In particular,
+the `ros-kinetic-flydra` role or the `ros-kinetic-freemovr` install on
+Ubuntu 16.04 with ROS Kinetic, either flydra alone or within a [full FreemoVR
+system](https://strawlab.org/freemovr).
+
 ## History
 
 This software was originally develped by Andrew Straw in the Dickinson Lab at
