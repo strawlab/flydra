@@ -14,7 +14,6 @@ import numpy as np
 ext_modules = []
 
 LIGHT_INSTALL = int(os.environ.get('LIGHT_INSTALL','0'))
-print('LIGHT_INSTALL',LIGHT_INSTALL)
 
 if not LIGHT_INSTALL:
     import motmot.FastImage.FastImage # set LIGHT_INSTALL env variable to skip
@@ -24,9 +23,7 @@ if not LIGHT_INSTALL:
     import motmot.FastImage.util as FastImage_util
     IPPROOT = os.environ['IPPROOT']
 
-    # build with same IPP as FastImage
-    vals = FastImage_util.get_build_info(ipp_static=False, # use dynamic linking
-                                         ipp_arch=FastImage.get_IPP_arch(),
+    vals = FastImage_util.get_build_info(ipp_arch=FastImage.get_IPP_arch(),
                                          ipp_root=IPPROOT,
                                          )
 
@@ -37,6 +34,7 @@ if not LIGHT_INSTALL:
                                  libraries=vals['ipp_libraries'],
                                  define_macros=vals['ipp_define_macros'],
                                  extra_link_args=vals['extra_link_args'],
+                                 extra_objects=vals['ipp_extra_objects'],
                                  ))
 
 ext_modules.append(Extension(name='flydra._reconstruct_utils',
