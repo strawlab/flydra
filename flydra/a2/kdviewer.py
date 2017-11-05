@@ -8,10 +8,9 @@ import os, sys, math
 import warnings
 
 import pkg_resources
-try:
-    from enthought.tvtk.api import tvtk
-except ImportError:
-    from tvtk.api import tvtk
+from tvtk.api import tvtk
+from tvtk.common import configure_input_data
+
 import numpy
 import numpy as np
 import tables as PT
@@ -752,10 +751,11 @@ def doit(filename,
 
             g = tvtk.Glyph3D(scale_mode=scale_mode,
                              vector_mode = 'use_vector',
-                             input=pd)
+                             )
+            configure_input_data(g, pd)
             ss = tvtk.SphereSource(**sphere_kw)
-            g.source = ss.output
-            vel_mapper = tvtk.PolyDataMapper(input=g.output)
+            g.set_source_connection(ss.output_port)
+            vel_mapper = tvtk.PolyDataMapper(input_connection=g.output_port)
             if not obj_color:
                 vel_mapper.lookup_table = lut
                 if (options.highlight_start is None and

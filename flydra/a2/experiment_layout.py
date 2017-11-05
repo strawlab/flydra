@@ -9,6 +9,8 @@ from mayavi.sources.api import VTKDataSource
 from mayavi.modules.surface import Surface
 from mayavi.modules.vectors import Vectors
 
+from tvtk.common import configure_input_data
+
 def cylindrical_arena(info=None):
     assert numpy.allclose(info['axis'],numpy.array([0,0,1])), (
         "only vertical areas supported at the moment")
@@ -38,14 +40,13 @@ def cylindrical_arena(info=None):
         lines.append( [vi+N-1,vi] )
 
         vi += (N)
-    pd = tvtk.PolyData()
-    pd.points = verts
-    pd.lines = lines
-    pt = tvtk.TubeFilter(radius=0.001,input=pd,
+    pd = tvtk.PolyData(points=verts, lines=lines)
+    pt = tvtk.TubeFilter(radius=0.001,
                          number_of_sides=4,
                          vary_radius='vary_radius_off',
                          )
-    m = tvtk.PolyDataMapper(input=pt.output)
+    configure_input_data(pt, pd)
+    m = tvtk.PolyDataMapper(input_connection=pt.output_port)
     a = tvtk.Actor(mapper=m)
     a.property.color = .9, .9, .9
     a.property.specular = 0.3
