@@ -10,7 +10,8 @@ from pyface.api import GUI
 from mayavi.core.engine import Engine
 from mayavi.core.ui.engine_view import EngineView
 # Usual MayaVi imports
-from mayavi.sources.api import VTKXMLFileReader, VTKDataSource
+from mayavi.sources.api import VTKXMLFileReader
+from mayavi.sources.vtk_data_source import VTKDataSource
 from mayavi.modules.api import Outline, ScalarCutPlane, Streamline
 import numpy
 import numpy as np
@@ -74,7 +75,8 @@ class CalibrationAlignmentWindow(Widget):
     orig_data_verts = traits.Instance(object)
     orig_data_speeds = traits.Instance(object)
     reconstructor = traits.Instance(object)
-    viewed_data = traits.Instance(object) # should be a source
+    viewed_data = traits.Instance(tvtk.DataSet)
+    source = traits.Instance(VTKDataSource)
 
     def __init__(self, parent, **traits):
         super(CalibrationAlignmentWindow, self).__init__(**traits)
@@ -106,8 +108,8 @@ class CalibrationAlignmentWindow(Widget):
         pd = tvtk.PolyData(points=points, polys=polys)
         pd.point_data.scalars = orig_data_speeds
         pd.point_data.scalars.name = 'speed'
-        self.viewed_data = VTKDataSource(data=pd,
-                                         name='aligned data')
+        self.viewed_data = pd
+        self.source = VTKDataSource(data=self.viewed_data, name='aligned data')
 
         if align_json:
             j = json.loads(open(align_json).read())
@@ -127,11 +129,12 @@ class CalibrationAlignmentWindow(Widget):
     def _params_changed(self):
         if self.orig_data_verts is None or self.viewed_data is None:
             # no data set yet
-
             return
         M = self.params.get_matrix()
         verts = np.dot(M,self.orig_data_verts)
-        self.viewed_data.data.points = hom2vtk(verts)
+        self.viewed_data.points = hom2vtk(verts)
+        self.source.update()
+        self.source.render()
 
     def get_aligned_R(self):
         M = self.params.get_matrix()
@@ -430,7 +433,7 @@ def main():
         ui = ev.edit_traits()
 
     # view aligned data
-    e.add_source(viewer.cal_align.viewed_data)
+    e.add_source(viewer.cal_align.source)
 
     v = Vectors()
     v.glyph.scale_mode = 'data_scaling_off'
