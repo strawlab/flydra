@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Starting point: mayavi2-2.0.2a1/enthought.mayavi/examples/standalone.py
-
+from __future__ import print_function
 from os.path import join, dirname
 import warnings
 from tvtk.api import tvtk
@@ -162,7 +162,6 @@ class CalibrationAlignmentWindow(Widget):
         if dialog.open() == OK:
             alignedR = self.get_aligned_R()
             alignedR.save_to_xml_filename(dialog.path)
-            #print 'saved calibration to XML file...',dialog.path
 
     def _save_new_cal_dir_fired(self):
         dialog = FileDialog(#parent=self.window.control,
@@ -172,7 +171,6 @@ class CalibrationAlignmentWindow(Widget):
         if dialog.open() == OK:
             alignedR = self.get_aligned_R()
             alignedR.save_to_files_in_new_directory(dialog.path)
-            #print 'saved calibration to directory...',dialog.path
 
 class IVTKWithCalGUI(SplitApplicationWindow):
     # The ratio of the size of the left/top pane to the right/bottom pane.
@@ -262,7 +260,7 @@ def main():
     # If not, is it a .pcd (point cloud) file?
     if h5_filename is None:
         if not have_pcl:
-            print >> sys.stderr, "PCL required to try non-HDF5 file as .PCD file"
+            print("PCL required to try non-HDF5 file as .PCD file", file=sys.stderr)
             raise pcl_import_error
         pcd = pcl.PointCloud()
         pcd.from_file( args.filename )
@@ -326,7 +324,7 @@ def main():
             if exclude_obj_ids is not None:
                 use_obj_ids = list( set(use_obj_ids).difference(
                     exclude_obj_ids ) )
-            print 'using object ids specified in fanout .xml file'
+            print('using object ids specified in fanout .xml file')
         if stim_xml.has_reconstructor():
             stim_xml.verify_reconstructor(R)
     else:
@@ -349,7 +347,7 @@ def main():
         if obj_filelist is not None:
             data = np.loadtxt(obj_filelist,delimiter=',')
             obj_only = np.array(data[:,0], dtype='int')
-            print obj_only
+            print(obj_only)
 
         use_obj_ids = numpy.array(obj_only)
 
@@ -365,7 +363,7 @@ def main():
         else:
             assert obj_id==0
             verts = pcd.to_array()
-            print 'verts.shape',verts.shape
+            print('verts.shape',verts.shape)
         if len(verts)>=3:
             verts_central_diff = verts[2:,:] - verts[:-2,:]
             dt = 1.0/fps
@@ -393,7 +391,7 @@ def main():
                     v=info['verts4x4']
             if v is not None:
                 for vi in v:
-                    print 'adding',vi
+                    print('adding',vi)
                     x.append( [vi[0]] )
                     y.append( [vi[1]] )
                     z.append( [vi[2]] )
