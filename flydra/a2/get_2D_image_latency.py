@@ -33,7 +33,7 @@ def main():
     camns = camn2cam_id.keys()
 
     # read all data
-    end_idx=args['--end-idx']
+    end_idx=int(args['--end-idx'])
     d2d = results.root.data2d_distorted[:end_idx]
     cam_info = results.root.cam_info[:end_idx]
     results.close()

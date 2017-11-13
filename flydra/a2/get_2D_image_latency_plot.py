@@ -90,7 +90,7 @@ def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000
 def main():
     args = docopt(__doc__)
     fname = args['FILENAME']
-    plot_latency(fname, do_3d_latency=args['--3d'], do_2d_latency=args['--2d'], end_idx=args['--end-idx'])
+    plot_latency(fname, do_3d_latency=args['--3d'], do_2d_latency=args['--2d'], end_idx=int(args['--end-idx']))
 
 if __name__=='__main__':
     main()
