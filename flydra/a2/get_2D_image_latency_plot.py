@@ -60,6 +60,9 @@ def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000
         axn=None
         fig3 = plt.figure()
         ax3n = None
+        fig4 = plt.figure()
+        ax4n = None
+
         for camn, dfcam in df2d.groupby('camn'):
             cam_id = camn2cam_id[camn]
             df0 = dfcam[ dfcam['frame_pt_idx']==0 ]
@@ -84,6 +87,12 @@ def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000
             ax3n.text(0,1,cam_id, va='top', ha='left', transform=ax3n.transAxes)
             if camn_list.index(camn)==0:
                 ax3n.legend()
+
+            ax4n = fig4.add_subplot( len(camn_list), 1, camn_list.index(camn)+1,sharex=ax4n)
+            ax4n.plot(frames[:-1],ts0s[1:]-ts0s[:-1],'g.-')
+            ax4n.set_xlabel('frame')
+            ax4n.set_ylabel('inter-frame-interval (s)')
+            ax4n.text(0,1,cam_id, va='top', ha='left', transform=ax4n.transAxes)
 
     plt.show()
 
