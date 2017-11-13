@@ -7,10 +7,7 @@ import time
 import flydra.version
 
 Info2D = flydra.data_descriptions.Info2D
-if LooseVersion(tables.__version__) < LooseVersion('3.0.0'):
-    Info2DCol_description = tables.Description(Info2D().columns)._v_nested_descr
-else:
-    Info2DCol_description = tables.Description(Info2D().columns)._v_nested_descr
+Info2DCol_description = tables.Description(Info2D().columns)._v_nested_descr
 CamSyncInfo = flydra.data_descriptions.CamSyncInfo
 TextLogDescription = flydra.data_descriptions.TextLogDescription
 
