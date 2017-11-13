@@ -42,14 +42,6 @@ from tvtk.pyface.api import Scene, DecoratedScene
 from pyface.api import SplitApplicationWindow
 from pyface.api import FileDialog, OK
 
-try:
-    import pcl
-    have_pcl = True
-    pcl_import_error = None
-except ImportError, err:
-    have_pcl = False
-    pcl_import_error = err
-
 import roslib
 roslib.load_manifest('tf')
 import tf.transformations
@@ -214,8 +206,8 @@ class IVTKWithCalGUI(SplitApplicationWindow):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('filename',
-                        help='name of flydra .hdf5 or .pcd (libpcl) file',
+    parser.add_argument('filename', nargs='+',
+                        help='name of flydra .hdf5 file',
                         )
 
     parser.add_argument("--stim-xml",
@@ -251,48 +243,39 @@ def main():
     args = parser.parse_args()
     options = args # optparse OptionParser backwards compatibility
 
-    # Is the input an h5 file?
-    if tables.is_hdf5_file(args.filename):
-        h5_filename=args.filename
-    else:
-        h5_filename=None
+    reconstructor_path = args.reconstructor_path
+    fps = None
 
-    # If not, is it a .pcd (point cloud) file?
-    if h5_filename is None:
-        if not have_pcl:
-            print("PCL required to try non-HDF5 file as .PCD file", file=sys.stderr)
-            raise pcl_import_error
-        pcd = pcl.PointCloud()
-        pcd.from_file( args.filename )
-        use_obj_ids = [0]
-    else:
-        pcd = None
+    ca = core_analysis.get_global_CachingAnalyzer()
+    by_file = {}
+
+    for h5_filename in args.filename:
+        assert(tables.is_hdf5_file(h5_filename))
+        obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
+            h5_filename)
+        this_fps = result_utils.get_fps( data_file, fail_on_error=False )
+        if fps is None:
+            if this_fps is not None:
+                fps = this_fps
+        if reconstructor_path is None:
+            reconstructor_path = data_file
+        by_file[h5_filename] = (use_obj_ids, data_file)
+    del h5_filename
+    del obj_ids, use_obj_ids, is_mat_file, data_file, extra
 
     if options.obj_only is not None:
         obj_only = core_analysis.parse_seq(options.obj_only)
     else:
         obj_only = None
 
-    reconstructor_path = args.reconstructor_path
-
-    if h5_filename is not None:
-        ca = core_analysis.get_global_CachingAnalyzer()
-        obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(
-            h5_filename)
-        if reconstructor_path is None:
-            reconstructor_path = data_file
-    else:
-        if reconstructor_path is None:
-            raise RuntimeError('must specify reconstructor from CLI if not using .h5 files')
+    if reconstructor_path is None:
+        raise RuntimeError('must specify reconstructor from CLI if not using .h5 files')
 
     R = reconstruct.Reconstructor(reconstructor_path)
 
-    if h5_filename is not None:
-        fps = result_utils.get_fps( data_file, fail_on_error=False )
-
-        if fps is None:
-            fps = 100.0
-            warnings.warn('Setting fps to default value of %f'%fps)
+    if fps is None:
+        fps = 100.0
+        warnings.warn('Setting fps to default value of %f'%fps)
     else:
         fps = 1.0
 
@@ -300,22 +283,14 @@ def main():
         raise ValueError(
             'stim_xml must be specified (how else will you align the data?')
 
-    if options.stim_xml is not None:
-        if h5_filename is not None:
-            file_timestamp = data_file.filename[4:19]
-        else:
-            file_timestamp = None
+    if 1:
         stim_xml = xml_stimulus.xml_stimulus_from_filename(
             options.stim_xml,
-            timestamp_string=file_timestamp,
             )
         try:
             fanout = xml_stimulus.xml_fanout_from_filename( options.stim_xml )
         except xml_stimulus.WrongXMLTypeError:
             pass
-
-
-
         else:
             include_obj_ids, exclude_obj_ids = fanout.get_obj_ids_for_timestamp(
                 timestamp_string=file_timestamp )
@@ -327,8 +302,6 @@ def main():
             print('using object ids specified in fanout .xml file')
         if stim_xml.has_reconstructor():
             stim_xml.verify_reconstructor(R)
-    else:
-        stim_xml = None
 
     x = []
     y = []
@@ -344,42 +317,46 @@ def main():
         obj_only = 1
 
     if obj_only is not None:
+        if len(by_file) != 1:
+            raise RuntimeError("specifying obj_only can only be done for a single file")
         if obj_filelist is not None:
             data = np.loadtxt(obj_filelist,delimiter=',')
             obj_only = np.array(data[:,0], dtype='int')
             print(obj_only)
 
         use_obj_ids = numpy.array(obj_only)
+        h5_filename = by_file.keys()[0]
+        (prev_use_ob_ids, data_file) = by_file[h5_filename]
+        by_file[h5_filename] = (use_obj_ids, data_file)
 
-    for obj_id_enum,obj_id in enumerate(use_obj_ids):
-        if h5_filename is not None:
+    for h5_filename in by_file:
+        (use_obj_ids, data_file) = by_file[h5_filename]
+        for obj_id_enum,obj_id in enumerate(use_obj_ids):
             rows = ca.load_data( obj_id, data_file,
-                                    use_kalman_smoothing=False,
-                                    #dynamic_model_name = dynamic_model_name,
-                                    #frames_per_second=fps,
-                                    #up_dir=up_dir,
-                                    )
+                                 use_kalman_smoothing=False,
+                                 #dynamic_model_name = dynamic_model_name,
+                                 #frames_per_second=fps,
+                                 #up_dir=up_dir,
+                                )
             verts = numpy.array( [rows['x'], rows['y'], rows['z']] ).T
-        else:
-            assert obj_id==0
-            verts = pcd.to_array()
-            print('verts.shape',verts.shape)
-        if len(verts)>=3:
-            verts_central_diff = verts[2:,:] - verts[:-2,:]
-            dt = 1.0/fps
-            vels = verts_central_diff/(2*dt)
-            speeds = numpy.sqrt(numpy.sum(vels**2,axis=1))
-            # pad end points
-            speeds = numpy.array([speeds[0]] + list(speeds) + [speeds[-1]])
-        else:
-            speeds = numpy.zeros( (verts.shape[0],) )
+            if len(verts)>=3:
+                verts_central_diff = verts[2:,:] - verts[:-2,:]
+                dt = 1.0/fps
+                vels = verts_central_diff/(2*dt)
+                speeds = numpy.sqrt(numpy.sum(vels**2,axis=1))
+                # pad end points
+                speeds = numpy.array([speeds[0]] + list(speeds) + [speeds[-1]])
+            else:
+                speeds = numpy.zeros( (verts.shape[0],) )
 
-        if verts.shape[0] != len(speeds):
-            raise ValueError('mismatch length of x data and speeds')
-        x.append( verts[:,0] )
-        y.append( verts[:,1] )
-        z.append( verts[:,2] )
-        speed.append(speeds)
+            if verts.shape[0] != len(speeds):
+                raise ValueError('mismatch length of x data and speeds')
+            x.append( verts[:,0] )
+            y.append( verts[:,1] )
+            z.append( verts[:,2] )
+            speed.append(speeds)
+        data_file.close()
+    del h5_filename, use_obj_ids, data_file
 
     if 0:
         # debug
@@ -397,8 +374,6 @@ def main():
                     z.append( [vi[2]] )
                     speed.append( [100.0] )
 
-    if h5_filename:
-        data_file.close()
     x = np.concatenate(x)
     y = np.concatenate(y)
     z = np.concatenate(z)
