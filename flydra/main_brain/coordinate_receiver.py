@@ -116,6 +116,7 @@ class CoordinateProcessor(threading.Thread):
 
         self._synchronized_cameras = []
         self.sync_cam_pub = None
+        self.frame_offset_pubs = {}
         if rospy.core.is_initialized():
             self.sync_cam_pub = rospy.Publisher("~synchronized_cameras",
                                                 CameraList,
@@ -405,16 +406,30 @@ class CoordinateProcessor(threading.Thread):
         del self._synchronized_cameras[:]
         self._publish_list_of_synced_cameras()
 
+    def _new_frame_offset(self, cam_id, framenumber):
+        self.frame_offsets[cam_id] = framenumber
+        if not rospy.core.is_initialized():
+            return
+
+        msg = std_msgs.msg.UInt64(data=framenumber)
+
+        if cam_id not in self.frame_offset_pubs:
+            pub = rospy.Publisher("/%s/frame_offset" % (cam_id,),
+                                  std_msgs.msg.UInt64,
+                                  )
+            self.frame_offset_pubs[cam_id] = pub
+        self.frame_offset_pubs[cam_id].publish(msg)
+
     def register_frame(self, cam_id, framenumber):
         frame_timestamp = time.time()
         try:
             last_frame_timestamp = self.last_frame_times[cam_id]
         except KeyError:
             # very first frame from this cam_id
-            self.frame_offsets[cam_id] = framenumber
+            self._new_frame_offset(cam_id, framenumber)
+            did_frame_offset_change = True
             corrected_framenumber = framenumber-self.frame_offsets[cam_id]
             self.last_frame_times[cam_id] = frame_timestamp
-            did_frame_offset_change = True
             return corrected_framenumber, did_frame_offset_change
 
         this_interval = frame_timestamp-last_frame_timestamp
@@ -422,7 +437,7 @@ class CoordinateProcessor(threading.Thread):
         did_frame_offset_change = False
         if self.main_brain._is_synchronizing:
             if this_interval > flydra.common_variables.sync_duration:
-                self.frame_offsets[cam_id] = framenumber
+                self._new_frame_offset(cam_id, framenumber)
                 did_frame_offset_change = True
                 self._synchronized_cameras.append( cam_id )
                 self._publish_list_of_synced_cameras()
