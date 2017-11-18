@@ -1152,6 +1152,8 @@ class MainBrain(object):
             raise RuntimeError("will not overwrite data file")
 
         self.h5filename = filename
+
+        LOG.info('saving data to %s' % self.h5filename)
         self.pub_data_file.publish(self.h5filename)
 
         self.block_triggerbox_activity = True
