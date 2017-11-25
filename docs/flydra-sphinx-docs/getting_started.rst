@@ -18,7 +18,7 @@ that does not overwrite any system files. Get the virtualenv source
 code, upack it and create a "virtual Python installation" in your home
 directory called "PY_flydra"::
 
-  wget http://pypi.python.org/packages/source/v/virtualenv/virtualenv-1.3.tar.gz
+  wget https://pypi.python.org/packages/source/v/virtualenv/virtualenv-1.3.tar.gz
   tar xvzf virtualenv-1.3.tar.gz
   cd virtualenv-1.3
   python virtualenv.py ~/PY_flydra
