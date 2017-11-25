@@ -224,23 +224,6 @@ class SymobolicModels:
         theta = sympy.atan(dy/dx)
         return theta
 
-def get_group_for_obj(obj_id,h5,writeable=False):
-    parent_name = 'ori_ekf_qual'
-    if not hasattr(h5.root,parent_name):
-        if writeable:
-            h5.create_group(h5.root,parent_name,'ori EKF quality')
-        else:
-            raise ValueError('no group %s, and cannot create'%parent_name)
-    parent = getattr(h5.root,parent_name)
-    groupnum = obj_id//2000
-    groupname = 'group%d'%groupnum
-    if not hasattr(parent,groupname):
-        if writeable:
-            h5.create_group(parent,groupname,'ori EKF data')
-        else:
-            raise ValueError('no group %s, and cannot create'%groupname)
-    return getattr(parent,groupname)
-
 def doit(output_h5_filename=None,
          kalman_filename=None, data2d_filename=None, start = None, stop = None,
          gate_angle_threshold_degrees = 40.0,
@@ -855,7 +838,7 @@ def doit(output_h5_filename=None,
                         arr = np.array( save_cols[name], dtype=dtype )
                         arrays.append(arr)
                     save_recarray = np.rec.fromarrays(arrays,names=names)
-                    h5group = get_group_for_obj(obj_id,output_h5,writeable=True)
+                    h5group = core_analysis.get_group_for_obj(obj_id,output_h5,writeable=True)
                     output_h5.create_table(h5group,
                                           'obj%d'%obj_id,
                                           save_recarray,
@@ -994,7 +977,7 @@ def compute_ori_quality(h5_context, orig_frames, obj_id, smooth_len=10):
     """compute quality of orientation estimate
     """
     ca = core_analysis.get_global_CachingAnalyzer()
-    group = get_group_for_obj(obj_id,h5_context)
+    group = h5_context.get_or_make_group_for_obj(obj_id)
     try:
         table = getattr(group,'obj%d'%obj_id)
     except:

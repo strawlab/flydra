@@ -207,6 +207,23 @@ def compute_ori_quality(*args,**kwargs):
     import orientation_ekf_fitter
     return orientation_ekf_fitter.compute_ori_quality(*args,**kwargs)
 
+def get_group_for_obj(obj_id,h5,writeable=False):
+    parent_name = 'ori_ekf_qual'
+    if not hasattr(h5.root,parent_name):
+        if writeable:
+            h5.create_group(h5.root,parent_name,'ori EKF quality')
+        else:
+            raise ValueError('no group %s, and cannot create'%parent_name)
+    parent = getattr(h5.root,parent_name)
+    groupnum = obj_id//2000
+    groupname = 'group%d'%groupnum
+    if not hasattr(parent,groupname):
+        if writeable:
+            h5.create_group(parent,groupname,'ori EKF data')
+        else:
+            raise ValueError('no group %s, and cannot create'%groupname)
+    return getattr(parent,groupname)
+
 class WeakRefAbleDict(object):
     def __init__(self,val,debug=False):
         self.val = val
@@ -1359,6 +1376,8 @@ class FileContextManager:
     def load_data(self,obj_id,**kwargs):
         return self._ca.load_data(obj_id,self._data_file,
                                   **kwargs)
+    def get_or_make_group_for_obj(self,obj_id,writeable=False):
+        return get_group_for_obj(obj_id=obj_id,h5=self._data_file,writeable=writeable)
 
 class CachingAnalyzer:
 
