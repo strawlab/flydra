@@ -1698,7 +1698,7 @@ class Reconstructor:
                     pt_angle = np.arctan2( surface_pt_cam[1], surface_pt_cam[0] ) # OK to here
                     pt_horiz_dist = np.sqrt(np.sum(surface_pt_cam**2)) # horizontal distance from camera to water surface
                     theta_air = np.arctan2( pt_horiz_dist, pt1[2] )
-                    # sin(theta_water)/sin(theta_air) = sin(n_air)/sin(n_water)
+                    # sin(theta_water)/sin(theta_air) = n_air/n_water
                     sin_theta_water = np.sin(theta_air)*self.wateri.n1/self.wateri.n2
                     theta_water = np.arcsin( sin_theta_water )
                     horiz_dist_at_depth_1 = np.tan(theta_water)
