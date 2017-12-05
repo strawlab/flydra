@@ -53,10 +53,10 @@ copyright = u'2008-2009, California Institute of Technology'
 version = '0.4'
 # The full version, including alpha/beta/rc tags.
 try:
-    import flydra.version
-    release = flydra.version.__version__
+    import flydra_core.version
+    release = flydra_core.version.__version__
 except Exception as e:
-    print("Could not import flydra.version: %s." % e)
+    print("Could not import flydra_core.version: %s." % e)
     print("Anti-catch-22 behavior: I will go ahead and build documentation even ")
     print("though Flydra is not installed, as I understand perhaps you want to ")
     print("read the documentation to find out HOW to install Flydra.")

@@ -3,35 +3,35 @@ Modules reference
 #################
 
 
-flydra.a2 - analysis (second generation)
-========================================
+flydra_analysis.a2 - analysis (second generation)
+=================================================
 
 .. toctree::
   :maxdepth: 0
 
-  modules/flydra.a2.benu.rst
-  modules/flydra.a2.core_analysis.rst
-  modules/flydra.a2.plot_kalman_2d.rst
-  modules/flydra.a2.utils.rst
-  modules/flydra.a2.xml_stimulus.rst
+  modules/flydra_analysis.a2.benu.rst
+  modules/flydra_analysis.a2.core_analysis.rst
+  modules/flydra_analysis.a2.plot_kalman_2d.rst
+  modules/flydra_analysis.a2.utils.rst
+  modules/flydra_analysis.a2.xml_stimulus.rst
 
-flydra.analysis - data analysis modules
-=======================================
-
-.. toctree::
-  :maxdepth: 0
-
-  modules/flydra.analysis.PQmath.rst
-
-Miscellaneous flydra modules
-============================
+flydra_analysis.analysis - data analysis modules
+================================================
 
 .. toctree::
   :maxdepth: 0
 
-  modules/flydra.geom.rst
-  modules/flydra.kalman.data_packets.rst
-  modules/flydra.kalman.dynamic_models.rst
-  modules/flydra.kalman.flydra_tracker.rst
-  modules/flydra.MainBrain.rst
-  modules/flydra.reconstruct.rst
+  modules/flydra_analysis.analysis.PQmath.rst
+
+Miscellaneous flydra_core modules
+=================================
+
+.. toctree::
+  :maxdepth: 0
+
+  modules/flydra_core.geom.rst
+  modules/flydra_core.kalman.data_packets.rst
+  modules/flydra_core.kalman.dynamic_models.rst
+  modules/flydra_core.kalman.flydra_tracker.rst
+  modules/flydra_core.MainBrain.rst
+  modules/flydra_core.reconstruct.rst

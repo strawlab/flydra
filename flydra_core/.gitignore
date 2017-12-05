@@ -1,0 +1,10 @@
+flydra_core.egg-info
+flydra_core/_Roots3And4.so
+flydra_core/_fastgeom.so
+flydra_core/_flydra_tracked_object.so
+flydra_core/_mahalanobis.so
+flydra_core/_pmat_jacobian.so
+flydra_core/_pmat_jacobian_water.so
+flydra_core/_reconstruct_utils.so
+flydra_core/_refraction.so
+build

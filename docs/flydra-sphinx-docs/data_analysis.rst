@@ -114,7 +114,7 @@ multiple roles within a single file type. The roles include
 
 Because the format is extensible, adding further support can be done
 in a backwards-compatible way. These XML files are handled primarily
-through :mod:`flydra.a2.xml_stimulus`.
+through :mod:`flydra_analysis.a2.xml_stimulus`.
 
 Predefined analysis programs
 ============================
@@ -124,7 +124,7 @@ Predefined analysis programs
 Automating data analysis
 ========================
 
-The module :mod:`flydra.a2.flydra_scons` provides definitions that may
+The module :mod:`flydra_analysis.a2.flydra_scons` provides definitions that may
 be useful in building SConstruct files for scons_. Using scons allows
 relatively simple batch processing to be specified, including the
 ability to concurrently execute several jobs at once.
@@ -134,7 +134,7 @@ ability to concurrently execute several jobs at once.
 Source code for your own data analysis
 ======================================
 
-The module :mod:`flydra.a2.core_analysis` has fast, optimized
+The module :mod:`flydra_analysis.a2.core_analysis` has fast, optimized
 trajectory opening routines.
 
 Data flow
@@ -210,7 +210,7 @@ Estimating longitudinal body orientation happens in several steps:
 * Run :command:`flydra_analysis_image_based_orientation` to estimate
   2D longitudinal body axis.
 
-* Check the 2D body axis estimates using :command:`flydra_analysis_montage_ufmfs` 
+* Check the 2D body axis estimates using :command:`flydra_analysis_montage_ufmfs`
   to generate images or movies of the tracking.
 
 * Finally, take the 2D orientation data and make 3D estimates. Nowdays
@@ -226,7 +226,7 @@ Estimating longitudinal body orientation happens in several steps:
 An example of a call to
 :command:`flydra_analysis_image_based_orientation` is: (This was
 automatically called via an SConstruct script using
-:mod:`flydra.a2.flydra_scons`.)
+:mod:`flydra_analysis.a2.flydra_scons`.)
 
 ::
 

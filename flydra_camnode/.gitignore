@@ -1,0 +1,4 @@
+build
+flydra_camnode.egg-info
+flydra_camnode/camnode_colors.c
+flydra_camnode/camnode_colors.so

@@ -47,9 +47,6 @@ Scripts of great interest
   to be from the same 3D point. In this case, specify a start and stop
   frame.
 
-* |check_atmel| check the latencies of 3D reconstruction. Do this
-  depends on the camera triggers actually being the Atmel device.
-
 * ``ffpmeg`` for example ``ffmpeg -b 2008000 -f mpeg2video -r 25 -i
   image%05d.png movie.mpeg``
 
@@ -75,9 +72,6 @@ Scripts of great interest
 
 .. |flydra_analysis_generate_recalibration| sourcelink:: flydra/analysis/flydra_analysis_generate_recalibration.py
   :command: flydra_analysis_generate_recalibration
-
-.. |check_atmel| sourcelink:: flydra/a2/check_atmel_clock.py
-  :command: check_atmel_clock.py
 
 .. |flydra_analysis_convert_to_mat| sourcelink:: flydra/analysis/flydra_analysis_convert_to_mat.py
    :command: flydra_analysis_convert_to_mat
@@ -228,7 +222,7 @@ added some profiling options. Here's the breakdown of times:
 The values above add up roughly to the values I remember from earlier
 in 2007, so I guess this is more-or-less what was happening back then.
 
-As of Nov. 16, 2007, the |check_atmel| script was used to generate
+As of Nov. 16, 2007, the ``check_atmel`` script was used to generate
 this figure, which is total latency to reconstructed 3D on the
 mainbrain with ``flydra_camera_node`` using ``--num-points=2``. This
 includes the 20 msec Basler A602f latency, so presumably for GigE,

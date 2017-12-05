@@ -55,7 +55,7 @@ You should now have a working flydra installation in your virtual
 Python environment. To test this, type::
 
   cd ~ # switch to a directory without a flydra/ subdirectory
-  python -c "import flydra.version; print flydra.version.__version__"
+  python -c "import flydra_core.version; print flydra_core.version.__version__"
 
 The output should be something like "0.4.28-svn", indicating this is
 the development version after release 0.4.28.

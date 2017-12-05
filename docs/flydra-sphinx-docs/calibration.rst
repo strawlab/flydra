@@ -187,18 +187,18 @@ Multi Camera Self Calibration Toolbox.
 
 ::
 
-  # NOTE: if your 2D and 3D data are in one file, 
+  # NOTE: if your 2D and 3D data are in one file,
   # don't use the "--2d-data" argument.
   flydra_analysis_generate_recalibration DATAFILE3D.h5 EFILE \
      --2d-data DATAFILE2D.h5
-  # This will output a new calibration directory in 
+  # This will output a new calibration directory in
   # DATAFILE3D.h5.recal
 
 The ``EFILE`` above should have the following format (for example)::
 
   # These are the obj_ids of traces to use.
   long_ids = [655, 646, 530, 714, 619, 288, 576, 645]
-  # These are the obj_ids of traces not to use (exluded 
+  # These are the obj_ids of traces not to use (exluded
   # from the list in long_ids)
   bad=[]
 
@@ -238,7 +238,7 @@ procedure is:
 1. Use :command:`flydra_analysis_plot_kalman_2d` to save a `points.h5`
    file with the 3D positions resulting from the original
    calibration. In particular, use the hotkeys as defined in
-   :meth:`~flydra.a2.plot_kalman_2d.ShowIt.on_key_press`.
+   :meth:`~flydra_analysis.a2.plot_kalman_2d.ShowIt.on_key_press`.
 
 2. Load `points.h5` and a STIMULUS.xml file into
    :command:`flydra_analysis_calibration_align_gui` and adjust the
@@ -301,7 +301,7 @@ A variety of other options exist::
               # 'binary'    - a background-subtracted and thresholded image
               # 'no_bg'     - a background-subtracted image
   angle_precision_degrees=10.0 # Threshold angular difference between adjacent edges.
-  aspect_ratio = 1.0           # Aspect ratio of pixel spacing (1.0 is normal, 
+  aspect_ratio = 1.0           # Aspect ratio of pixel spacing (1.0 is normal,
                                                                 0.5 is vertically downsampled)
 
   show_lines = False
@@ -309,7 +309,7 @@ A variety of other options exist::
   debug_line_finding = False
   epsfcn = 1e09
   print_debug_info = False
-  save_debug_images = False  
+  save_debug_images = False
 
   ftol=0.001
   xtol=0
@@ -322,7 +322,7 @@ A variety of other options exist::
   kc2 = 0.0 # initial guess of radial distortion
 
 After adjusting these parameters, call
-:command:`flydra_checkerboard`. 
+:command:`flydra_checkerboard`.
 
 Critical to :command:`flydra_checkerboard` is the ability to extract
 numerous checkerboard corners with few false positives. To ensure that
@@ -342,7 +342,7 @@ more points, which is good.
   :width: 650
   :height: 546
 
-.. image:: images/chessboard_rawbinary_found_corners.jpg  
+.. image:: images/chessboard_rawbinary_found_corners.jpg
   :width: 650
   :height: 546
 
@@ -359,7 +359,7 @@ mistakes. In the second example, the grid detection had a couple
 mistakes -- one in the lower right corner and one in the upper right
 corner.
 
-.. image:: images/chessboard_grid_no_mistakes.jpg  
+.. image:: images/chessboard_grid_no_mistakes.jpg
   :width: 650
   :height: 546
 
@@ -402,4 +402,4 @@ checkerboards.
 
 .. image:: images/chessboard_undistorted_image.jpg
   :width: 491
-  :height: 770 
+  :height: 770
