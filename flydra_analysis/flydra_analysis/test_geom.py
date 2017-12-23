@@ -4,7 +4,6 @@ import pkg_resources
 import flydra_core._reconstruct_utils as reconstruct_utils
 import flydra_core.geom
 import flydra_core._fastgeom as fastgeom
-import flydra_core.undistort
 import numpy
 import numpy as np
 import scipy.optimize
@@ -162,16 +161,6 @@ class TestNonlinearDistortion:
         yd = fc2*yd + cc2
         return xd, yd
 
-    ## def _undistort( self, helper_args, xy ):
-    ##     helper = reconstruct_utils.ReconstructHelper( *helper_args )
-    ##     lbrt = ( -100,-100,800,700 )
-    ##     dm = flydra_core.undistort.DistortionMesh( helper, lbrt )
-    ##     x,y= xy
-    ##     undistorted_xs, undistorted_ys = dm.undistort_points( [x],[y] )
-    ##     assert len(undistorted_xs)==1
-    ##     assert len(undistorted_ys)==1
-    ##     return undistorted_xs[0], undistorted_ys[0]
-
     def tst_distort(self, pinhole_xys, helper_args ):
         helper = reconstruct_utils.ReconstructHelper( *helper_args )
         for xy in pinhole_xys:
@@ -188,15 +177,6 @@ class TestNonlinearDistortion:
                                                n_iterations=50 )
             xy_distorted = helper.distort( xy_undistorted[0], xy_undistorted[1] )
             assert numpy.allclose( xy_distorted, xy_orig_distorted )
-
-    ## def tst_undistort_mesh(self, distorted_xys, helper_args ):
-    ##     helper = reconstruct_utils.ReconstructHelper( *helper_args )
-    ##     for xy in distorted_xys:
-    ##         undistorted_xy = self._undistort( helper_args, xy)
-    ##         redistorted_xy = helper.distort( *undistorted_xy )
-
-    ##         rtol = 1e-3 # distortion mesh not very accurate
-    ##         assert numpy.allclose( xy, redistorted_xy, rtol=rtol)
 
     def tst_undistort_orig(self, distorted_xys, helper_args ):
         helper = reconstruct_utils.ReconstructHelper( *helper_args )
