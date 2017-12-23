@@ -1,0 +1,9 @@
+Source: python-flydra
+Maintainer: Andrew Straw <strawman@astraw.com>
+Build-Depends: debhelper (>= 9)
+Standards-Version: 3.9.1
+
+Package: python-flydra
+Architecture: any
+Description: metapackage for flydra
+Depends: python-flydra-core, python-flydra-camnode, python-flydra-analysis, python-flydra-compat
