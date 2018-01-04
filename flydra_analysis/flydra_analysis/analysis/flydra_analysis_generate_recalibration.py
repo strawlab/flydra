@@ -243,9 +243,17 @@ def do_it(filename,
     for cam_id in cam_ids:
         print ' %s: %d'%(cam_id, npoints_by_cam_id[cam_id])
     print 'by n points:'
+    max_npoints = 0
     for ncams in npoints_by_ncams:
         print ' %d: %d'%(ncams, npoints_by_ncams[ncams])
+        max_npoints = max(max_npoints, npoints_by_ncams[ncams])
     print
+
+    if max_npoints < 10:
+        print >> sys.stderr, 'not enough points, aborting'
+        results.close()
+        h5_2d_data.close()
+        sys.exit(1)
 
     IdMat = numpy.array(IdMat,dtype=numpy.uint8).T
     points = numpy.array(points,dtype=numpy.float32).T
