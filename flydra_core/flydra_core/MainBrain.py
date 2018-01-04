@@ -221,8 +221,8 @@ class MainBrain(object):
         save_movie_dir='~/FLYDRA_MOVIES',
         camera_calibration='',
         use_unix_domain_sockets=False,
+        posix_scheduler='', # '' means OS default, set to e.g. ['FIFO', 99] for max
     )
-
 
     class RemoteAPI:
 
@@ -583,6 +583,7 @@ class MainBrain(object):
                                    max_reconstruction_latency_sec=self.config['max_reconstruction_latency_sec'],
                                    max_N_hypothesis_test=self.config['max_N_hypothesis_test'],
                                    use_unix_domain_sockets=self.config['use_unix_domain_sockets'],
+                                   posix_scheduler=self.config['posix_scheduler'],
                                    )
         #self.coord_processor.setDaemon(True)
         self.coord_processor.start()

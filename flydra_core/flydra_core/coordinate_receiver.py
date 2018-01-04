@@ -45,12 +45,6 @@ LOG = flydra_core.rosutils.Log(to_ros=True)
 import flydra_core.debuglock
 DebugLock = flydra_core.debuglock.DebugLock
 
-if os.name == 'posix':
-    try:
-        import posix_sched
-    except ImportError:
-        LOG.warn('Could not open posix_sched module')
-
 ATTEMPT_DATA_RECOVERY = True
 #ATTEMPT_DATA_RECOVERY = False
 
@@ -107,6 +101,7 @@ class CoordinateProcessor(threading.Thread):
                  max_reconstruction_latency_sec,
                  max_N_hypothesis_test,
                  use_unix_domain_sockets,
+                 posix_scheduler='',
                  ):
         self.did_quit_successfully = False
         self.main_brain = main_brain
@@ -114,6 +109,7 @@ class CoordinateProcessor(threading.Thread):
         self.show_overall_latency = show_overall_latency
         self.max_reconstruction_latency_sec = max_reconstruction_latency_sec
         self.max_N_hypothesis_test = max_N_hypothesis_test
+        self.posix_scheduler = posix_scheduler
 
         self._synchronized_cameras = []
         self.sync_cam_pub = None
@@ -458,14 +454,18 @@ class CoordinateProcessor(threading.Thread):
     def run(self):
         """main loop of CoordinateProcessor"""
 
-        if os.name == 'posix':
+        if self.posix_scheduler!='':
+            import posix_sched
+            mode_str, priority = self.posix_scheduler
+            mode = getattr(posix_sched,mode_str)
             try:
-                max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
-                sched_params = posix_sched.SchedParam(max_priority)
-                posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
-                LOG.info('excellent, 3D reconstruction thread running in maximum prioity mode')
+                sched_params = posix_sched.SchedParam(priority)
+                posix_sched.setscheduler(0, mode, sched_params)
+                LOG.info('3D reconstruction thread running with priority %s' % self.posix_scheduler )
             except Exception as x:
-                LOG.warn('could not run in maximum priority mode (PID %d): %s'%(os.getpid(),str(x)))
+                LOG.warn('could not adjust priority (PID %d): %s'%(os.getpid(),str(x)))
+        else:
+            LOG.info('3D reconstruction thread running with default priority')
         self.main_brain.trigger_device.wait_for_estimate()
         while not self.quit_event.isSet():
             try:
