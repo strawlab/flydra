@@ -99,12 +99,6 @@ def do_it(filename,
         kobs = results.root.ML_estimates
         kobs_2d = results.root.ML_estimates_2d_idxs
 
-    try:
-        reconstructor = flydra_core.reconstruct.Reconstructor(results)
-    except tables.exceptions.NoSuchNodeError, err:
-        # no calibration saved in file
-        reconstructor = None
-
     h5_2d_data = result_utils.get_results(h5_2d_data_filename,mode='r+')
 
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5_2d_data)
@@ -261,24 +255,17 @@ def do_it(filename,
     # resolution
     Res = []
     for cam_id in cam_ids:
-        if reconstructor is not None:
-            imsize = reconstructor.get_resolution(cam_id)
-        else:
-            image_table = results.root.images
-            arr = getattr(image_table,cam_id)
-            imsize = arr.shape[1], arr.shape[0]
+        image_table = results.root.images
+        arr = getattr(image_table,cam_id)
+        imsize = arr.shape[1], arr.shape[0]
         Res.append( imsize )
     Res = numpy.array( Res )
-
-    if options.camera_center_reconstructor:
-        creconstructor = flydra_core.reconstruct.Reconstructor(cal_source=options.camera_center_reconstructor)
-    else:
-        creconstructor = reconstructor
 
     cam_centers = []
     cam_calibrations = []
 
-    if creconstructor is not None:
+    if options.camera_center_reconstructor:
+        creconstructor = flydra_core.reconstruct.Reconstructor(cal_source=options.camera_center_reconstructor)
         cam_centers = numpy.asarray([creconstructor.get_camera_center(cam_id)[:,0]
                                      for cam_id in cam_ids])
         flydra_core.reconstruct.save_ascii_matrix(cam_centers,os.path.join(calib_dir,'original_cam_centers.dat'))
