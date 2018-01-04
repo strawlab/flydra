@@ -30,7 +30,7 @@ def save_calibration_directory(IdMat=None,
                                ):
     warnings.warn('DeprecationWarning: save_calibration_directory backward compatibility shim being used', DeprecationWarning, stacklevel=2)
 
-    mcsc = MultiCamSelfCal(calib_dir, use_nth_frame=5 )
+    mcsc = MultiCamSelfCal(calib_dir)
     mcsc.create_calibration_directory(
                                cam_ids=cam_ids,
                                IdMat=IdMat,
@@ -289,7 +289,7 @@ def do_it(filename,
 
     undo_radial_distortion = len(cam_calibrations) == len(cam_ids)
 
-    mcsc = MultiCamSelfCal(calib_dir, use_nth_frame=5 )
+    mcsc = MultiCamSelfCal(calib_dir)
     mcsc.create_calibration_directory(
                                cam_ids=cam_ids,
                                IdMat=IdMat,
