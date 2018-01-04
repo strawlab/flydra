@@ -278,8 +278,6 @@ def do_it(filename,
     cam_centers = []
     cam_calibrations = []
 
-    mcsc = MultiCamSelfCal(calib_dir, use_nth_frame=5 )
-
     if creconstructor is not None:
         cam_centers = numpy.asarray([creconstructor.get_camera_center(cam_id)[:,0]
                                      for cam_id in cam_ids])
@@ -304,6 +302,7 @@ def do_it(filename,
 
     undo_radial_distortion = len(cam_calibrations) == len(cam_ids)
 
+    mcsc = MultiCamSelfCal(calib_dir, use_nth_frame=5 )
     mcsc.create_calibration_directory(
                                cam_ids=cam_ids,
                                IdMat=IdMat,
