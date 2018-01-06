@@ -1,5 +1,4 @@
-from docutils.parsers.rst import directives
-from sphinx.util.compat import Directive, directive_dwim
+from docutils.parsers.rst import directives, Directive
 from sphinx import addnodes
 from docutils.parsers.rst import states
 

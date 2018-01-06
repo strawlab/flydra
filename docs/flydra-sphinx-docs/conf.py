@@ -197,3 +197,6 @@ latex_documents = [
 
 # If false, no module index is generated.
 #latex_use_modindex = True
+
+# https://stackoverflow.com/a/15210813/1633026
+numpydoc_show_class_members = False
