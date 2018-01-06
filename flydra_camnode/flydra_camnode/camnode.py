@@ -99,8 +99,6 @@ WIRE_ORDER_SUMSQF_VAL_IDX = flydra_core.data_descriptions.WIRE_ORDER_SUMSQF_VAL_
 import camnode_utils
 import motmot.FastImage.FastImage as FastImage
 #FastImage.set_debug(3)
-if os.name == 'posix' and sys.platform != 'darwin':
-    import posix_sched
 
 import flydra_core.debuglock
 DebugLock = flydra_core.debuglock.DebugLock
@@ -426,6 +424,7 @@ class ProcessCamClass(rospy.SubscribeListener):
                  options = None,
                  initial_image_dict = None,
                  benchmark = False,
+                 posix_scheduler = '',
                  ):
 
         self.ros_namespace = cam_id
@@ -447,6 +446,7 @@ class ProcessCamClass(rospy.SubscribeListener):
         self.pub_rate_lastframe = 0
 
         self.benchmark = benchmark
+        self.posix_scheduler = posix_scheduler
         self.options = options
         self.globals = globals
         if framerate is not None:
@@ -649,16 +649,20 @@ class ProcessCamClass(rospy.SubscribeListener):
         old_fn = None
         points = []
 
-        if os.name == 'posix' and not BENCHMARK:
+        if self.posix_scheduler!='':
+            import posix_sched
+            mode_str, priority = self.posix_scheduler
+            mode = getattr(posix_sched,mode_str)
             try:
-                max_priority = posix_sched.get_priority_max( posix_sched.FIFO )
-                sched_params = posix_sched.SchedParam(max_priority)
-                posix_sched.setscheduler(0, posix_sched.FIFO, sched_params)
-                msg = 'excellent, grab thread running in maximum prioity mode'
-            except Exception, x:
-                msg = 'WARNING: could not run in maximum priority mode: %s' % x
-            self.log_message_queue.put((self.cam_id,time.time(),msg))
-            LOG.info(msg)
+                sched_params = posix_sched.SchedParam(priority)
+                posix_sched.setscheduler(0, mode, sched_params)
+                msg = 'grab thread running with priority %s' % self.posix_scheduler
+            except Exception as x:
+                msg = 'could not adjust priority (PID %d): %s'%(os.getpid(),str(x))
+        else:
+            msg = 'grab thread running with default priority'
+        self.log_message_queue.put((self.cam_id,time.time(),msg))
+        LOG.info(msg)
 
         #FastImage.set_debug(3) # let us see any images malloced, should only happen on hardware ROI size change
 
@@ -2298,6 +2302,7 @@ class AppState(object):
                             options=options,
                             initial_image_dict = initial_image_dict,
                             benchmark=benchmark,
+                            posix_scheduler=options.posix_scheduler,
                             )
                     self.all_cam_processors[cam_no]= cam_processor
 
@@ -2719,6 +2724,7 @@ def get_app_defaults():
                     background_frame_interval=50,
                     background_frame_alpha=1.0/50.0,
                     mask_images = None,
+                    posix_scheduler='', # '' means OS default, set to e.g. ['FIFO', 99] for max
                     )
     for k,v in camnode_defaults.items():
         camnode_defaults[k] = rospy.get_param('~%s' % k, v)
