@@ -26,6 +26,23 @@ This software was originally develped by Andrew Straw in the Dickinson Lab at
 Caltech from 2004-2010. Ongoing development continued, coordinated by the Straw
 Lab, from 2010. The software was open sourced in 2017.
 
+## Funding
+
+We gratefully acknowledge support from from the Packard Foundation, AFOSR
+(FA9550-06-1-0079), ARO (DAAD 19-03-D-0004), NIH (R01 DA022777), NSF (0923802),
+and Caltech to Michael H. Dickinson, and AFOSR (FA9550-10-1-0086), ERC (Starting
+Grant 281884 FlyVisualCircuits), WWTF (CS11-029), Boehringer Ingelheim, Research
+Institute of Molecular Pathology (IMP), and the University of Freiburg to Andrew
+D. Straw.
+
+## Directory organization
+
+ * `docs` - documentation
+ * `flydra_analysis` - calibration and analysis routines
+ * `flydra_camnode` - camera node program
+ * `flydra_core` - realtime 3D tracking
+ * `packaging` - making Debian/Ubuntu packages
+
 ## Publications
 
 Flydra is described in the following papers:
