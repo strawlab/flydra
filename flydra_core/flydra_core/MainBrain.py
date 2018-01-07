@@ -392,12 +392,20 @@ class MainBrain(object):
             assert camnode_ros_name is not None
             fqdn = cam_hostname
 
+            do_close = False
+            with self.cam_info_lock:
+                if cam_guid in self.cam_info:
+                    do_close = True
+
+            if do_close:
+                LOG.warn("camera %s already exists, clearing existing data" % cam_guid)
+                self.close(cam_guid)
+                self.main_brain.service_pending()
+
             LOG.info("REGISTER NEW CAMERA %s on %s @ ros node %s" % (cam_guid,fqdn,camnode_ros_name))
             self.main_brain.coord_processor.connect(cam_guid)
 
             with self.cam_info_lock:
-                if cam_guid in self.cam_info:
-                    raise RuntimeError("camera with guid %s already exists" % cam_guid)
                 self.cam_info[cam_guid] = {'commands':{}, # command queue for cam
                                          'lock':threading.Lock(), # prevent concurrent access
                                          'image':None,  # most recent image from cam
