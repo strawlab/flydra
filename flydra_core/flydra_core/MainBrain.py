@@ -1230,10 +1230,13 @@ class MainBrain(object):
             self.coord_processor.tracker.kill_all_trackers()
 
     def stop_saving_data(self):
+        LOG.info('received request to stop saving file')
         self.close_pending = True
         if self.coord_processor.tracker is not None:
             # eventually this will trigger a call to self.finally_close_save_files()
             self.coord_processor.tracker.kill_all_trackers()
+        else:
+            self.finally_close_save_files()
 
     def finally_close_save_files(self):
       if not self.close_pending:
