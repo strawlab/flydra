@@ -552,7 +552,7 @@ class CoordinateProcessor(threading.Thread):
 
             self.last_framenumbers_skip[cam_idx]=raw_framenumber
             start=header_size
-            if n_pts and (self.reconstructor is not None):
+            if n_pts:
                 # valid points
                 for frame_pt_idx in range(n_pts):
                     end=start+pt_size
