@@ -56,42 +56,6 @@ PT_TUPLE_IDX_CUR_VAL_IDX = flydra_core.data_descriptions.PT_TUPLE_IDX_CUR_VAL_ID
 PT_TUPLE_IDX_MEAN_VAL_IDX = flydra_core.data_descriptions.PT_TUPLE_IDX_MEAN_VAL_IDX
 PT_TUPLE_IDX_SUMSQF_VAL_IDX = flydra_core.data_descriptions.PT_TUPLE_IDX_SUMSQF_VAL_IDX
 
-class RealtimeROSSenderThread(threading.Thread):
-    """a class to send realtime data from a separate thread"""
-    def __init__(self,ros_path,ros_klass,ros_send_array,queue,quit_event,name):
-        warnings.warn('Should convert RealtimeROSSenderThread to ROS publisher with queue_size!=None')
-        threading.Thread.__init__(self,name=name)
-        self.daemon = True
-        self._queue = queue
-        self._quit_event = quit_event
-        self._ros_path = ros_path
-        self._ros_klass = ros_klass
-        self._ros_send_array = ros_send_array
-        try:
-            self._pub = rospy.Publisher(self._ros_path,self._ros_klass,queue_size=1,tcp_nodelay=True)
-        except Exception as err:
-            rospy.logwarn('could not start coordinate publisher: %r'%(err,))
-            self._pub = None
-
-    def run(self):
-        while not self._quit_event.isSet():
-            packets = []
-            packets.append( self._queue.get() )
-            while 1:
-                try:
-                    packets.append( self._queue.get_nowait() )
-                except Queue.Empty:
-                    break
-
-            if self._pub is None:
-                continue
-
-            if self._ros_send_array:
-                self._pub.publish(self._ros_klass(packets))
-            else:
-                for p in packets:
-                    self._pub.publish(p)
-
 class CoordinateProcessor(threading.Thread):
     def __init__(self,main_brain,save_profiling_data,
                  debug_level,
@@ -176,34 +140,13 @@ class CoordinateProcessor(threading.Thread):
 
         self.set_reconstructor(None)
 
-        self.queue_realtime_ros_packets = Queue.Queue()
-        self.tp = RealtimeROSSenderThread(
-                        '~super_packets',
-                        flydra_mainbrain_super_packet,
-                        True,
-                        self.queue_realtime_ros_packets,
-                        self.quit_event,
-                        'CoordinateSender')
-        self.tp.start()
+        self.realtime_ros_packets_pub = rospy.Publisher(
+            '~super_packets',flydra_mainbrain_super_packet,
+            queue_size=100,tcp_nodelay=True)
 
-        self.queue_synchronze_ros_msgs = Queue.Queue()
-        self.ts = RealtimeROSSenderThread(
-                        '~synchronize',
-                        std_msgs.msg.String,
-                        False,
-                        self.queue_synchronze_ros_msgs,
-                        self.quit_event,
-                        'SynchronizeSender')
-        self.ts.start()
-
-        self.te = RealtimeROSSenderThread(
-                        '~error',
-                        FlydraError,
-                        False,
-                        self.main_brain.queue_error_ros_msgs,
-                        self.quit_event,
-                        'ErrorSender')
-        self.te.start()
+        self.synchronze_ros_msgs_pub = rospy.Publisher(
+            '~synchronize',std_msgs.msg.String,
+            queue_size=100)
 
         self.realtime_coord_dict = {}
         self.timestamp_check_dict = {}
@@ -309,7 +252,8 @@ class CoordinateProcessor(threading.Thread):
                 reconstruction_stamp=reconstruction_stamp,
                 acquire_stamp=acquire_stamp,
                 objects = [this_ros_object])
-            self.queue_realtime_ros_packets.put( ros_packet )
+            self.realtime_ros_packets_pub.publish(
+                flydra_mainbrain_super_packet([ros_packet]))
 
         if self.debug_level.isSet():
             LOG.debug('killing obj_id %d:'%tracked_object.obj_id)
@@ -366,7 +310,7 @@ class CoordinateProcessor(threading.Thread):
             return
 
         if 1:
-            self.queue_synchronze_ros_msgs.put( std_msgs.msg.String(cam_id) )
+            self.synchronze_ros_msgs_pub.publish( std_msgs.msg.String(cam_id) )
             LOG.info('%s (re)synchronized'%cam_id)
             # discard all previous data
             for k in self.realtime_coord_dict.keys():
@@ -529,7 +473,7 @@ class CoordinateProcessor(threading.Thread):
                     # this is not the first frame
                     # probably because network buffer filled up before we emptied it
                     LOG.warn('frame data loss %s' % cam_id)
-                    self.main_brain.queue_error_ros_msgs.put( FlydraError(FlydraError.FRAME_DATA_LOSS,cam_id) )
+                    self.main_brain.error_ros_msgs_pub.publish( FlydraError(FlydraError.FRAME_DATA_LOSS,cam_id) )
 
                 if ATTEMPT_DATA_RECOVERY:
                     if not self.last_framenumbers_skip[cam_idx]==-1:
@@ -909,7 +853,8 @@ class CoordinateProcessor(threading.Thread):
                                             reconstruction_stamp=rospy.Time.from_sec(now),
                                             acquire_stamp=rospy.Time.from_sec(oldest_camera_timestamp),
                                             objects = ros_objects)
-                                        self.queue_realtime_ros_packets.put( ros_packet )
+                                        self.realtime_ros_packets_pub.publish(
+                                            flydra_mainbrain_super_packet([ros_packet]))
 
                 for finished in finished_corrected_framenumbers:
                     #check that timestamps are in reasonable agreement (low priority)
@@ -922,7 +867,7 @@ class CoordinateProcessor(threading.Thread):
                         if len(timestamps_by_cam_id):
                             if numpy.max(abs(timestamps_by_cam_id - timestamps_by_cam_id[0])) > 0.005:
                                 LOG.warn('timestamps off by more than 5 msec -- synchronization error')
-                                self.main_brain.queue_error_ros_msgs.put( FlydraError(FlydraError.CAM_TIMESTAMPS_OFF,"") )
+                                self.main_brain.error_ros_msgs_pub.publish( FlydraError(FlydraError.CAM_TIMESTAMPS_OFF,"") )
 
                     del realtime_coord_dict[finished]
                     del timestamp_check_dict[finished]
@@ -939,7 +884,7 @@ class CoordinateProcessor(threading.Thread):
                     #dont spam the console at startup (i.e. before a sync has been attemted)
                     if self.ever_synchronized:
                         LOG.warn('Cameras not synchronized or network dropping packets -- unmatched 2D data accumulating')
-                        self.main_brain.queue_error_ros_msgs.put( FlydraError(FlydraError.NOT_SYNCHRONIZED, "") )
+                        self.main_brain.error_ros_msgs_pub.publish( FlydraError(FlydraError.NOT_SYNCHRONIZED, "") )
 
                     k = realtime_coord_dict.keys()
                     k.sort()
@@ -953,7 +898,7 @@ class CoordinateProcessor(threading.Thread):
                         delta = list(set(self.cam_ids) - set(this_cam_ids))
                         LOG.warn('a guess at missing cam_id(s): %r' % delta)
                         for d in delta:
-                            self.main_brain.queue_error_ros_msgs.put( FlydraError(FlydraError.MISSING_DATA, d) )
+                            self.main_brain.error_ros_msgs_pub.publish( FlydraError(FlydraError.MISSING_DATA, d) )
 
                     for ki in k[:-50]:
                         del realtime_coord_dict[ki]
@@ -961,7 +906,7 @@ class CoordinateProcessor(threading.Thread):
 
                 if len(realtime_kalman_coord_dict)>100:
                     LOG.warn('deleting unused 3D data (this should be a rare occurrance)')
-                    self.main_brain.queue_error_ros_msgs.put( FlydraError(FlydraError.UNUSED_3D_DATA,"") )
+                    self.main_brain.error_ros_msgs_pub.publish( FlydraError(FlydraError.UNUSED_3D_DATA,"") )
                     k = realtime_kalman_coord_dict.keys()
                     k.sort()
                     for ki in k[:-50]:
