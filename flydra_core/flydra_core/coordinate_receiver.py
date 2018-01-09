@@ -501,14 +501,14 @@ class CoordinateProcessor(threading.Thread):
 
         new_data_framenumbers = set()
 
-        with self.all_data_lock:
-            deferred_2d_data = []
-            header = buf_data[:header_size]
-            assert len(header) == header_size
-            # this raw_timestamp is the remote camera's timestamp (?? from the driver, not the host clock??)
-            (cam_id, raw_timestamp, camn_received_time, raw_framenumber,
-             n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
+        deferred_2d_data = []
+        header = buf_data[:header_size]
+        assert len(header) == header_size
+        # this raw_timestamp is the remote camera's timestamp (?? from the driver, not the host clock??)
+        (cam_id, raw_timestamp, camn_received_time, raw_framenumber,
+            n_pts,n_frames_skipped) = struct.unpack(header_fmt,header)
 
+        with self.all_data_lock:
             cam_idx = self.cam_ids.index(cam_id)
             absolute_cam_no = self.absolute_cam_nos[cam_idx]
 
