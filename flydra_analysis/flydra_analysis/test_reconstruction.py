@@ -19,7 +19,6 @@ import flydra_analysis.a2.core_analysis as core_analysis
 import flydra_core.flydra_socket as flydra_socket
 from flydra_core.reconstruct import Reconstructor, DEFAULT_WATER_REFRACTIVE_INDEX
 from flydra_analysis.a2.retrack_reuse_data_association import retrack_reuse_data_association
-from flydra_core.coordinate_receiver import CoordinateProcessor
 
 SPINUP_DURATION = 0.2
 MAX_MEAN_ERROR = 0.002
@@ -317,7 +316,9 @@ class FakeMainBrain:
     def is_saving_data(self):
         return False
 
-def test_online_reconstruction():
+def disabled_tst_online_reconstruction():
+    # This is currently disabled because it was never updated when we switched from
+    # sending ROS messages from a separate thread to directly calling publish().
     for with_water in [False, True]:
         for with_orientation in [False,True]:
             for multithreaded in [True, False]:
@@ -345,6 +346,7 @@ def check_online_reconstruction(with_water=False,
     #debug_level.set()
     show_overall_latency=threading.Event()
     #show_overall_latency.set()
+    from flydra_core.coordinate_receiver import CoordinateProcessor
     coord_processor = CoordinateProcessor(mb,
                                           save_profiling_data=False,
                                           debug_level=debug_level,

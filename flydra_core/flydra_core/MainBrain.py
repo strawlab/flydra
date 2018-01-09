@@ -163,7 +163,7 @@ class TimestampEchoReceiver(threading.Thread):
                 start_timestamp, remote_timestamp, stop_timestamp = srs
                 clock_diff_msec = abs(remote_timestamp-start_timestamp)*1e3
                 if clock_diff_msec > 1:
-                    self.main_brain.queue_error_ros_msgs.put(
+                    self.main_brain.error_ros_msgs_pub.publish(
                                             FlydraError(
                                                 FlydraError.CLOCK_DIFF,
                                                 "%s/%f" % (remote_hostname,clock_diff_msec)) )
@@ -581,7 +581,9 @@ class MainBrain(object):
         self.queue_data3d_best     = Queue.Queue()
 
         self.queue_data3d_kalman_estimates = Queue.Queue()
-        self.queue_error_ros_msgs = Queue.Queue()
+        self.error_ros_msgs_pub = rospy.Publisher(
+            '~error',FlydraError,
+            queue_size=100)
 
         self.coord_processor = CoordinateProcessor(self,
                                    save_profiling_data=save_profiling_data,
