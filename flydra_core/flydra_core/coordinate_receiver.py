@@ -45,8 +45,7 @@ LOG = flydra_core.rosutils.Log(to_ros=True)
 import flydra_core.debuglock
 DebugLock = flydra_core.debuglock.DebugLock
 
-ATTEMPT_DATA_RECOVERY = True
-#ATTEMPT_DATA_RECOVERY = False
+ATTEMPT_DATA_RECOVERY = bool(int(os.environ.get("ATTEMPT_DATA_RECOVERY","1")))
 
 IMPOSSIBLE_TIMESTAMP = -10.0
 
