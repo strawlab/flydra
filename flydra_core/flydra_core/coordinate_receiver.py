@@ -488,7 +488,7 @@ class CoordinateProcessor(threading.Thread):
 
         self.did_quit_successfully = True
 
-    def process_data(self, incoming_2d_data ):
+    def process_data(self, buf_data ):
 
         header_fmt = flydra_core.common_variables.recv_pt_header_fmt
         header_size = struct.calcsize(header_fmt)
@@ -496,8 +496,6 @@ class CoordinateProcessor(threading.Thread):
         pt_size = struct.calcsize(pt_fmt)
 
         no_point_tuple = (nan,nan,nan,nan,nan,nan,nan,nan,nan,False,0,0,0,0)
-
-        buf_data = incoming_2d_data
 
         new_data_framenumbers = set()
 
