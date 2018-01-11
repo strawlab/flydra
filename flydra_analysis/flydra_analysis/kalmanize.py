@@ -383,7 +383,7 @@ def kalmanize(src_filename,
     if exclude_camns is None:
         exclude_camns = []
 
-    dest_file_os_fd = None
+    use_existing_filename = True
 
     if reconstructor is not None:
         assert isinstance(reconstructor, flydra_core.reconstruct.Reconstructor )
@@ -433,7 +433,8 @@ def kalmanize(src_filename,
                 dest_filename = os.path.splitext(
                     results.filename)[0]+'.kalmanized.h5'
         else:
-            dest_file_os_fd, dest_filename = tempfile.mkstemp(suffix='.h5')
+            use_existing_filename = False
+            dest_filename = tempfile.mktemp(suffix='.h5')
 
         if reconstructor is not None and reconstructor.cal_source_type == 'pytables':
             save_reconstructor_filename = reconstructor.cal_source.filename
@@ -455,9 +456,12 @@ def kalmanize(src_filename,
         else:
             sync_error_threshold=options.sync_error_threshold_msec/1000.0
 
-        if dest_file_os_fd is None and os.path.exists(dest_filename):
-            raise ValueError('%s already exists. Will not '
-                             'overwrite.'%dest_filename)
+        if os.path.exists(dest_filename):
+            if use_existing_filename:
+                raise ValueError('%s already exists. Will not '
+                                'overwrite.'%dest_filename)
+            else:
+                os.unlink(dest_filename)
 
         with open_file_safe(dest_filename, mode="w", title="tracked Flydra data file",
                           delete_on_error=True) as h5file:
