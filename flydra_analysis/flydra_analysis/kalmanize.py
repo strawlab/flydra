@@ -435,7 +435,7 @@ def kalmanize(src_filename,
         else:
             dest_file_os_fd, dest_filename = tempfile.mkstemp(suffix='.h5')
 
-        if reconstructor.cal_source_type == 'pytables':
+        if reconstructor is not None and reconstructor.cal_source_type == 'pytables':
             save_reconstructor_filename = reconstructor.cal_source.filename
         else:
             warnings.warn('unable to determine reconstructor source '
