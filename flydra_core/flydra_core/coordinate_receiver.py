@@ -409,6 +409,7 @@ class CoordinateProcessor(threading.Thread):
                 LOG.warn('could not adjust priority (PID %d): %s'%(os.getpid(),str(x)))
         else:
             LOG.info('3D reconstruction thread running with default priority')
+        LOG.info('CoordinateProcessor running on PID %d' % os.getpid())
         # self.main_brain.trigger_device.wait_for_estimate()
         while not self.quit_event.isSet():
             try:
