@@ -1,6 +1,12 @@
 # flydra change log
 
-## unreleased
+## [0.7.1] - 2018-01-17
+
+### Changed
+
+* Fixed packaging issues with .deb files.
+
+## [0.7.0] - 2018-01-17
 
 ### Changed
 
@@ -26,3 +32,6 @@
   was loaded. Also correctly close hdf5 file in these circumstances.
 * Do not quit mainbrain if a previously seen camera re-joins after suddenly
   quitting.
+
+[0.7.1]: https://github.com/strawlab/flydra/compare/release/0.7.0...release/0.7.1
+[0.7.0]: https://github.com/strawlab/flydra/compare/release/0.6.14...release/0.7.0
