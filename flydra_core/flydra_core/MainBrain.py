@@ -5,6 +5,7 @@ import warnings
 import json
 import collections
 
+import tzlocal
 import flydra_core.reconstruct
 import numpy
 import numpy as np
@@ -1276,6 +1277,9 @@ class MainBrain(object):
         cam_id = 'mainbrain'
         timestamp = time.time()
 
+        # Get local timezone name. See https://stackoverflow.com/a/17365806/1633026
+        local_tz_name = tzlocal.get_localzone()
+
         # This line is important (including the formatting). It is
         # read by flydra_analysis.a2.check_atmel_clock.
 
@@ -1284,7 +1288,7 @@ class MainBrain(object):
              'MainBrain running at %s fps, (flydra_version %s, time_tzname0 %s)' % (
                 self.trigger_device.get_frames_per_second(),
                 flydra_core.version.__version__,
-                time.tzname[0])
+                local_tz_name)
             ),
             (timestamp,cam_id,timestamp,
              'using flydra version %s' % (flydra_core.version.__version__,)),

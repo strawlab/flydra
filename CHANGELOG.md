@@ -1,5 +1,11 @@
 # flydra change log
 
+## unreleased
+
+### Fixed
+
+* Save local timezone name correctly and compatible with pytz in flydra_core.
+
 ## [0.7.1] - 2018-01-17
 
 ### Changed
