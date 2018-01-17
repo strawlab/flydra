@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(name='flydra_compat',
-      version='0.1.0',
+      version='0.1.1',
       author='Andrew Straw',
       author_email='strawman@astraw.com',
       description='flydra backwards compatibility layer',
