@@ -1,6 +1,6 @@
 # flydra change log
 
-## unreleased
+## [0.7.2] - 2018-01-17
 
 ### Fixed
 
