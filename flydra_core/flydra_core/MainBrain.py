@@ -1170,7 +1170,7 @@ class MainBrain(object):
         self.pub_data_file.publish(self.h5filename)
 
         self.block_triggerbox_activity = True
-        self.h5file = tables.open_file(self.h5filename, mode="w", title="Flydra data file")
+        self.h5file = tables.open_file(os.path.expanduser(self.h5filename), mode="w", title="Flydra data file")
         expected_rows = int(1e6)
         ct = self.h5file.create_table # shorthand
         root = self.h5file.root # shorthand

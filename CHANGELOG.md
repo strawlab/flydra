@@ -1,5 +1,11 @@
 # flydra change log
 
+## unreleased
+
+### Fixed
+
+* Expand user (`~`) when writing file in flydra_core.
+
 ## [0.7.2] - 2018-01-17
 
 ### Fixed
