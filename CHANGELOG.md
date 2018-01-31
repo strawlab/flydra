@@ -1,5 +1,11 @@
 # flydra change log
 
+## unreleased
+
+### Changed
+
+* Do not load timezone in plot_timeseries_2d_3d unless it is needed.
+
 ## [0.7.3] - 2018-01-31
 
 ### Fixed

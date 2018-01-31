@@ -91,7 +91,6 @@ def doit(
             pylab.figtext(0.01,0.01,figtitle,verticalalignment='bottom')
 
         with PT.open_file( filename, mode='r' ) as h5:
-            timezone = result_utils.get_tz( h5 )
             if options.spreadh5 is not None:
                 h5spread = PT.open_file(options.spreadh5, mode='r')
             else:
@@ -202,6 +201,7 @@ def doit(
                     ax.set_xlim( (start_frame, stop_frame) )
             ax.set_xlabel('frame')
             if options.timestamps:
+                timezone = result_utils.get_tz( h5 )
                 df = DateFormatter(timezone)
                 ax.xaxis.set_major_formatter(
                     ticker.FuncFormatter(df.format_date))
@@ -487,6 +487,7 @@ def doit(
 
                     if options.timestamps:
                         ax.set_xlabel('time (sec)')
+                        timezone = result_utils.get_tz( h5 )
                         df = DateFormatter(timezone)
                         ax.xaxis.set_major_formatter(
                             ticker.FuncFormatter(df.format_date))
