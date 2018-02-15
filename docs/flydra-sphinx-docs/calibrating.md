@@ -11,16 +11,17 @@ Do this:
 
 ### Step 1: setup cameras (zoom, focus, aperture, gain) and lights
 
-Setup camera position, zoom, focus (thanks to an object in the flycube) and aperture (slightly under the maximum).
-The shutter times and gains are already specified in the flydra.yaml file (located in flycave/launch/flycubeX/).
-The gains could be improved.
+Setup camera position, zoom, focus (using an object in the tracking volume) and aperture (slightly stopped down from
+wide-open). Exposure times and gains are specified by ROS parameters, typically set in a `flydra.yaml` file. Note
+that if you intend to run at 100 frames per second, exposure times must be less than 10 milliseconds.
 
-View the luminosity distribution of each camera (replace the camera names accordingly):
+View the luminance distribution of each camera (replace the camera names accordingly):
 
     rosrun ros_flydra camhistograms --camera /Basler_xxx/image_raw etc.
 
-Try to have nicely widespread luminosity distributions. Look at those distributions while the room
-lights are off! Write the chosen gain values in flydra.yaml.
+Try to a luminance distribution which extends all the way from 0 to 255 with very little clipping. Look at those
+distributions using the same lighting conditions that will be in use during experiments (i.e. while the room lights
+are off). Write the chosen gain values in `flydra.yaml`.
 
 ### Step 2: remove the distortion errors of the cameras
 
