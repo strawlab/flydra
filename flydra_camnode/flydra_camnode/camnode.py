@@ -106,7 +106,9 @@ DebugLock = flydra_core.debuglock.DebugLock
 LOG = flydra_core.rosutils.Log(to_ros=True)
 
 def ros_ensure_valid_name(name):
-    return name.replace('-','_')
+    name = name.replace('-','_')
+    name = name.replace('Allied Vision Technologies','AVT')
+    return name
 
 class SharedValue:
     # in fview
