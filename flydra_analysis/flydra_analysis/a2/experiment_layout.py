@@ -126,15 +126,13 @@ def cubic_arena(info=None):
     tube_radius = info['tube_diameter']/2.0
 
     def make_2_vert_tube(a,b):
-        pd = tvtk.PolyData()
-        pd.points = [ a,b ]
-        pd.lines = [ [0,1] ]
+        pd = tvtk.PolyData(points = [ a,b ], lines = [ [0,1] ])
         pt = tvtk.TubeFilter(radius=tube_radius,
-                             input=pd,
                              number_of_sides=20,
                              vary_radius='vary_radius_off',
                              )
-        m = tvtk.PolyDataMapper(input=pt.output)
+        configure_input_data(pt, pd)
+        m = tvtk.PolyDataMapper(input_connection=pt.output_port)
         a = tvtk.Actor(mapper=m)
         a.property.color = 0,0,0
         a.property.specular = 0.3
