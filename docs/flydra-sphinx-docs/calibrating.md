@@ -41,6 +41,8 @@ Keep the `flycube_only_flydra.launch` file running in the first tab.
 
 ### Step 3: calibrate flydra
 
+#### Step 3a: collect calibration data and run MCSC
+
 Room lights should be off.
 
 In a first tab, start the flydra (tracking system) calibration with (enter the right flycube name):
@@ -84,6 +86,43 @@ Move the three generated files from ~/DATA to flycave/calibration/flycubeX. You 
 
 Now you have a working calibration, which is NOT aligned or scaled to the flycube coordinate system, but is able to track. Scaling can be quite important for good tracking.
 
-TODO: describe how to align and scale the calibration using the alignment GUI.
+#### Step 3b: align the calibration
 
+With the retracked calibration data, align it manually to a model of the volume you
+were tracing. For example, we have a volume defined in a file called `windtunnel.xml`.
 
+```
+<stimxml version="1">
+  <cubic_arena>
+    <verts4x4>
+      <vert>.944,  .3048,  .6096</vert>
+      <vert>.944,  -.3048, .6096</vert>
+      <vert>-.944, -.3048, .6096</vert>
+      <vert>-.944,  .3048, .6096</vert>
+
+      <vert>.944,  .3048,  0</vert>
+      <vert>.944,  -.3048, 0</vert>
+      <vert>-.944, -.3048, 0</vert>
+      <vert>-.944,  .3048, 0</vert>
+    </verts4x4>
+    <tube_diameter>0.002</tube_diameter>
+  </cubic_arena>
+</stimxml>
+```
+
+Now, run the calibration alignment GUI with the calibration points and the
+defined volume:
+
+    flydra_analysis_calibration_align_gui --stim-xml path/to/windtunnel.xml ${DATAFILE_RETRACKED}
+
+This will open a GUI in which you must align the LED tracked points in the `${DATAFILE_RETRACKED}` file with some known locations from the volume definition file (called `windtunnel.xml` in the example above).
+
+Save the aligned calibration to an .xml file. This filename must be used as a ROS parameter to the mainbrain
+program to do realtime 3D tracking with an aligned calibration. For example, in a ROS launch file, do something
+like this:
+
+```
+  <node name="flydra_mainbrain" pkg="ros_flydra" type="main_brain">
+    <param name="camera_calibration" type="str" value="/path/to/my/new/calibration.xml" />
+  </node>
+```
