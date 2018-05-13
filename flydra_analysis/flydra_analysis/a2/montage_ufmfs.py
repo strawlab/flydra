@@ -626,7 +626,7 @@ def main():
     # keep default config file in sync with get_config_defaults() above
     usage = """%prog DATAFILE2D.h5 [options]
 
-The default configuration correspondes to a config file:
+The default configuration corresponds to a config file:
 
 [what to show]
 show_2d_position = False
