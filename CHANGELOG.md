@@ -4,6 +4,9 @@
 
 ### Changed
 
+* Made camnode compatible with "Allied Vision Technologies" cameras by
+  renaming them to "AVT". The spaces and length of the name caused problems
+  within ROS.
 * Do not load timezone in plot_timeseries_2d_3d unless it is needed.
 
 ## [0.7.3] - 2018-01-31
