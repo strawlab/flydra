@@ -2,12 +2,19 @@
 
 ## unreleased
 
-### Changed
+### Added
 
+* Created documentation for calibrating cameras in
+  `docs/flydra-sphinx-docs/calibrating.md`
+
+### Fixed
+
+* Updated analysis scripts that use VTK to VTK 6 (the version shipped in
+  Ubuntu 16.04).
+* Do not load timezone in plot_timeseries_2d_3d unless it is needed.
 * Made camnode compatible with "Allied Vision Technologies" cameras by
   renaming them to "AVT". The spaces and length of the name caused problems
   within ROS.
-* Do not load timezone in plot_timeseries_2d_3d unless it is needed.
 
 ## [0.7.3] - 2018-01-31
 
