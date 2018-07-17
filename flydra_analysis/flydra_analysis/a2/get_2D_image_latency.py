@@ -35,7 +35,7 @@ def main():
     # read all data
     end_idx=int(args['--end-idx'])
     d2d = results.root.data2d_distorted[:end_idx]
-    cam_info = results.root.cam_info[:end_idx]
+    cam_info = results.root.cam_info
     results.close()
 
     if 1:
