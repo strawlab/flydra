@@ -1,0 +1,2 @@
+include flydra_core/*.pyx
+include flydra_core/*.h
