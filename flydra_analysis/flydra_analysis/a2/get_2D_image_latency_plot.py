@@ -78,10 +78,11 @@ def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000
             tss = df0['cam_received_timestamp'].values
             frames = df0['frame'].values
             dts = tss-ts0s
+            dframes = frames[1:] - frames[:-1]
 
             axn = fig2.add_subplot( len(camn_list), 1, camn_list.index(camn)+1,sharex=axn)
             axn.plot(frames,dts,'r.-',label='camnode latency' )
-            axn.plot( frames[:-1], ts0s[1:]-ts0s[:-1], 'g.-', label='inter-frame interval' )
+            axn.plot( frames[:-1], (ts0s[1:]-ts0s[:-1])/dframes, 'g.-', label='mean inter-frame interval' )
             axn.set_xlabel('frame')
             axn.set_ylabel('time (s)')
             axn.text(0,1,cam_id, va='top', ha='left', transform=axn.transAxes)
