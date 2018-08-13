@@ -4,11 +4,12 @@
 Usage:
   get_2D_image_latency_plot.py FILENAME [options]
 
-Options:
+        Options:
   -h --help     Show this screen.
   --3d          Plot the 3D tracking latency
   --2d          Plot the 2D tracking latency
   --end-idx=N   Only show this many rows [default: 100000]
+  --save        Only save the plots, do not open them to screen
 """
 from __future__ import print_function
 from docopt import docopt
@@ -21,7 +22,7 @@ import numpy as np
 
 import flydra_analysis.analysis.result_utils as result_utils
 
-def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000):
+def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000, save=False):
     if do_3d_latency==False and do_2d_latency==False:
         print('hmm, not plotting 3d or 2d data. nothing to do')
         return
@@ -39,10 +40,14 @@ def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000
         camn_list = list(df2d['camn'].unique())
         camn_list.sort()
 
+
+    figs = {}
+
     if do_3d_latency:
         dfk = pd.DataFrame(dk)
 
         fig = plt.figure()
+        figs['3d'] = fig
         ax = fig.add_subplot(111)
         for obj_id, dfobj in dfk.groupby('obj_id'):
             frame = dfobj['frame'].values
@@ -57,10 +62,13 @@ def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000
 
     if do_2d_latency:
         fig2 = plt.figure()
+        figs['2'] = fig2
         axn=None
         fig3 = plt.figure()
+        figs['3'] = fig3
         ax3n = None
         fig4 = plt.figure()
+        figs['4'] = fig4
         ax4n = None
 
         for camn, dfcam in df2d.groupby('camn'):
@@ -94,12 +102,18 @@ def plot_latency(fname, do_3d_latency=False, do_2d_latency=False, end_idx=100000
             ax4n.set_ylabel('inter-frame-interval (s)')
             ax4n.text(0,1,cam_id, va='top', ha='left', transform=ax4n.transAxes)
 
-    plt.show()
+    if save:
+        for key in figs:
+            fig = figs[key]
+            fig.savefig('%s-latency-%s.png'%(fname,key))
+    else:
+        plt.show()
 
 def main():
     args = docopt(__doc__)
     fname = args['FILENAME']
-    plot_latency(fname, do_3d_latency=args['--3d'], do_2d_latency=args['--2d'], end_idx=int(args['--end-idx']))
+    plot_latency(fname, do_3d_latency=args['--3d'], do_2d_latency=args['--2d'], end_idx=int(args['--end-idx']),
+                 save=args['--save'])
 
 if __name__=='__main__':
     main()
