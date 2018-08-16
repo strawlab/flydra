@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import adskalman.adskalman as adskalman
 
@@ -71,10 +72,10 @@ def ori_smooth(directions,frames_per_second=None,return_missing=False):
         bad_cond = ~good_cond
 
         if bad_cond.shape != dirsmooth[:,0].shape:
-            print 'xxxx'
-            print bad_cond.shape
-            print dirsmooth[:,0].shape
-            print directions.shape
+            print('xxxx')
+            print(bad_cond.shape)
+            print(dirsmooth[:,0].shape)
+            print(directions.shape)
         dirsmooth[bad_cond,:] = np.nan
 
     # normalize lengths to unit vectors

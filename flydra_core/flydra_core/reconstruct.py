@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, glob, sys, math
 opj=os.path.join
 import numpy as np
@@ -282,12 +283,12 @@ def intersect_planes_to_find_line(P):
                     -(planeP[2]*planeQ[0]) + planeP[0]*planeQ[2],
                     -(planeP[1]*planeQ[0]) + planeP[0]*planeQ[1] )
     except Exception, exc:
-        print 'WARNING svd exception:',str(exc)
+        print('WARNING svd exception:',str(exc))
         Lcoords = None
     except:
-        print 'WARNING: unknown error in reconstruct.py'
-        print '(you probably have an old version of numarray'
-        print 'and SVD did not converge)'
+        print('WARNING: unknown error in reconstruct.py')
+        print('(you probably have an old version of numarray')
+        print('and SVD did not converge)')
         Lcoords = None
     return Lcoords
 
@@ -333,15 +334,15 @@ def do_3d_operations_on_2d_point(helper,
         try:
             u,d,vt=svd(A,full_matrices=True)
         except:
-            print 'rise,run',rise,run
-            print 'pmat_inv',pmat_inv
-            print 'X0, X1, camera_center',X0, X1, camera_center
+            print('rise,run',rise,run)
+            print('pmat_inv',pmat_inv)
+            print('X0, X1, camera_center',X0, X1, camera_center)
             raise
         Pt = vt[3,:] # plane parameters
 
         p1,p2,p3,p4 = Pt[0:4]
         if numpy.isnan(p1):
-            print 'ERROR: SVD returned nan'
+            print('ERROR: SVD returned nan')
     else:
         p1,p2,p3,p4 = numpy.nan,numpy.nan, numpy.nan,numpy.nan
 
@@ -370,9 +371,9 @@ def angles_near(a,b, eps=None, mod_pi=False,debug=False):
 
     result = abs(diff) < eps
     if debug:
-        print 'a',a*R2D
-        print 'b',b*R2D
-        print 'diff',diff*R2D
+        print('a',a*R2D)
+        print('b',b*R2D)
+        print('diff',diff*R2D)
     if abs(diff-2*numpy.pi) < eps:
         result = result or True
     return result
@@ -470,11 +471,11 @@ class SingleCameraCalibration:
                                   intrinsic_parameters[2,2])
                     intrinsic_parameters = \
                                  intrinsic_parameters/intrinsic_parameters[2,2]
-                    print intrinsic_parameters
+                    print(intrinsic_parameters)
                 else:
-                    print ('WARNING: expected last row/col of intrinsic '
-                           'parameter matrix to be unity')
-                    print 'intrinsic_parameters[2,2]',intrinsic_parameters[2,2]
+                    print('WARNING: expected last row/col of intrinsic '
+                          'parameter matrix to be unity')
+                    print('intrinsic_parameters[2,2]',intrinsic_parameters[2,2])
                     raise ValueError('expected last row/col of intrinsic '
                                      'parameter matrix to be unity')
 
@@ -770,7 +771,7 @@ class SingleCameraCalibration:
                                                camera_center,
                                                x0d, y0d, rise, run)
         except:
-            print 'camera_center',camera_center
+            print('camera_center',camera_center)
             raise
         (p1, p2, p3, p4, ray0, ray1, ray2, ray3, ray4, ray5) = tmp
         plane = (p1, p2, p3, p4)
@@ -1117,7 +1118,7 @@ class Reconstructor:
                     pmat = normalize_pmat(pmat)
 ##                    if not numpy.allclose(pmat_orig,pmat):
 ##                        assert numpy.allclose(pmat2cam_center(pmat_orig),pmat2cam_center(pmat))
-##                        #print 'normalized pmat, but camera center should  changed for %s'%cam_id
+##                        #print('normalized pmat, but camera center should  changed for %s'%cam_id)
                 self.Pmat[cam_id] = pmat
                 self.Res[cam_id] = map(int,res_fd.readline().split())
             res_fd.close()
@@ -1295,10 +1296,10 @@ class Reconstructor:
             if my_scc != other_scc:
                 if int(os.environ.get('DEBUG_EQ','0')):
                     for attr in ['cam_id','Pmat','res','helper']:
-                        print
-                        print 'attr',attr
-                        print 'my_scc',getattr(my_scc,attr)
-                        print 'other_scc',getattr(other_scc,attr)
+                        print()
+                        print('attr',attr)
+                        print('my_scc',getattr(my_scc,attr))
+                        print('other_scc',getattr(other_scc,attr))
                 eq = False
                 break
         return eq
@@ -1994,23 +1995,23 @@ def align_calibration():
      elif options.align_cams is not None:
          cam_ids = srcR.get_cam_ids()
          ccs = [srcR.get_camera_center(cam_id)[:,0] for cam_id in cam_ids]
-         print 'ccs',ccs
+         print('ccs',ccs)
          orig_cam_centers = np.array(ccs).T
-         print 'orig_cam_centers',orig_cam_centers.T
+         print('orig_cam_centers',orig_cam_centers.T)
          new_cam_centers = np.loadtxt(options.align_cams).T
-         print 'new_cam_centers',new_cam_centers.T
+         print('new_cam_centers',new_cam_centers.T)
          s,R,t = align.estsimt(orig_cam_centers,new_cam_centers)
      elif options.align_reconstructor is not None:
          cam_ids = srcR.get_cam_ids()
-         print cam_ids
+         print(cam_ids)
          ccs = [srcR.get_camera_center(cam_id)[:,0] for cam_id in cam_ids if cam_id not in except_cams]
-         print 'ccs',ccs
+         print('ccs',ccs)
          orig_cam_centers = np.array(ccs).T
-         print 'orig_cam_centers',orig_cam_centers.T
+         print('orig_cam_centers',orig_cam_centers.T)
          tmpR = Reconstructor(cal_source=options.align_reconstructor)
          nccs = [tmpR.get_camera_center(cam_id)[:,0] for cam_id in cam_ids if cam_id not in except_cams]
          new_cam_centers = np.array(nccs).T
-         print 'new_cam_centers',new_cam_centers.T
+         print('new_cam_centers',new_cam_centers.T)
          s,R,t = align.estsimt(orig_cam_centers,new_cam_centers)
      elif options.align_json is not None:
          import json
@@ -2023,9 +2024,9 @@ def align_calibration():
      else:
          raise Exception("Alignment not supported")
 
-     print 's',s
-     print 'R',R
-     print 't',t
+     print('s',s)
+     print('R',R)
+     print('t',t)
 
      M = align.build_xform(s,R,t)
 
@@ -2035,13 +2036,13 @@ def align_calibration():
      else:
          alignedR.save_to_files_in_new_directory(dst)
 
-     print "wrote", dst
+     print("wrote", dst)
 
 def print_cam_centers():
     filename = sys.argv[1]
     R = flydra_core.reconstruct.Reconstructor(filename)
     for cam_id in R.cam_ids:
-        print cam_id, R.get_camera_center(cam_id)[:,0]
+        print(cam_id, R.get_camera_center(cam_id)[:,0])
 
 def flip_calibration():
     import pymvg.multi_camera_system

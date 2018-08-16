@@ -1,3 +1,4 @@
+from __future__ import print_function
 import math
 import numpy
 import numpy as np
@@ -403,17 +404,17 @@ def points_to_plane(*args,**kwds):
         raise NotCoplanarError('points not co-planar (errors=%s)'%(d[3:],))
 
     if 0:
-        print 'X'
-        print X
-        print 'u',u.shape
-        print 'u'
-        print u
-        print 'd',d.shape
-        print 'd',d
-        print 'vt',vt.shape
-        print 'vt'
-        print vt
-        print
+        print('X')
+        print(X)
+        print('u',u.shape)
+        print('u')
+        print(u)
+        print('d',d.shape)
+        print('d',d)
+        print('vt',vt.shape)
+        print('vt')
+        print(vt)
+        print()
 
     n = vt[3,:3]
     mag = np.sqrt(np.sum(n**2))
