@@ -339,7 +339,7 @@ def kalman_smooth(orig_rows,
 
     model = flydra_core.kalman.dynamic_models.get_kalman_model(name=dynamic_model_name,dt=(1.0/frames_per_second))
     if model['dt'] != 1.0/frames_per_second:
-        raise ValueError('specified fps disagrees with model')
+        raise ValueError('specified fps %s disagrees with model %s' % (frames_per_second,1.0/model['dt']))
 
     # initial state guess: postion = observation, other parameters = 0
     ss = model['ss']
