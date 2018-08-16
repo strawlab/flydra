@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -30,12 +30,12 @@ def onpick_callback(event):
     # see matplotlib/examples/pick_event_demo.py
     thisline = event.artist
     obj_id = all_kalman_lines[thisline]
-    print 'obj_id',obj_id
+    print('obj_id',obj_id)
     if 0:
         xdata = thisline.get_xdata()
         ydata = thisline.get_ydata()
         ind = event.ind
-        print 'picked line:',zip(numpy.take(xdata, ind), numpy.take(ydata, ind))
+        print('picked line:',zip(numpy.take(xdata, ind), numpy.take(ydata, ind)))
 
 class DateFormatter:
     def __init__(self,tz):
@@ -63,11 +63,11 @@ def doit(
 
     if not use_kalman_smoothing:
         if (fps is not None) or (dynamic_model is not None):
-            print >> sys.stderr, ('WARNING: disabling Kalman smoothing '
+            print('WARNING: disabling Kalman smoothing '
                                   '(--disable-kalman-smoothing) is '
                                   'incompatable with setting fps and '
                                   'dynamic model options (--fps and '
-                                  '--dynamic-model)')
+                                  '--dynamic-model)', file=sys.stderr)
 
     ax = None
     ax_by_cam = {}
@@ -120,9 +120,9 @@ def doit(
                                                                stop=stop_idx+1)
                     all_data.append(these_rows)
                 if len(all_data)==0:
-                    print 'file %s has no frames in range %s - %s' % ( filename,
+                    print('file %s has no frames in range %s - %s' % ( filename,
                                                                        start,
-                                                                       stop )
+                                                                       stop ))
                     continue
                 all_data = np.concatenate( all_data )
                 del valid_cond, frames, start_idx, stop_idx, these_rows, read_idxs
@@ -131,7 +131,7 @@ def doit(
 
             tmp_frames = all_data['frame']
             if len(tmp_frames)==0:
-                print 'file %s has no frames, skipping.'%filename
+                print('file %s has no frames, skipping.'%filename)
                 continue
             n_files += 1
             start_frame = tmp_frames.min()
@@ -273,7 +273,7 @@ def doit(
                 valid_cond &= frames <= stop
             obj_ids = obj_ids[valid_cond]
             use_obj_ids = np.unique(obj_ids)
-            print 'quick found use_obj_ids',use_obj_ids
+            print('quick found use_obj_ids',use_obj_ids)
         if is_mat_file:
             raise ValueError('cannot use .mat file for kalman_filename '
                              'because it is missing the reconstructor '
@@ -285,10 +285,10 @@ def doit(
 
         if dynamic_model is None and use_kalman_smoothing:
             dynamic_model = extra['dynamic_model_name']
-            print 'detected file loaded with dynamic model "%s"'%dynamic_model
+            print('detected file loaded with dynamic model "%s"'%dynamic_model)
             if dynamic_model.startswith('EKF '):
                 dynamic_model = dynamic_model[4:]
-            print '  for smoothing, will use dynamic model "%s"'%dynamic_model
+            print('  for smoothing, will use dynamic model "%s"'%dynamic_model)
 
         if options.reproj_error:
             reproj_error = collections.defaultdict(list)
@@ -314,7 +314,7 @@ def doit(
             # modified from save_movies_overlay
             for this_3d_row_enum,this_3d_row in enumerate(kalman_rows):
                 if this_3d_row_enum%100 == 0:
-                    print ('doing reprojection error for MLE 3d estimate for '
+                    print('doing reprojection error for MLE 3d estimate for '
                            'row %d of %d'%(this_3d_row_enum, len(kalman_rows)))
                 vert = numpy.array([this_3d_row['x'],
                                     this_3d_row['y'],
@@ -356,16 +356,16 @@ def doit(
                     this_reproj_error = numpy.sqrt(
                         (vert_image[0]-x)**2 + (vert_image[1]-y)**2)
                     if this_reproj_error > 100:
-                        print ('  reprojection error > 100 (%.1f) at frame %d '
+                        print('  reprojection error > 100 (%.1f) at frame %d '
                                'for camera %s, obj_id %d'%(this_reproj_error,
                                                            this_3d_row['frame'],
                                                            cam_id, obj_id))
                     if numpy.isnan(this_reproj_error):
-                        print 'error:'
-                        print this_camns, this_camn_idxs
-                        print cam_id
-                        print vert_image
-                        print vert
+                        print('error:')
+                        print(this_camns, this_camn_idxs)
+                        print(cam_id)
+                        print(vert_image)
+                        print(vert)
                         raise ValueError('nan at frame %d'%this_3d_row['frame'])
                     reproj_error[cam_id].append( this_reproj_error )
                     if cam_id in max_reproj_error:
@@ -379,21 +379,21 @@ def doit(
                                                     this_reproj_error, obj_id)
 
             del kalman_rows, kalman_3d_frame, obj_ids
-            print 'mean reprojection errors:'
+            print('mean reprojection errors:')
             cam_ids = reproj_error.keys()
             cam_ids.sort()
             for cam_id in cam_ids:
                 errors = reproj_error[cam_id]
                 mean_error = numpy.mean(errors)
                 worst_frame,worst_error,worst_obj_id = max_reproj_error[cam_id]
-                print ' %s: %.1f (worst: frame %d, obj_id %d, error %.1f)'%(
-                    cam_id, mean_error, worst_frame, worst_obj_id, worst_error)
-            print
+                print(' %s: %.1f (worst: frame %d, obj_id %d, error %.1f)'%(
+                    cam_id, mean_error, worst_frame, worst_obj_id, worst_error))
+            print()
 
         for kalman_smoothing in [True,False]:
             if use_kalman_smoothing==False and kalman_smoothing==True:
                 continue
-            print 'loading frame numbers for kalman objects (estimates)'
+            print('loading frame numbers for kalman objects (estimates)')
             kalman_rows = []
             for obj_id in use_obj_ids:
                 try:
@@ -428,7 +428,7 @@ def doit(
 
             obj_ids = kalman_rows['obj_id']
             use_obj_ids = numpy.unique( obj_ids )
-            print 'plotting %d Kalman objects'%(len(use_obj_ids),)
+            print('plotting %d Kalman objects'%(len(use_obj_ids),))
             for obj_id in use_obj_ids:
                 cond = obj_ids == obj_id
                 x = kalman_rows['x'][cond]
@@ -448,7 +448,7 @@ def doit(
 
                 for cam_id in cam_ids:
                     if cam_id not in R.get_cam_ids():
-                        print 'no calibration for %s: not showing 3D projections'%(cam_id,)
+                        print('no calibration for %s: not showing 3D projections'%(cam_id,))
                         continue
                     ax = ax_by_cam[cam_id]
                     x2d = R.find2d(cam_id,X,distorted=True)
@@ -571,7 +571,7 @@ def doit(
             fig.canvas.mpl_connect('pick_event', onpick_callback)
             pylab.show()
     else:
-        print 'No filename(s) with data given -- nothing to do!'
+        print('No filename(s) with data given -- nothing to do!')
 
 def main():
     usage = '%prog [options] FILE1 [FILE2] ...'
