@@ -1,3 +1,4 @@
+from __future__ import print_function
 import flydra_core.data_descriptions as data_descriptions
 import collections
 
@@ -75,7 +76,7 @@ class Tracker:
         results = [ tro.get_distance_and_nsigma(X) for tro in self.live_tracked_objects]
         for (dist_meters, dist_nsigma) in results:
             if debug>5:
-                print 'distance in meters, nsigma:',dist_meters, dist_nsigma
+                print('distance in meters, nsigma:',dist_meters, dist_nsigma)
             if ((dist_nsigma < min_dist_to_believe_new_nsigma) or
                 (dist_meters < min_dist_to_believe_new_meters)):
                 believably_new = False
@@ -110,7 +111,7 @@ class Tracker:
         # want.
 
         if debug2>1:
-            print self,'gobbling all data for frame %d'%(frame,)
+            print(self,'gobbling all data for frame %d'%(frame,))
 
         all_to_gobble= []
         best_by_hash = {}
