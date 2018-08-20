@@ -253,15 +253,15 @@ def line_from_points(p,q):
     >>> p1 = ThreeTuple((2,3,7))
     >>> p2 = ThreeTuple((2,1,0))
     >>> L = line_from_points(p1,p2)
-    >>> print L
+    >>> print(L)
     PlueckerLine(ThreeTuple((0,2,7)),ThreeTuple((-7,14,-4)))
 
     >>> q1 = ThreeTuple((0,2,7))
     >>> q2 = ThreeTuple((0,2,0))
     >>> L2 = line_from_points(q1,q2)
-    >>> print L2.dist2()
+    >>> print(L2.dist2())
     4
-    >>> print L2.closest()
+    >>> print(L2.closest())
     ThreeTuple((0,2,0))
     """
 
@@ -285,15 +285,15 @@ class LineSegment:
     >>> seg = LineSegment(ThreeTuple((0,0,0)),ThreeTuple((0,0,10)))
 
     >>> point = ThreeTuple((1,0,5))
-    >>> print seg.get_distance_from_point(point)
+    >>> print(seg.get_distance_from_point(point))
     1.0
 
     >>> point = ThreeTuple((0,0,-1))
-    >>> print seg.get_distance_from_point(point)
+    >>> print(seg.get_distance_from_point(point))
     1.0
 
     >>> point = ThreeTuple((2,0,0))
-    >>> print seg.get_distance_from_point(point)
+    >>> print(seg.get_distance_from_point(point))
     2.0
 
     """
