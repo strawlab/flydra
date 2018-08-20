@@ -440,11 +440,46 @@ def read_textlog_header(results,fail_on_error=True):
                         parsed['flydra_version'] = test_version
     return parsed
 
+def calc_fps_from_data(results):
+    row0 = None
+    idx = 0
+    while 1:
+        row = results.root.data2d_distorted.read_coordinates([idx])
+        idx += 1
+        if not np.isnan(row['timestamp']):
+            row0 = row
+            break
+
+    row1 = None
+    idx = -1
+    while 1:
+        row = results.root.data2d_distorted.read_coordinates([idx])
+        idx -= 1
+        if not np.isnan(row['timestamp']):
+            row1 = row
+            break
+
+    frame0 = row0['frame'][0]
+    frame1 = row1['frame'][0]
+    t0 = row0['timestamp'][0]
+    t1 = row1['timestamp'][0]
+
+    time_range = t1-t0
+    frame_range = frame1-frame0
+    fps = frame_range/time_range
+
+    return fps
+
 def get_fps(results,fail_on_error=True):
     parsed = read_textlog_header(results,fail_on_error=fail_on_error)
     if parsed is None and not fail_on_error:
         return None
     result = float(parsed['fps'])
+
+    if np.isnan(result):
+        # calculate fps from data in case correct fps was not saved
+        result = calc_fps_from_data(results)
+
     if fail_on_error and np.isnan(result):
         raise ValueError('nan is not a valid frames per second value')
     return result
