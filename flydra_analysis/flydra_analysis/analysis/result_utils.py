@@ -444,7 +444,10 @@ def get_fps(results,fail_on_error=True):
     parsed = read_textlog_header(results,fail_on_error=fail_on_error)
     if parsed is None and not fail_on_error:
         return None
-    return float(parsed['fps'])
+    result = float(parsed['fps'])
+    if fail_on_error and np.isnan(result):
+        raise ValueError('nan is not a valid frames per second value')
+    return result
 
 def get_tzname0(results,default=DEFAULT_TZ):
     parsed = read_textlog_header(results,fail_on_error=True)
