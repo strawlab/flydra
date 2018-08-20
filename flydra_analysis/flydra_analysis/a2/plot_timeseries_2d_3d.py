@@ -428,9 +428,11 @@ def doit(
 
             obj_ids = kalman_rows['obj_id']
             use_obj_ids = numpy.unique( obj_ids )
+            non_nan_rows = ~np.isnan(kalman_rows['x'])
             print('plotting %d Kalman objects'%(len(use_obj_ids),))
             for obj_id in use_obj_ids:
                 cond = obj_ids == obj_id
+                cond &= non_nan_rows
                 x = kalman_rows['x'][cond]
                 y = kalman_rows['y'][cond]
                 z = kalman_rows['z'][cond]
