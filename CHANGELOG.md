@@ -1,5 +1,16 @@
 # flydra change log
 
+## unreleased
+
+### Changed
+
+* Calculate framerate from data when not explicity specified in saved metadata.
+* Work towards Python 3 compatibility
+
+### Fixed
+
+* Better handling of nan values in data.
+
 ## [0.7.4] - 2018-05-29
 
 ### Added
