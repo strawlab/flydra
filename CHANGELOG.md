@@ -1,6 +1,6 @@
 # flydra change log
 
-## unreleased
+## [0.7.6] - 2018-08-21
 
 ### Fixed
 
@@ -78,6 +78,7 @@
 * Do not quit mainbrain if a previously seen camera re-joins after suddenly
   quitting.
 
+[0.7.6]: https://github.com/strawlab/flydra/compare/release/0.7.5...release/0.7.6
 [0.7.5]: https://github.com/strawlab/flydra/compare/release/0.7.4...release/0.7.5
 [0.7.4]: https://github.com/strawlab/flydra/compare/release/0.7.3...release/0.7.4
 [0.7.3]: https://github.com/strawlab/flydra/compare/release/0.7.2...release/0.7.3
