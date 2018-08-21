@@ -440,13 +440,13 @@ def read_textlog_header(results,fail_on_error=True):
                         parsed['flydra_version'] = test_version
     return parsed
 
-def calc_fps_from_data(results):
+def calc_fps_from_data(results, field_name):
     row0 = None
     idx = 0
     while 1:
         row = results.root.data2d_distorted.read_coordinates([idx])
         idx += 1
-        if not np.isnan(row['timestamp']):
+        if not np.isnan(row[field_name]):
             row0 = row
             break
 
@@ -455,14 +455,14 @@ def calc_fps_from_data(results):
     while 1:
         row = results.root.data2d_distorted.read_coordinates([idx])
         idx -= 1
-        if not np.isnan(row['timestamp']):
+        if not np.isnan(row[field_name]):
             row1 = row
             break
 
     frame0 = row0['frame'][0]
     frame1 = row1['frame'][0]
-    t0 = row0['timestamp'][0]
-    t1 = row1['timestamp'][0]
+    t0 = row0[field_name][0]
+    t1 = row1[field_name][0]
 
     time_range = t1-t0
     frame_range = frame1-frame0
@@ -478,7 +478,14 @@ def get_fps(results,fail_on_error=True):
 
     if np.isnan(result):
         # calculate fps from data in case correct fps was not saved
-        result = calc_fps_from_data(results)
+        d2d = results.root.data2d_distorted[:10000]
+        nnz = np.sum(~np.isnan(d2d['timestamp']))
+        if nnz > 10:
+            # prefer 'timestamp' field, which can be nan if time model was not present
+            result = calc_fps_from_data(results, field_name='timestamp')
+        else:
+            # else use 'cam_received_timestamp', which is always present
+            result = calc_fps_from_data(results, field_name='cam_received_timestamp')
 
     if fail_on_error and np.isnan(result):
         raise ValueError('nan is not a valid frames per second value')

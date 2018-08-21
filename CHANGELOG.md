@@ -1,5 +1,11 @@
 # flydra change log
 
+## unreleased
+
+### Fixed
+
+* calculate fps even when 'timestamp' column is nan
+
 ## [0.7.5] - 2018-08-20
 
 ### Changed
