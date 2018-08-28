@@ -1,6 +1,5 @@
 import numpy as np
 import time, warnings
-import scipy.weave
 
 #import pyximport; pyximport.install() # requires recent Cython
 import fastfinder_help
@@ -69,38 +68,6 @@ class FastFinder(object):
             self.values.astype(np.float),
             np.asanyarray(testvals).astype(np.float),
             missing_ok=missing_ok)
-
-    def get_idx_of_equal_weave(self,testvals):
-        haystack = self.values
-        needles = np.asanyarray(testvals)
-        found = np.empty( needles.shape, dtype=np.int )
-        if needles.ndim!=1:
-            raise NotImplementedError('only 1D testvals currently supported')
-        # TODO: speedup with binary search on pre-sorted values
-        code = r"""
-        int needle_found;
-        int i,j;
-        int nn=Nneedles[0];
-        int nh=Nhaystack[0];
-        for (i=0; i<nn; i++) {
-            needle_found = 0;
-            for (j=0; j<nh; j++) {
-                if (HAYSTACK1(j)==NEEDLES1(i)) {
-                    needle_found = 1;
-                    break;
-                 }
-            }
-            if (needle_found) {
-                FOUND1(i) = j;
-            } else {
-                FOUND1(i) = -1;
-            }
-        }
-        """
-        scipy.weave.inline(code,['needles','haystack','found'])
-        if np.any(found==-1):
-            raise ValueError('some of your needles were not found')
-        return found
 
     def get_idx_of_equal_slow(self,testvals):
         """performs fast search for vector
