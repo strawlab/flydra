@@ -3,6 +3,8 @@ Flydra Camera Calibration Workflow
 
 Calibrate from top-to-bottom:
 
+Note that you must have your ROS environment variables set before the commands like "roslaunch" will work. Therefore, you may need to type `source ~/ros/freemovr-kinetic/devel/setup.bash`.
+
 ### Step 0: turn on cameras and get viewers running
 
 Do this:
@@ -23,7 +25,7 @@ Try to a luminance distribution which extends all the way from 0 to 255 with ver
 distributions using the same lighting conditions that will be in use during experiments (i.e. while the room lights
 are off). Write the chosen gain values in `flydra.yaml`.
 
-### Step 2: remove the distortion errors of the cameras
+### Step 2: run the ROS camera calibrator to calibrate the camera distortions
 
 Run this (change camera name accordingly):
     rosrun camera_calibration cameracalibrator.py --size 6x8 --square=0.029  image:=/Basler_21020232/image_raw camera:=Basler_21020232
@@ -38,6 +40,7 @@ Keep the `flycube_only_flydra.launch` file running in the first tab.
 
 `rosrun image_view image_view image:=/Basler_xxx/image_rect_color` in a third tab to launch the viewer node.
 
+Repeat this for all cameras before proceeding to the next step.
 
 ### Step 3: calibrate flydra
 
