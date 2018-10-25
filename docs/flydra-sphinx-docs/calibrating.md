@@ -25,12 +25,14 @@ Try to a luminance distribution which extends all the way from 0 to 255 with ver
 distributions using the same lighting conditions that will be in use during experiments (i.e. while the room lights
 are off). Write the chosen gain values in `flydra.yaml`.
 
-### Step 2: run the ROS camera calibrator to calibrate the camera distortions
+### Step 2: run the ROS camera calibrator to calibrate the camera intrinsic parameters
 
 Run this (change camera name accordingly):
     rosrun camera_calibration cameracalibrator.py --size 6x8 --square=0.029  image:=/Basler_21020232/image_raw camera:=Basler_21020232
 
 Show a checkerboard to the camera (the checkerboard parameters are hardcoded into the operator-console as a 8x6 checkerboard with 29 mm squares). Try to show the checkerboard at different distances and angles to increase the four gauges to almost the maximum. Do not forget to show the checkerboard corners in the corners of the camera field of view. Once the four gauges are filled, click "calibrate", then wait. Then click on "save", wait a bit, and finally click on "commit".
+
+The results of this intrinsic parameter calibration are saved in `~/.ros/camera_info/<camera_name>.yaml`. So, this would be `~/.ros/camera_info/Basler_21020232.yaml` for the example here.
 
 Verify the removal of distortion errors like this:
 
