@@ -842,7 +842,7 @@ def doit(output_h5_filename=None,
                     output_h5.create_table(h5group,
                                           'obj%d'%obj_id,
                                           save_recarray,
-                                          filters=tables.Filters(1, complib='lzo'))
+                                          filters=tables.Filters(1, complib='zlib'))
 
                     if options.show:
                         all_xhats = np.array( all_xhats )

@@ -1064,7 +1064,7 @@ class PreSmoothedDataCache(object):
 
             if h5table is None:
                 if 1:
-                    filters = tables.Filters(1, complib='lzo') # compress
+                    filters = tables.Filters(1, complib='zlib') # compress
                 else:
                     filters = tables.Filters(0)
 

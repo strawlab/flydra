@@ -185,7 +185,7 @@ class KalmanSaver:
         kalman_estimates_description = (
             self.kalman_saver_info_instance.get_description())
 
-        filters = tables.Filters(1, complib='lzo') # compress
+        filters = tables.Filters(1, complib='zlib') # compress
 
         self.h5file = h5file
         reconstructor.save_to_h5file(self.h5file)
