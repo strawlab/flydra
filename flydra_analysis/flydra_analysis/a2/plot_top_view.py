@@ -163,7 +163,14 @@ def plot_top_and_side_views(subplot=None,
         walking_start_stops = []
 
     if dynamic_model is None:
-        dynamic_model = extra['dynamic_model_name']
+        dynamic_model = extra.get('dynamic_model_name',None)
+
+    if dynamic_model is None:
+        if use_kalman_smoothing:
+            warnings.warn("no kalman smoothing will be performed because no "
+                "dynamic model specified or found.")
+            use_kalman_smoothing = False
+    else:
         print 'detected file loaded with dynamic model "%s"'%dynamic_model
         if use_kalman_smoothing:
             if dynamic_model.startswith('EKF '):
