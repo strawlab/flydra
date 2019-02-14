@@ -1,5 +1,17 @@
 # flydra change log
 
+## [0.7.7] - 2019-02-14
+
+### Fixed
+
+* plot_top_view.py works even when no dynamic model specified
+
+### Changed
+
+* Update documentation and force to known working version of Sphinx
+* Use zlib (not lzo) for compression of .hdf5 files so they can be opened
+  in a wider range of downstream software.
+
 ## [0.7.6] - 2018-08-21
 
 ### Fixed
