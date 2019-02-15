@@ -48,7 +48,6 @@ def save_as_flydra_hdf5(newfilename, data, tzname, fps, smoothed_source=None,
     assert smoothed_source is not None
     assert smoothed_data_filename is not None
     assert raw_data_filename is not None
-    assert dynamic_model_name is not None
     assert smoothing_flydra_version is not None
     assert recording_flydra_version is not None
 
@@ -82,8 +81,9 @@ def save_as_flydra_hdf5(newfilename, data, tzname, fps, smoothed_source=None,
                 dset.attrs['raw_data_filename'] = raw_data_filename
                 assert dset.attrs['raw_data_filename'] == raw_data_filename
 
-                dset.attrs['dynamic_model_name'] = dynamic_model_name
-                assert dset.attrs['dynamic_model_name'] == dynamic_model_name
+                if dynamic_model_name is not None:
+                    dset.attrs['dynamic_model_name'] = dynamic_model_name
+                    assert dset.attrs['dynamic_model_name'] == dynamic_model_name
 
                 dset.attrs['smoothing_flydra_version'] = smoothing_flydra_version
                 assert dset.attrs['smoothing_flydra_version'] == smoothing_flydra_version
