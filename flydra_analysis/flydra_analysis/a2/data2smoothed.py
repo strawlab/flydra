@@ -256,7 +256,7 @@ def convert(infilename,
                 warnings.warn('linear algebra error smoothing obj_id %d, skipping.'%(obj_id,))
                 continue
             except core_analysis.CouldNotCalculateOrientationError:
-                warnings.warn('algebra error smoothing obj_id %d, skipping.'%(obj_id,))
+                warnings.warn('orientation error smoothing obj_id %d, skipping.'%(obj_id,))
                 continue
 
             allrows.append(rows)
