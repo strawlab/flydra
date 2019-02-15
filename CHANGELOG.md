@@ -1,5 +1,11 @@
 # flydra change log
 
+## [0.7.9] - 2019-02-15
+
+### Fixed
+
+* flydra_core debian package depends on python-tables
+
 ## [0.7.8] - 2019-02-15
 
 ### Fixed
