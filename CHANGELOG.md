@@ -1,5 +1,11 @@
 # flydra change log
 
+## [0.7.8] - 2019-02-15
+
+### Fixed
+
+* save_as_flydra_hdf5 does not fail when dynamic_model_name not set
+
 ## [0.7.7] - 2019-02-14
 
 ### Fixed
