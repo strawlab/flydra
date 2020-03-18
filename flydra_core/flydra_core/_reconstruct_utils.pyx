@@ -29,7 +29,7 @@ cdef extern from "math.h":
 
 def make_ReconstructHelper_from_rad_file(filename):
     params = {}
-    execfile(filename,params)
+    exec(open(filename).read(),params)
     if params['K12'] != 0:
         raise NotImplementedError('need to properly roundtrip alpha_c != 0')
     helper = ReconstructHelper(
