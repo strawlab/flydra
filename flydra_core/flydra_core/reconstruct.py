@@ -18,7 +18,13 @@ import flydra_core.geom as slowgeom
 import flydra_core.water as water
 import flydra_core.align
 import xml.etree.ElementTree as ET
-import StringIO, warnings
+import sys
+import six
+
+if sys.version_info.major == 3:
+    import functools
+
+import warnings
 import cgtypes # ubuntu: python-cgkit1 or "pip install cgkit1"
 from optparse import OptionParser
 
@@ -248,7 +254,7 @@ def setOfSubsets(L):
     """
     N = len(L)
     return [ [ L[i] for i in range(N)
-                if X & (1L<<i) ]
+                if X & (1<<i) ]
         for X in range(2**N) ]
 
 intrinsic_normalized_eps = 1e-6
@@ -282,7 +288,7 @@ def intersect_planes_to_find_line(P):
                     -(planeP[3]*planeQ[0]) + planeP[0]*planeQ[3],
                     -(planeP[2]*planeQ[0]) + planeP[0]*planeQ[2],
                     -(planeP[1]*planeQ[0]) + planeP[0]*planeQ[1] )
-    except Exception, exc:
+    except(Exception, exc):
         print('WARNING svd exception:',str(exc))
         Lcoords = None
     except:
@@ -787,7 +793,7 @@ class SingleCameraCalibration:
         cam_id.text = self.cam_id
 
         pmat = ET.SubElement(elem, "calibration_matrix")
-        fd = StringIO.StringIO()
+        fd = six.StringIO()
         save_ascii_matrix(self.Pmat,fd)
         mystr = fd.getvalue()
         mystr = mystr.strip()
@@ -998,7 +1004,7 @@ class Reconstructor:
                  ):
         self.cal_source = cal_source
 
-        if isinstance(self.cal_source,str) or isinstance(self.cal_source,unicode):
+        if isinstance(self.cal_source, six.string_types):
             if not self.cal_source.endswith('h5'):
                 if os.path.isdir(self.cal_source):
                     self.cal_source_type = 'normal files'
@@ -1205,7 +1211,11 @@ class Reconstructor:
             else:
                 return 0
         # order camera combinations from most cameras to least
-        self.cam_combinations.sort(cmpfunc)
+        if sys.version_info.major == 3:
+            self.cam_combinations.sort(key=functools.cmp_to_key(cmpfunc))
+        else:
+            # python2
+            self.cam_combinations.sort(cmpfunc)
         self.cam_combinations_by_size = {}
         for cc in self.cam_combinations:
             self.cam_combinations_by_size.setdefault(len(cc),[]).append(cc)
