@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import print_function
 import tables.flavor
 tables.flavor.restrict_flavors(keep=['numpy'])
 
@@ -103,7 +104,7 @@ def do_it(filename,
 
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5_2d_data)
 
-    cam_ids = cam_id2camns.keys()
+    cam_ids = list(cam_id2camns.keys())
     cam_ids.sort()
 
     data2d = h5_2d_data.root.data2d_distorted
@@ -123,8 +124,8 @@ def do_it(filename,
     if use_kalman_data:
         row_keys = []
         if start is not None or stop is not None:
-            print 'start, stop',start, stop
-            print 'WARNING: currently ignoring start/stop because Kalman data is being used'
+            print('start, stop',start, stop)
+            print('WARNING: currently ignoring start/stop because Kalman data is being used')
         for obj_id_enum, obj_id in enumerate(use_obj_ids):
             row_keys.append( ( len(points), obj_id ) )
 #            print 'obj_id %d (%d of %d)'%(obj_id, obj_id_enum+1, len(use_obj_ids))
@@ -147,7 +148,7 @@ def do_it(filename,
                 pbar.update(n_kframe)
                 if 0:
                     k_use_idx = k_use_idxs[n_kframe*use_nth_observation]
-                    print kobs.read_coordinates( numpy.array([k_use_idx]))
+                    print(kobs.read_coordinates( numpy.array([k_use_idx])))
                 if PT.__version__ <= '1.3.3':
                     obs_2d_idx_find = int(obs_2d_idx)
                     kframe_find = int(kframe)
@@ -231,20 +232,20 @@ def do_it(filename,
             IdMat_row, points_row = create_new_row( d2d, this_camns, this_camn_idxs, cam_ids, camn2cam_id, npoints_by_cam_id )
             IdMat.append( IdMat_row )
             points.append( points_row )
-    print '%d points'%len(IdMat)
+    print('%d points'%len(IdMat))
 
-    print 'by camera id:'
+    print('by camera id:')
     for cam_id in cam_ids:
-        print ' %s: %d'%(cam_id, npoints_by_cam_id[cam_id])
-    print 'by n points:'
+        print(' %s: %d'%(cam_id, npoints_by_cam_id[cam_id]))
+    print('by n points:')
     max_npoints = 0
     for ncams in npoints_by_ncams:
-        print ' %d: %d'%(ncams, npoints_by_ncams[ncams])
+        print(' %d: %d'%(ncams, npoints_by_ncams[ncams]))
         max_npoints = max(max_npoints, npoints_by_ncams[ncams])
-    print
+    print()
 
     if max_npoints < 10:
-        print >> sys.stderr, 'not enough points, aborting'
+        print('not enough points, aborting',file=sys.stderr)
         results.close()
         h5_2d_data.close()
         sys.exit(1)
@@ -310,12 +311,12 @@ def do_it(filename,
 
     if options.run_mcsc:
         caldir = mcsc.execute(silent=False)
-        print "\nfinished: result in ",caldir
+        print("\nfinished: result in ",caldir)
         if options.output_xml:
             fname = os.path.join(caldir, "reconstructor.xml")
             recon = flydra_core.reconstruct.Reconstructor(cal_source=caldir)
             recon.save_to_xml_filename(fname)
-            print "\nfinished: new reconstructor in", fname
+            print("\nfinished: new reconstructor in", fname)
 
 def main():
     usage = '%prog FILE EFILE [options]'
@@ -403,7 +404,7 @@ To ignore 3D trajectories and simply use all data::
     (options, args) = parser.parse_args()
 
     if len(args)>2:
-        print >> sys.stderr,  "arguments interpreted as FILE and EFILE supplied more than once"
+        print("arguments interpreted as FILE and EFILE supplied more than once", file=sys.stderr)
         parser.print_help()
         return
 

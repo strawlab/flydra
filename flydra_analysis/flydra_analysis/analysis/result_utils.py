@@ -1,3 +1,4 @@
+from __future__ import print_function
 import tables as PT
 
 # pytables files stored using Numeric would by default return Numeric-based results.
@@ -30,7 +31,7 @@ def md5sum_headtail(filename):
 
     try:
         fd.seek(-1000,os.SEEK_END)
-    except IOError,err:
+    except IOError as err:
         # it's OK, we'll just read up to another 1000 bytes
         pass
 
@@ -41,7 +42,7 @@ def md5sum_headtail(filename):
     return m.hexdigest()
 
 def status(status_string):
-    print " status:",status_string
+    print(" status:",status_string)
     sys.stdout.flush()
 
 def get_camn(results, cam, remote_timestamp=None, frame=None):
@@ -125,9 +126,9 @@ def get_camn_and_remote_timestamp(results, cam, frame):
                 found = True
                 break
     except TypeError:
-        print 'frame',frame
-        print 'repr(frame)',repr(frame)
-        print 'type(frame)',type(frame)
+        print('frame',frame)
+        print('repr(frame)',repr(frame))
+        print('type(frame)',type(frame))
         raise
     if not found:
         raise ValueError("No data found for cam and frame")
@@ -151,6 +152,8 @@ def get_caminfo_dicts(results):
     for row in cam_info:
         cam_id, camn = row['cam_id'], row['camn']
         cam_id = cam_id.strip() # workaround pytables 1.3 save bug
+        if sys.version_info.major >= 3:
+            cam_id = cam_id.decode("utf-8")
         cam_id2camns.setdefault(cam_id,[]).append(camn)
         camn2cam_id[camn]=cam_id
     return camn2cam_id, cam_id2camns
@@ -160,16 +163,16 @@ def get_results(filename,mode='r+',create_camera_summary=False):
     if hasattr(h5file.root,'data3d_best'):
         frame_col = h5file.root.data3d_best.cols.frame
         if frame_col.index is None:
-            print 'creating index on data3d_best.cols.frame ...'
+            print('creating index on data3d_best.cols.frame ...')
             frame_col.create_index()
-            print 'done'
+            print('done')
 
     if False and hasattr(h5file.root,'data2d'):
         frame_col = h5file.root.data2d.cols.frame
         if frame_col.index is None:
-            print 'creating index on data2d.cols.frame ...'
+            print('creating index on data2d.cols.frame ...')
             frame_col.create_index()
-            print 'done'
+            print('done')
 
 ##        timestamp_col = h5file.root.data2d.cols.timestamp
 ##        if timestamp_col.index is None:
@@ -188,9 +191,9 @@ def get_results(filename,mode='r+',create_camera_summary=False):
     if create_camera_summary and not hasattr(h5file.root,'data2d_camera_summary'):
         if not hasattr(h5file.root,'data2d_distorted'):
             raise ValueError('need data2d_distorted to make camera summary')
-        print 'creating data2d camera summary ...'
+        print('creating data2d camera summary ...')
         create_data2d_camera_summary(h5file)
-        print 'done'
+        print('done')
     return h5file
 
 def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=False):
@@ -240,7 +243,7 @@ def get_f_xyz_L_err( results, max_err = 10, typ = 'best', include_timestamps=Fal
     else:
         frame_col = data3d.cols.frame
         if not len(frame_col):
-            print 'no 3D data'
+            print('no 3D data')
             return
         f = np.array(frame_col)
         timestamps = np.array(timestamps)
@@ -310,7 +313,7 @@ def create_data2d_camera_summary(results):
                                  Data2DCameraSummary, 'data2d camera summary' )
     for camn in camn2cam_id:
         cam_id = camn2cam_id[camn]
-        print 'creating 2d camera index for camn %d, cam_id %s'%(camn,cam_id)
+        print('creating 2d camera index for camn %d, cam_id %s'%(camn,cam_id))
 
         first_row = True
         this_camn = camn
@@ -352,8 +355,8 @@ def model_remote_to_local(remote_timestamps, local_timestamps, debug=False):
     b = local_timestamps[:,np.newaxis]
     x,resids,rank,s = np.linalg.lstsq(A,b)
     if debug:
-        print 'in model_remote_to_local: N=%d, resids=%s'%(
-            len(remote_timestamps),resids)
+        print('in model_remote_to_local: N=%d, resids=%s'%(
+            len(remote_timestamps),resids))
     gain = x[0,0]
     offset = x[1,0]
     return gain,offset
@@ -373,7 +376,7 @@ def frame2timestamp_command():
     assert len(sys.argv)==3
     results = tables.open_file(h5_filename,mode='r')
     model = get_time_model_from_data(results)
-    print repr(model.framestamp2timestamp(frame))
+    print(repr(model.framestamp2timestamp(frame)))
     results.close()
 
 def timestamp2frame_command():
@@ -382,7 +385,7 @@ def timestamp2frame_command():
     assert len(sys.argv)==3
     results = tables.open_file(h5_filename,mode='r')
     model = get_time_model_from_data(results)
-    print repr(model.timestamp2framestamp(timestamp))
+    print(repr(model.timestamp2framestamp(timestamp)))
     results.close()
 
 class NoTimestampDataError(Exception):
@@ -394,7 +397,7 @@ class TextlogParseError(Exception):
 def read_textlog_header(results,fail_on_error=True):
     try:
         textlog1 = results.root.textlog.read_coordinates([0])
-    except PT.exceptions.NoSuchNodeError, err:
+    except PT.exceptions.NoSuchNodeError as err:
         if fail_on_error:
             raise
         else:
@@ -514,7 +517,7 @@ def get_time_model_from_data(results,debug=False,full_output=False):
         return None
 
     if debug:
-        print 'I found the timer max ("top") to be %d.'%timer_max
+        print('I found the timer max ("top") to be %d.'%timer_max)
         FOSC = 8000000 # 8 MHz
         CS_all = [1,8,64,256,1024]
         CS_known=False
@@ -528,9 +531,9 @@ def get_time_model_from_data(results,debug=False,full_output=False):
             carrier_duration = timer_max*clock_tick_duration
             carrier_freq = 1.0/carrier_duration
             if CS_known:
-                print '  (%.1f Hz, CS=%s)'%(float(carrier_freq),CS)
+                print('  (%.1f Hz, CS=%s)'%(float(carrier_freq),CS))
             else:
-                print '  (%.1f Hz if CS=%s)'%(float(carrier_freq),CS)
+                print('  (%.1f Hz if CS=%s)'%(float(carrier_freq),CS))
 
     # open the log of at90usb clock info
 
@@ -546,8 +549,8 @@ def get_time_model_from_data(results,debug=False,full_output=False):
 
     meas_err = (-tbl['start_timestamp'] + tbl['stop_timestamp'])
     if debug:
-        print 'meas_err.max() msec',meas_err.max()*1e3
-        print 'meas_err.min() msec',meas_err.min()*1e3
+        print('meas_err.max() msec',meas_err.max()*1e3)
+        print('meas_err.min() msec',meas_err.min()*1e3)
 
     #cond = meas_err < 3e-3 # take data with only small measurement errors
     cond = meas_err >-1e100 # take all data (expect measurement errors to be positive)
@@ -575,8 +578,8 @@ def get_time_model_from_data(results,debug=False,full_output=False):
     fps_saved = get_fps(results,fail_on_error=False)
     if fps_saved is not None:
         if debug:
-            print 'fps_estimated,fps_saved',fps_estimated,fps_saved
-            print 'fps estimated from time model agrees with fps saved'
+            print('fps_estimated,fps_saved',fps_estimated,fps_saved)
+            print('fps estimated from time model agrees with fps saved')
         if not np.allclose(fps_estimated,fps_saved,rtol=1e-3):
             warnings.warn('fps estimated and saved are different: %s vs %s'%(
                 fps_estimated, fps_saved))
@@ -653,16 +656,16 @@ def make_exact_movie_info2(results,movie_dir=None):
     for row in movie_info:
         cam_id = row['cam_id']
         filename = row['filename']
-        print 'filename1:',filename
+        print('filename1:',filename)
         if movie_dir is None:
             computer_name = cam_id.split('_')[0]
             filename = filename.replace('~/','~/%s/'%computer_name)
         else:
             filename = os.path.join(movie_dir,os.path.split(filename)[-1])
 
-        print 'filename2:',filename
+        print('filename2:',filename)
         filename = os.path.expanduser(filename)
-        print 'filename3:',filename
+        print('filename3:',filename)
         import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
         frame_server = FlyMovieFormat.FlyMovie(filename,check_integrity=True)
         status(' for %s %s:'%(cam_id,filename))
@@ -756,4 +759,4 @@ def do_json_progress(percent):
     class PrettyFloat(float):
         def __repr__(self):
             return '%.1f' % self
-    print json.dumps({'progress':{'percent':PrettyFloat(percent)}})
+    print(json.dumps({'progress':{'percent':PrettyFloat(percent)}}))
