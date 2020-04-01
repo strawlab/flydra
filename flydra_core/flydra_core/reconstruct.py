@@ -1126,7 +1126,7 @@ class Reconstructor:
 ##                        assert numpy.allclose(pmat2cam_center(pmat_orig),pmat2cam_center(pmat))
 ##                        #print('normalized pmat, but camera center should  changed for %s'%cam_id)
                 self.Pmat[cam_id] = pmat
-                self.Res[cam_id] = map(int,res_fd.readline().split())
+                self.Res[cam_id] = list(map(int,res_fd.readline().split()))
             res_fd.close()
 
             # load non linear parameters
