@@ -31,14 +31,14 @@ class Log:
                     if not x.endswith('\n'):
                         _file.write('\n')
                     break
-                except IOError, err:
+                except IOError as err:
                     if err.args[0] == errno.EINTR: # interrupted system call
                         continue
         while 1:
             try:
                 _file.flush()
                 break
-            except IOError, err:
+            except IOError as err:
                 if err.args[0] == errno.EINTR:
                     continue
 

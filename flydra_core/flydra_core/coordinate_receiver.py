@@ -134,7 +134,7 @@ class CoordinateProcessor(threading.Thread):
                                                     port=0)
         self.listen_socket = flydra_socket.FlydraTransportReceiver(addrinfo,socket_timeout_seconds=0.5)
         self.listen_address = self.listen_socket.get_listen_addrinfo().to_dict()
-        if self.listen_address.has_key('host') and self.listen_address['host']=='0.0.0.0':
+        if 'host' in self.listen_address and self.listen_address['host']=='0.0.0.0':
             self.listen_address['host']= flydra_core.rosutils.get_node_hostname( rospy.get_name() )
         LOG.info("coordinate receiver listening at %r"%self.listen_address)
 

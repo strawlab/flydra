@@ -288,7 +288,7 @@ def intersect_planes_to_find_line(P):
                     -(planeP[3]*planeQ[0]) + planeP[0]*planeQ[3],
                     -(planeP[2]*planeQ[0]) + planeP[0]*planeQ[2],
                     -(planeP[1]*planeQ[0]) + planeP[0]*planeQ[1] )
-    except(Exception, exc):
+    except Exception as exc:
         print('WARNING svd exception:',str(exc))
         Lcoords = None
     except:
