@@ -4,10 +4,6 @@ from Cython.Build import cythonize
 import os
 import sys
 
-import flydra_core.version
-
-version = flydra_core.version.__version__
-
 import numpy as np
 
 INSTALL_REQUIRES = [
@@ -76,7 +72,7 @@ ext_modules.append(
 
 setup(
     name="flydra_core",
-    version=version,
+    version="0.7.9",  # keep in sync with flydra_core/version.py
     author="Andrew Straw",
     author_email="strawman@astraw.com",
     description="flydra mainbrain and core lib",
