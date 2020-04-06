@@ -10,6 +10,18 @@ version = flydra_core.version.__version__
 
 import numpy as np
 
+INSTALL_REQUIRES = [
+    # these are Depends in stdeb.cfg. (The Build-Depends must be already installed.)
+    "numpy",
+    "scipy",
+    "cgkit1",
+    "pymvg",
+    "adskalman",
+    "tzlocal",
+    "tables",
+    "six",
+]
+
 ext_modules = []
 
 ext_modules.append(
@@ -80,4 +92,5 @@ setup(
         ],
     },
     package_data={"flydra_core": ["flydra_server_art.png", "sample_calibration/*",],},
+    install_requires=INSTALL_REQUIRES,
 )
