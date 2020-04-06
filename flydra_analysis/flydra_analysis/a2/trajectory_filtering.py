@@ -1,5 +1,7 @@
+from __future__ import print_function
+from __future__ import absolute_import
 import warnings
-import xml_stimulus, utils # flydra.a2 modules
+from . import xml_stimulus, utils # flydra.a2 modules
 import numpy as np
 
 DEBUG=0
@@ -29,34 +31,34 @@ def iterate_over_subtrajectories(style='not on walls',
         warnings.warn('ignoring stimulus file, using sample_stim_cubic_arena')
         good_cond = np.ones( (len(data),), dtype=np.bool)
         if 0:
-            print
-            print 'obj %d'%data['obj_id'][0]
-            print 'all'
+            print()
+            print('obj %d'%data['obj_id'][0])
+            print('all')
             good_idx = np.nonzero(good_cond)[0]
             for start,stop in utils.get_contig_chunk_idxs(good_idx):
-                print start,stop
+                print(start,stop)
         good_cond &= ((-0.5 + dist) < data['x']) & (data['x'] < (0.5-dist))
         if 0:
-            print 'x'
+            print('x')
             good_idx = np.nonzero(good_cond)[0]
             for start,stop in utils.get_contig_chunk_idxs(good_idx):
-                print start,stop
+                print(start,stop)
         good_cond &= ((-0.15 + dist) < data['y']) & (data['y'] < (0.15-dist))
         if 0:
             ## print data['y'][30:40]
             ## print range(30,40)
             ## print good_cond[30:40]
-            print 'y'
+            print('y')
             good_idx = np.nonzero(good_cond)[0]
             ## print good_idx[:40]
             for start,stop in utils.get_contig_chunk_idxs(good_idx):
-                print start,stop
+                print(start,stop)
         good_cond &= ((0 + dist) < data['z']) & (data['z'] < (0.3-dist))
         if 0:
-            print 'z'
+            print('z')
             good_idx = np.nonzero(good_cond)[0]
             for start,stop in utils.get_contig_chunk_idxs(good_idx):
-                print start,stop
+                print(start,stop)
     else:
         1/0 # not implemented
     good_idx = np.nonzero(good_cond)[0]
@@ -67,14 +69,14 @@ def iterate_over_subtrajectories(style='not on walls',
         ax2.plot(data['x'],data['z'],'r.' )
     sub_data = None
     if 0:
-        print 'good idx'
-        print good_idx
+        print('good idx')
+        print(good_idx)
     for starti,stopi in utils.get_contig_chunk_idxs(good_idx):
         start = good_idx[starti]
         stop = good_idx[stopi-1]+1 # (-1 is to convert from stop idx)
         if 0:
-            print 'starti,stopi',starti,stopi,
-            print 'start,stop',start,stop
+            print('starti,stopi',starti,stopi, end=' ')
+            print('start,stop',start,stop)
         if (stop-start)>=min_samples:
             sub_data = data[start:stop]
             yield sub_data

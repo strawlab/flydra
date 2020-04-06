@@ -1,3 +1,4 @@
+from __future__ import print_function
 import tables
 import numpy
 import math
@@ -11,14 +12,14 @@ if sys.platform=='darwin':
 
 if __name__=='__main__':
     filename='DATA20070214_192124.h5'
-    print 'filename',filename
+    print('filename',filename)
     n_cams = 4
-    print 'n_cams',n_cams
+    print('n_cams',n_cams)
     kresults = tables.open_file(filename,mode="r")
     camn2cam_id, cam_id2camns = get_caminfo_dicts(kresults)
     data2d = kresults.root.data2d_distorted
 
-    print 'len(data2d)',len(data2d)
+    print('len(data2d)',len(data2d))
     timestamp_vectors = []
     framenumbers = []
     if 1:
@@ -36,7 +37,7 @@ if __name__=='__main__':
             sortidx = numpy.argsort(allframes)
             sortedframes = allframes[sortidx]
 
-        print 'n frames %d (%d-%d)'%(len(uframes),uframes[0],uframes[-1])
+        print('n frames %d (%d-%d)'%(len(uframes),uframes[0],uframes[-1]))
         doframes = ( #list(range(3047,10000)) +
                      #list(range(1000000,1001000)) +
 #                     list(range(2000000,2001000)) +
@@ -84,7 +85,7 @@ if __name__=='__main__':
         maxchunks = 2
 
         num_chunks = int(math.ceil(len(data2d)/chunksize))
-        print 'num_chunks',num_chunks
+        print('num_chunks',num_chunks)
         #for chunknum in [0,1]:
         for chunknum in [0,500,1000,2000]:
             chunkstart = chunknum*chunksize
@@ -97,11 +98,11 @@ if __name__=='__main__':
 
             frames = chunk.field('frame')
             uframes = numpy.unique(frames)
-            print 'chunknum %d, %d frames'%(chunknum,len(uframes))
+            print('chunknum %d, %d frames'%(chunknum,len(uframes)))
             framecount = 0
             for frame_idx,frame in enumerate(uframes):
                 if frame_idx%100 == 0:
-                    print '  frame_idx %d of %d'%(frame_idx,len(uframes))
+                    print('  frame_idx %d of %d'%(frame_idx,len(uframes)))
                 cond1 = frames==frame
                 camns = chunk.field('camn')[cond1]
                 test_ucamns = numpy.unique(camns)
@@ -120,7 +121,7 @@ if __name__=='__main__':
                 timestamp_vector = timestamps_unordered[cond2_idxs]
                 timestamp_vectors.append( timestamp_vector )
                 framenumbers.append( frame )
-            print '    total frames with all data %d'%(len(timestamp_vectors),)
+            print('    total frames with all data %d'%(len(timestamp_vectors),))
     kresults.close()
 
     if len(timestamp_vectors)==0:

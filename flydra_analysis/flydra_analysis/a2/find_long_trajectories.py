@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import absolute_import
 import pylab
 import numpy
 import pickle
@@ -17,13 +19,13 @@ def main(files=None,
 
 
         for filename in filenames:
-            print 'filename',filename
+            print('filename',filename)
             kresults = PT.open_file(filename,mode="r")
             obj_ids = kresults.root.kalman_estimates.read(field='obj_id',flavor='numpy')
             use_obj_ids = obj_ids
             
             use_obj_ids = numpy.unique(use_obj_ids)
-            print len(use_obj_ids)
+            print(len(use_obj_ids))
 
             if fake:
                 continue
@@ -31,7 +33,7 @@ def main(files=None,
             objid_by_n_observations = {}
             for obj_id_enum,obj_id in enumerate(use_obj_ids):
                 if obj_id_enum%100==0:
-                    print 'reading %d of %d'%(obj_id_enum,len(use_obj_ids))
+                    print('reading %d of %d'%(obj_id_enum,len(use_obj_ids)))
                 if PT.__version__ <= '1.3.3':
                     obj_id_find=int(obj_id)
                 else:
@@ -60,7 +62,7 @@ def main(files=None,
     fd.close()
 
 if __name__=='__main__':
-    from conditions2 import files
+    from .conditions2 import files
     
     main(files=files,
          output_fname='trajectory_lengths2.pkl',

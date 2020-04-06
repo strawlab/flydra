@@ -1,3 +1,4 @@
+from __future__ import print_function
 import cgtypes # cgtypes 1.x
 import numpy as np
 
@@ -31,7 +32,7 @@ def pos_ori2fu(pos,ori):
     return focal_point, view_up_dir
 
 def check_close( a,b):
-    print a,'?=',b
+    print(a,'?=',b)
     return np.allclose( np.asarray(a), np.asarray(b))
 
 def test():
@@ -65,18 +66,18 @@ def test():
         assert check_close( fp,fp2)
         vu2 = q_mat*up
         assert check_close( vu,vu2)
-        print '*'*40
+        print('*'*40)
 
     if 0:
         def test_rotate(q,x):
-            print 'x',x
+            print('x',x)
             r1 = rotate(q,x)
             qmat = q.toMat4()
-            print 'qmat'
-            print qmat
+            print('qmat')
+            print(qmat)
             r2 = qmat*x
             assert check_close( r1, r2 )
-            print
+            print()
 
         q =  cgtypes.quat().fromAngleAxis(46.891594344015928*D2R,
                                           (-0.99933050325884276, -0.028458760896155278, 0.022992263583291334))
@@ -91,19 +92,19 @@ def test():
     if 1:
         pos = (0.40262157300195972, 0.12141447782035097, 1.0)
         ori = cgtypes.quat().fromAngleAxis(0.0, (0.0, 0.0, 1.0))
-        print 'ori.toAngleAxis()',ori.toAngleAxis()
-        print ori
+        print('ori.toAngleAxis()',ori.toAngleAxis())
+        print(ori)
 
         fp_good = np.array((0.40262157300195972, 0.12141447782035097, 0.0))
         vu_good = np.array((0,1,0))
 
         #fp,vu = pos_ori2fu(pos,ori)
         fp,vu = pos_ori2fu(pos,ori)
-        print 'fp_good',fp_good
-        print 'fp',fp
-        print
-        print 'vu_good',vu_good
-        print 'vu',vu
+        print('fp_good',fp_good)
+        print('fp',fp)
+        print()
+        print('vu_good',vu_good)
+        print('vu',vu)
         assert check_close(fp,fp_good)
         assert check_close(vu,vu_good)
 
@@ -112,10 +113,10 @@ def test():
             ori = cgtypes.quat().fromAngleAxis(orientation[0]*D2R,
                                                (orientation[1],orientation[2],orientation[3]))
             if 0:
-                print 'ori.toAngleAxis()',ori.toAngleAxis()
-                print ori
+                print('ori.toAngleAxis()',ori.toAngleAxis())
+                print(ori)
                 o2 = cgtypes.quat().fromAngleAxis(*(ori.toAngleAxis()))
-                print o2
+                print(o2)
 
             fp,vu = pos_ori2fu(position,ori)
 
@@ -123,11 +124,11 @@ def test():
             fpdir_good = np.array(fp_good)-position
             fpdir = np.array(fp)-position
 
-            print 'focal_point direction',
+            print('focal_point direction', end=' ')
             assert check_close(fpdir,fpdir_good)
-            print 'view_up',
+            print('view_up', end=' ')
             assert check_close(vu,vu_good)
-            print
+            print()
 
         # values from VTK's camera.position, camera.orientation_wxyz, camera.focal_point, camera.view_up
         position =  (0.4272878670512405, -0.55393877027170979, 0.68354826464002871)

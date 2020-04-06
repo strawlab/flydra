@@ -1,4 +1,6 @@
 from __future__ import with_statement
+from __future__ import print_function
+from __future__ import absolute_import
 import os, tempfile, errno
 from optparse import OptionParser
 import flydra_analysis.a2.auto_discover_ufmfs as auto_discover_ufmfs
@@ -8,7 +10,7 @@ import scipy.misc
 import flydra_analysis.a2.ufmf_tools as ufmf_tools
 import scipy.ndimage
 import flydra_core.data_descriptions
-from tables_tools import open_file_safe
+from .tables_tools import open_file_safe
 import motmot.FastImage.FastImage as FastImage
 import motmot.realtime_image_analysis.realtime_image_analysis \
        as realtime_image_analysis
@@ -54,7 +56,7 @@ def retrack_movies( h5_filename,
         ufmf_filenames = auto_discover_ufmfs.find_ufmfs( h5_filename,
                                                          ufmf_dir=ufmf_dir,
                                                          careful=True )
-    print 'ufmf_filenames: %r'%ufmf_filenames
+    print('ufmf_filenames: %r'%ufmf_filenames)
     if len(ufmf_filenames)==0:
         raise RuntimeError('nothing to do (autodetection of .ufmf files failed)')
 
@@ -133,7 +135,7 @@ def retrack_movies( h5_filename,
                                               'ML_estimates',
                                               'ML_estimates_2d_idxs',
                                               ]:
-                    print 'copying',input_node._v_name
+                    print('copying',input_node._v_name)
                     # copy everything from source to dest
                     input_node._f_copy(output_h5.root,recursive=True)
 
@@ -149,7 +151,7 @@ def retrack_movies( h5_filename,
                 )):
 
                 if (frame_enum%100)==0:
-                    print '%s: frame %d'%(datetime_str,frame)
+                    print('%s: frame %d'%(datetime_str,frame))
 
                 for ufmf_fname in ufmf_filenames:
                     try:
@@ -229,11 +231,11 @@ def retrack_movies( h5_filename,
                                     (x0_roi, y0_roi, weighted_area, slope,
                                      eccentricity) = fpc.fit(
                                         fast_foreground )
-                                except realtime_image_analysis.FitParamsError,err:
+                                except realtime_image_analysis.FitParamsError as err:
                                     fail_fit = True
-                                    print "frame %d, ufmf %s: fit failed"%(frame,
-                                                                           ufmf_fname)
-                                    print err
+                                    print("frame %d, ufmf %s: fit failed"%(frame,
+                                                                           ufmf_fname))
+                                    print(err)
                                 else:
                                     if camcfg['pixel_aspect']==2:
                                         y0_roi *= 0.5
@@ -274,8 +276,8 @@ def retrack_movies( h5_filename,
                             save_fname = 'debug_%s_%d.png'%(cam_id,
                                                             frame)
                             save_fname_path = os.path.join(save_dir,save_fname)
-                            print 'saving',save_fname_path
-                            import benu
+                            print('saving',save_fname_path)
+                            from . import benu
                             canv=benu.Canvas(save_fname_path,width,height)
                             maxlabel = np.max(labeled_im)
                             fact = int(np.floor(255.0/maxlabel))

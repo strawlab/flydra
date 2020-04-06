@@ -1,7 +1,8 @@
+from __future__ import absolute_import
 import math
 import numpy as nx
 from pylab import linspace
-import PQmath
+from . import PQmath
 from numpy.random import normal
 
 if __name__=='__main__':

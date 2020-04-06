@@ -1,3 +1,4 @@
+from __future__ import print_function
 import argparse
 import tables
 import math
@@ -30,7 +31,7 @@ def _get_struct_fmt(cloud, field_names=None):
             fmt += 'x' * (field.offset - offset)
             offset = field.offset
         if field.datatype not in _DATATYPES:
-            print >> sys.stderr, 'Skipping unknown PointField datatype [%d]' % field.datatype
+            print('Skipping unknown PointField datatype [%d]' % field.datatype, file=sys.stderr)
         else:
             datatype_fmt, datatype_length = _DATATYPES[field.datatype]
             fmt    += field.count * datatype_fmt

@@ -1,4 +1,6 @@
-from PQmath import orientation_to_quat, quat_to_orient
+from __future__ import print_function
+from __future__ import absolute_import
+from .PQmath import orientation_to_quat, quat_to_orient
 import numpy
 import cgtypes
 
@@ -13,9 +15,9 @@ for angle in angles:
     rotation_quat = cgtypes.quat().fromAngleAxis(angle,(0,0,1))
     q2 = rotate_quat(q,rotation_quat)
     o = quat_to_orient(q2)
-    print o
+    print(o)
 
-print '-='*20
+print('-='*20)
 # 1 rev per second
 angular_velocity = cgtypes.vec3((0,0,2*numpy.pi))
 
@@ -32,9 +34,9 @@ for t in times:
     rotation_quat = cgtypes.quat().fromAngleAxis(angle,axis)
     q2 = rotate_quat(q,rotation_quat)
     o = quat_to_orient(q2)
-    print o
+    print(o)
     
-print '-='*20
+print('-='*20)
 
 # cumulative addition of angle given angular velocity
 
@@ -53,4 +55,4 @@ for i in range(len(times)):
         axis = ang_change.normalize()
     rotation_quat = cgtypes.quat().fromAngleAxis(angle,axis)
     q2 = rotate_quat(q2,rotation_quat)
-    print o
+    print(o)

@@ -1,8 +1,10 @@
 from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
 import tables as PT
 import numpy
 from numpy import nan
-import result_utils
+from . import result_utils
 import flydra_core.reconstruct
 import flydra_core._reconstruct_utils as ru
 
@@ -53,7 +55,7 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=False ):
 ##        if frame_i >= 10:
 ##            break
         if frame_i%100 == 0:
-            print 'frame %d of %d'%(frame_i, len(observation_frames))
+            print('frame %d of %d'%(frame_i, len(observation_frames)))
 
         if PT.__version__ <= '1.3.3':
             obs_2d_idx_find = int(obs_2d_idx)
@@ -72,7 +74,7 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=False ):
         this_camn_idxs = kobs_2d_data[1::2]
 
         #print
-        print 'kframe',kframe
+        print('kframe',kframe)
 
         #print ' this_camns',this_camns
         #print ' this_camn_idxs',this_camn_idxs
@@ -111,7 +113,7 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=False ):
             cam_id = camn2cam_id[camn]
 
         if len(by_this_camns) < len(this_camns):
-            print 'WARNING: missing data.'
+            print('WARNING: missing data.')
             continue
 
 
@@ -136,16 +138,16 @@ def reconstruct_line_3ds( kresults, recon2, use_obj_id, return_fXl=False ):
             # make sure reconstructed 3D point matches original
             X_orig = numpy.array(( observation_xs[frame_i], observation_ys[frame_i], observation_zs[frame_i] ))
             assert numpy.allclose(X,X_orig)
-        except AssertionError, err:
-            print '*'*80
-            print '*'*80
-            print
-            print 'WARNING: 3D positions and original 3D positions not the same!'
-            print 'X',X
-            print 'X_orig',X_orig
-            print
-            print '*'*80
-            print '*'*80
+        except AssertionError as err:
+            print('*'*80)
+            print('*'*80)
+            print()
+            print('WARNING: 3D positions and original 3D positions not the same!')
+            print('X',X)
+            print('X_orig',X_orig)
+            print()
+            print('*'*80)
+            print('*'*80)
 
         if return_fXl:
             X_by_frame[int(kframe)] = X

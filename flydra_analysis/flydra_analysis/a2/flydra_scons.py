@@ -1,7 +1,7 @@
 import os, glob, time, sys, warnings, glob
 try:
     import SCons
-except ImportError, err:
+except ImportError as err:
     # Maybe this is related to
     # http://scons.tigris.org/issues/show_bug.cgi?id=1488
     maybe_scons = glob.glob(os.path.join(sys.prefix,'lib/scons*'))

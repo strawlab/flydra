@@ -1,8 +1,9 @@
+from __future__ import absolute_import
 import numpy as np
 import time, warnings
 
 #import pyximport; pyximport.install() # requires recent Cython
-import fastfinder_help
+from . import fastfinder_help
 
 class MissingValueError(Exception):
     pass

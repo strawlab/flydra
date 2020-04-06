@@ -1,4 +1,5 @@
 from __future__ import with_statement
+from __future__ import print_function
 import numpy
 import numpy as np
 import flydra_core.reconstruct
@@ -47,9 +48,9 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
     # are new objects.
 
     if debug>1:
-        print 'for frame %d: data not gobbled:'%(frame,)
+        print('for frame %d: data not gobbled:'%(frame,))
         pprint.pprint(dict(frame_data))
-        print
+        print()
 
     # Convert to format accepted by find_best_3d()
     found_data_dict,first_idx_by_cam_id = convert_format(
@@ -81,20 +82,20 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
     if hypothesis_test_found_point:
 
         if debug > 5:
-            print 'found new point using hypothesis testing:'
-            print 'this_observation_3d',this_observation_3d
-            print 'cam_ids_used',cam_ids_used
-            print 'min_mean_dist',min_mean_dist
+            print('found new point using hypothesis testing:')
+            print('this_observation_3d',this_observation_3d)
+            print('cam_ids_used',cam_ids_used)
+            print('min_mean_dist',min_mean_dist)
 
         believably_new = tracker.is_believably_new(
             this_observation_3d, debug=debug)
         if (debug > 5):
-            print 'believably_new',believably_new
+            print('believably_new',believably_new)
 
         if believably_new:
             assert min_mean_dist<max_err
             if debug > 5:
-                print 'accepting point'
+                print('accepting point')
 
             # make mapping from cam_id to camn
             cam_id2camn = {}
@@ -103,8 +104,8 @@ def process_frame(reconstructor,tracker,frame,frame_data,camn2cam_id,
                     continue # this camn not used this frame, ignore
                 cam_id = camn2cam_id[camn]
                 if cam_id in cam_id2camn:
-                    print '*'*80
-                    print """
+                    print('*'*80)
+                    print("""
 
 ERROR: It appears that you have >1 camn for a cam_id at a certain
 frame. This almost certainly means that you are using a data file
@@ -114,16 +115,16 @@ will have to manually find out which camns to ignore (use
 flydra_analysis_print_camera_summary) and then use the --exclude-camns
 option to this program.
 
-"""
-                    print '*'*80
-                    print
-                    print 'frame',frame
-                    print 'camn',camn
-                    print 'frame_data',frame_data
-                    print
-                    print 'cam_id2camn',cam_id2camn
-                    print 'camn2cam_id',camn2cam_id
-                    print
+""")
+                    print('*'*80)
+                    print()
+                    print('frame',frame)
+                    print('camn',camn)
+                    print('frame_data',frame_data)
+                    print()
+                    print('cam_id2camn',cam_id2camn)
+                    print('camn2cam_id',camn2cam_id)
+                    print()
                     raise ValueError('cam_id already in dict')
                 cam_id2camn[cam_id]=camn
 
@@ -135,15 +136,15 @@ option to this program.
                 first_idx_by_cam_id[cam_id] for cam_id in cam_ids_used]
 
             if debug>5:
-                print 'this_observation_camns',this_observation_camns
-                print 'this_observation_idxs',this_observation_idxs
+                print('this_observation_camns',this_observation_camns)
+                print('this_observation_idxs',this_observation_idxs)
 
-                print 'camn','raw 2d data','reprojected 3d->2d'
+                print('camn','raw 2d data','reprojected 3d->2d')
                 for camn in this_observation_camns:
                     cam_id = camn2cam_id[camn]
                     repro=reconstructor.find2d(
                         cam_id, this_observation_3d )
-                    print camn,frame_data[camn][0][0][:2],repro
+                    print(camn,frame_data[camn][0][0][:2],repro)
 
             ####################################
             #  Now join found point into Tracker
@@ -155,15 +156,15 @@ option to this program.
                                   debug=debug,
                                   )
     if debug > 5:
-        print
-        print 'At end of frame %d, all live tracked objects:'%frame
+        print()
+        print('At end of frame %d, all live tracked objects:'%frame)
         tracker.debug_info(level=debug)
-        print
-        print '-'*80
+        print()
+        print('-'*80)
     elif debug > 2:
-        print 'At end of frame %d, all live tracked objects:'%frame
+        print('At end of frame %d, all live tracked objects:'%frame)
         tracker.debug_info(level=debug)
-        print
+        print()
 
 class KalmanSaver:
     def __init__(self,
@@ -261,13 +262,13 @@ class KalmanSaver:
             save_obj_id = self.obj_id
 
         if self.debug:
-            print 'saving %s as obj_id %d'%(repr(self), save_obj_id)
+            print('saving %s as obj_id %d'%(repr(self), save_obj_id))
 
         # save observation 2d data indexes
         debugADS=False
 
         if debugADS:
-            print '2D indices: ----------------'
+            print('2D indices: ----------------')
 
         this_idxs = []
         for camns_and_idxs in tro.observations_2d:
@@ -275,12 +276,12 @@ class KalmanSaver:
             self.h5_2d_obs.append( camns_and_idxs )
 
             if debugADS:
-                print ' %d: %s'%(self.h5_2d_obs_next_idx,str(camns_and_idxs))
+                print(' %d: %s'%(self.h5_2d_obs_next_idx,str(camns_and_idxs)))
             self.h5_2d_obs_next_idx += 1
         self.h5_2d_obs.flush()
 
         if debugADS:
-            print
+            print()
 
         # becomes obs_2d_idx (index into 'ML_estimates_2d_idxs')
         this_idxs = numpy.array( this_idxs, dtype=numpy.uint64 )
@@ -314,9 +315,9 @@ class KalmanSaver:
             last_observation_frame = observations_frames[-1]
 
         if debugADS:
-            print 'kalman observations: --------------'
+            print('kalman observations: --------------')
             for row in obs_recarray:
-                print row['frame'], row['obs_2d_idx']
+                print(row['frame'], row['obs_2d_idx'])
 
         self.h5_obs.append(obs_recarray)
         self.h5_obs.flush()
@@ -405,7 +406,7 @@ def kalmanize(src_filename,
                 warnings.warn('dynamic model not specified. '
                               'using "%s"'%dynamic_model_name)
             else:
-                print 'using dynamic model "%s"'%dynamic_model_name
+                print('using dynamic model "%s"'%dynamic_model_name)
 
             if reconstructor_filename is not None:
                 if reconstructor_filename.endswith('h5'):
@@ -446,7 +447,7 @@ def kalmanize(src_filename,
         if frames_per_second is None:
             frames_per_second = get_fps(results)
             if do_full_kalmanization:
-                print 'read frames_per_second from file', frames_per_second
+                print('read frames_per_second from file', frames_per_second)
 
         dt = 1.0/frames_per_second
 
@@ -524,11 +525,11 @@ def kalmanize(src_filename,
             if 1:
                 time1 = time.time()
                 if do_full_kalmanization:
-                    print 'loading all frame numbers...'
+                    print('loading all frame numbers...')
                 frames_array = numpy.asarray(data2d.read(field='frame'))
                 time2 = time.time()
                 if do_full_kalmanization:
-                    print 'done in %.1f sec'%(time2-time1)
+                    print('done in %.1f sec'%(time2-time1))
                     if (not options.disable_image_stat_gating and
                         'cur_val' in data2d.colnames):
                         warnings.warn('No pre-filtering of data based on zero '
@@ -537,12 +538,12 @@ def kalmanize(src_filename,
 
             if len(frames_array)==0:
                 # no data
-                print 'No 2D data. Nothing to do.'
+                print('No 2D data. Nothing to do.')
                 return
 
             if do_full_kalmanization:
-                print '2D data range: approximately %d<frame<%d'%(
-                    frames_array[0], frames_array[-1])
+                print('2D data range: approximately %d<frame<%d'%(
+                    frames_array[0], frames_array[-1]))
 
             if do_full_kalmanization:
                 accum_frame_spread = None
@@ -557,8 +558,8 @@ def kalmanize(src_filename,
             for row_start, row_stop in utils.iter_non_overlapping_chunk_start_stops(
                 frames_array, min_chunk_size=500000, size_increment=1000, status_fd=sys.stdout):
 
-                print 'Doing initial scan of approx frame range %d-%d.'%(
-                    frames_array[row_start],frames_array[row_stop-1])
+                print('Doing initial scan of approx frame range %d-%d.'%(
+                    frames_array[row_start],frames_array[row_stop-1]))
 
                 this_frames_array = frames_array[row_start:row_stop]
                 if start_frame is not None:
@@ -570,7 +571,7 @@ def kalmanize(src_filename,
 
                 data2d_recarray = data2d.read(start=row_start, stop=row_stop)
                 this_frames = data2d_recarray['frame']
-                print 'Examining frames %d-%d in detail.'%(this_frames[0],this_frames[-1])
+                print('Examining frames %d-%d in detail.'%(this_frames[0],this_frames[-1]))
                 this_row_idxs = np.argsort( this_frames )
                 for ii in range(len(this_row_idxs)+1):
 
@@ -594,8 +595,8 @@ def kalmanize(src_filename,
 
                         if last_frame != new_frame:
                             if new_frame < last_frame:
-                                print 'new_frame',new_frame
-                                print 'last_frame',last_frame
+                                print('new_frame',new_frame)
+                                print('last_frame',last_frame)
                                 raise RuntimeError("expected continuously increasing "
                                                    "frame numbers")
                             finish_frame =True
@@ -624,23 +625,23 @@ def kalmanize(src_filename,
                                                            max_all_check_times)
                                 if this_frame_spread > sync_error_threshold:
                                     if this_frame_spread==max_all_check_times:
-                                        print '%s frame %d: sync diff: %.1f msec'%(
+                                        print('%s frame %d: sync diff: %.1f msec'%(
                                             os.path.split(results.filename)[-1],
                                             last_frame,
-                                            this_frame_spread*1000.0)
+                                            this_frame_spread*1000.0))
 
                             if debug > 5:
-                                print
-                                print 'frame_data for frame %d'%(last_frame,)
+                                print()
+                                print('frame_data for frame %d'%(last_frame,))
                                 pprint.pprint(dict(frame_data))
-                                print
+                                print()
                             if do_full_kalmanization:
                                 if this_frame_spread > sync_error_threshold:
                                     if debug > 5:
                                         print (
                                             'frame sync error (spread %.1f msec), '
                                             'skipping'%(this_frame_spread*1e3,))
-                                        print
+                                        print()
                                     warnings.warn('Synchronization error detected, '
                                                   'but continuing analysis without '
                                                   'potentially bad data.')
@@ -653,8 +654,8 @@ def kalmanize(src_filename,
                                 time2 = time.time()
                                 dur = time2-time1
                                 fps = frame_count/dur
-                                print 'frame % 10d, kalmanization/data association speed: % 8.1f fps'%(
-                                    last_frame,fps)
+                                print('frame % 10d, kalmanization/data association speed: % 8.1f fps'%(
+                                    last_frame,fps))
                                 time1 = time2
                                 frame_count = 0
 
@@ -802,13 +803,13 @@ def kalmanize(src_filename,
         h5.create_array( h5.root, 'cam_id_array', cam_id_array,
                         'cam_id_array')
         h5.close()
-        print 'saved %s'%accum_frame_spread_filename
+        print('saved %s'%accum_frame_spread_filename)
 
     if max_all_check_times > sync_error_threshold:
         if not options.keep_sync_errors:
             if do_full_kalmanization:
-                print 'max_all_check_times %.2f msec'%(
-                    max_all_check_times*1000.0)
+                print('max_all_check_times %.2f msec'%(
+                    max_all_check_times*1000.0))
                 handle, target = tempfile.mkstemp(
                     os.path.split(dest_filename)[1])
                 os.unlink(target) # remove original file there
@@ -823,10 +824,10 @@ def kalmanize(src_filename,
                 sys.exit(1) # sync error
     else:
         if not do_full_kalmanization:
-            print '%s no sync differences greater than %.1f msec'%(
+            print('%s no sync differences greater than %.1f msec'%(
                 os.path.split(src_filename)[-1],
                 sync_error_threshold*1000.0,
-                )
+                ))
 
 def check_sync():
     usage = """%prog FILE [options]
@@ -975,9 +976,9 @@ def main():
                                  for camn in options.exclude_camns.split()]
 
     if len(args)>1:
-        print 'args',args
-        print >> sys.stderr, ("arguments interpreted as FILE supplied more "
-                              "than once")
+        print('args',args)
+        print(("arguments interpreted as FILE supplied more "
+                              "than once"), file=sys.stderr)
         parser.print_help()
         sys.exit(1)
 
@@ -1007,7 +1008,7 @@ def main():
         import cProfile
         import lsprofcalltree
         p = cProfile.Profile()
-        print 'running kalmanize in profile mode'
+        print('running kalmanize in profile mode')
         p.runctx('kalmanize(*args, **kwargs)',globals(),locals())
         k = lsprofcalltree.KCacheGrind(p)
         data = open(os.path.expanduser('~/kalmanize.kgrind'), 'w+')

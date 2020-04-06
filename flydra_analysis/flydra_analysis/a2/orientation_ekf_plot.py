@@ -1,5 +1,7 @@
 from __future__ import division
 from __future__ import with_statement
+from __future__ import print_function
+from __future__ import absolute_import
 
 import flydra_analysis.analysis.result_utils as result_utils
 import flydra_analysis.a2.core_analysis as core_analysis
@@ -9,7 +11,7 @@ import flydra_core.reconstruct as reconstruct
 import collections, time, sys, os
 from optparse import OptionParser
 
-from tables_tools import clear_col, open_file_safe
+from .tables_tools import clear_col, open_file_safe
 import flydra_core.kalman.ekf as kalman_ekf
 import flydra_analysis.analysis.PQmath as PQmath
 import flydra_core.geom as geom
@@ -19,8 +21,8 @@ from sympy import Symbol, Matrix, sqrt, latex, lambdify
 import pickle
 import warnings
 from flydra_core.kalman.ori_smooth import ori_smooth
-from orientation_ekf_fitter import compute_ori_quality
-import analysis_options
+from .orientation_ekf_fitter import compute_ori_quality
+from . import analysis_options
 
 D2R = np.pi/180.0
 R2D = 180.0/np.pi
@@ -59,10 +61,10 @@ def plot_ori(kalman_filename=None,
 
     if dynamic_model is None:
         dynamic_model = extra['dynamic_model_name']
-        print 'detected file loaded with dynamic model "%s"'%dynamic_model
+        print('detected file loaded with dynamic model "%s"'%dynamic_model)
         if dynamic_model.startswith('EKF '):
             dynamic_model = dynamic_model[4:]
-        print '  for smoothing, will use dynamic model "%s"'%dynamic_model
+        print('  for smoothing, will use dynamic model "%s"'%dynamic_model)
 
     with open_file_safe( kalman_filename,
                        mode='r') as kh5:
@@ -111,7 +113,7 @@ def plot_ori(kalman_filename=None,
         max_frame_range = -np.inf
 
         if options.print_status:
-            print '%d object IDs in file'%(len(use_obj_ids),)
+            print('%d object IDs in file'%(len(use_obj_ids),))
         for obj_id in use_obj_ids:
             table = all_obj_ids[obj_id]
             rows = table[:]
@@ -123,7 +125,7 @@ def plot_ori(kalman_filename=None,
                 rows = rows[ rows['frame'] <= stop ]
 
             if options.print_status:
-                print 'obj_id %d: %d rows of EKF data'%(obj_id,len(rows))
+                print('obj_id %d: %d rows of EKF data'%(obj_id,len(rows)))
 
             frame=rows['frame']
             # get camns
@@ -152,7 +154,7 @@ def plot_ori(kalman_filename=None,
             mle_row_cond = all_mle_obj_ids==obj_id
             rows_this_obj = kmle[mle_row_cond]
             if options.print_status:
-                print 'obj_id %d: %d rows of ML data'%(obj_id,len(rows_this_obj))
+                print('obj_id %d: %d rows of ML data'%(obj_id,len(rows_this_obj)))
             frame = rows_this_obj['frame']
             hz = [rows_this_obj['hz_line%d'%i] for i in range(6)]
             #hz = np.rec.fromarrays(hz,names=['hz%d'%for i in range(6)])
@@ -171,7 +173,7 @@ def plot_ori(kalman_filename=None,
                     sori = ori_smooth(orinan,frames_per_second=fps)
                 except AssertionError:
                     if options.print_status:
-                        print 'not plotting smoothed ori for object id %d'%(obj_id,)
+                        print('not plotting smoothed ori for object id %d'%(obj_id,))
                     else:
                         pass
                 else:

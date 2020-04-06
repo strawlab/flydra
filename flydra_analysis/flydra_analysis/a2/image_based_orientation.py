@@ -1,5 +1,7 @@
 from __future__ import division
 from __future__ import with_statement
+from __future__ import print_function
+from __future__ import absolute_import
 
 if 1:
     # deal with old files, forcing to numpy
@@ -16,17 +18,17 @@ import motmot.ufmf.ufmf as ufmf
 import motmot.imops.imops as imops
 import flydra_analysis.a2.utils as utils
 import flydra_analysis.analysis.result_utils as result_utils
-import core_analysis
+from . import core_analysis
 import scipy.ndimage
 import motmot.FastImage.FastImage as FastImage
 import motmot.realtime_image_analysis.realtime_image_analysis \
        as realtime_image_analysis
 
 import cairo
-import benu
+from . import benu
 import adskalman.adskalman
 
-from tables_tools import clear_col, open_file_safe
+from .tables_tools import clear_col, open_file_safe
 
 font_size=14
 
@@ -294,11 +296,11 @@ def doit(h5_filename=None,
         kalman_filename)
     try:
         ML_estimates_2d_idxs = data_file.root.ML_estimates_2d_idxs[:]
-    except tables.exceptions.NoSuchNodeError, err1:
+    except tables.exceptions.NoSuchNodeError as err1:
         # backwards compatibility
         try:
             ML_estimates_2d_idxs = data_file.root.kalman_observations_2d_idxs[:]
-        except tables.exceptions.NoSuchNodeError, err2:
+        except tables.exceptions.NoSuchNodeError as err2:
             raise err1
 
     if os.path.exists( output_h5_filename ):
@@ -317,7 +319,7 @@ def doit(h5_filename=None,
             for input_node in h5.root._f_iter_nodes():
                 # copy everything from source to dest
                 input_node._f_copy(output_h5.root,recursive=True)
-            print 'done copying'
+            print('done copying')
 
             # Clear values in destination table that we may overwrite.
             dest_table = output_h5.root.data2d_distorted
@@ -329,7 +331,7 @@ def doit(h5_filename=None,
                     fill_value = np.nan
                 clear_col(dest_table,colname,fill_value=fill_value)
             dest_table.flush()
-            print 'done clearing'
+            print('done clearing')
 
             camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
 
@@ -356,7 +358,7 @@ def doit(h5_filename=None,
             fpc = realtime_image_analysis.FitParamsClass() # allocate FitParamsClass
 
             for obj_id_enum,obj_id in enumerate(use_obj_ids):
-                print 'object %d of %d'%(obj_id_enum,len(use_obj_ids))
+                print('object %d of %d'%(obj_id_enum,len(use_obj_ids)))
 
                 # get all images for this camera and this obj_id
 
@@ -431,8 +433,8 @@ def doit(h5_filename=None,
                             fmf_fno = fmf_fnos[0]
                             found = (fmf, fmf_fno )
                         if found is None:
-                            print 'no image data for frame timestamp %s cam_id %s'%(
-                                repr(frame_timestamp),cam_id)
+                            print('no image data for frame timestamp %s cam_id %s'%(
+                                repr(frame_timestamp),cam_id))
                             continue
                         fmf, fmf_fno = found
                         image, fmf_timestamp = fmf.get_frame( fmf_fno )
@@ -610,7 +612,7 @@ def doit(h5_filename=None,
                         try:
                             (x0_roi, y0_roi, area, slope, eccentricity) = fpc.fit(
                                 fast_av_im )
-                        except realtime_image_analysis.FitParamsError, err:
+                        except realtime_image_analysis.FitParamsError as err:
                             fail_fit = True
 
                         this_morph_failures = morph_failures[orig_idxs_in_average]

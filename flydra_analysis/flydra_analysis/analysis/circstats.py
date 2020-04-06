@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import print_function
 import math
 
 import numpy
@@ -71,12 +72,12 @@ def lm_circular_cl(y,x,init,verbose=False,tol=1e-10):
         raise NotImplementedError()
                         
 def test():
-    print 'A1inv(5.0)',A1inv(5.0)
-    print 'A1inv(0.0)',A1inv(0.0)
-    print 'A1inv(3421324)',repr(A1inv(3421324))
-    print 'A1inv(-0.5)',repr(A1inv(-0.5))
-    print 'A1inv(0.5)',repr(A1inv(0.5))
-    print 'A1inv(0.7)',repr(A1inv(0.7))
+    print('A1inv(5.0)',A1inv(5.0))
+    print('A1inv(0.0)',A1inv(0.0))
+    print('A1inv(3421324)',repr(A1inv(3421324)))
+    print('A1inv(-0.5)',repr(A1inv(-0.5)))
+    print('A1inv(0.5)',repr(A1inv(0.5)))
+    print('A1inv(0.7)',repr(A1inv(0.7)))
     #print 'A1inv(numpy.inf)',A1inv(numpy.inf)
 
 def raw_data_plot(ax,theta,r=1.0,**kwargs):

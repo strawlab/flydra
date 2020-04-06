@@ -1,3 +1,4 @@
+from __future__ import print_function
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -62,7 +63,7 @@ def convert(infilename,
         tzname = None
 
         if save_timestamps:
-            print 'STAGE 1: finding timestamps'
+            print('STAGE 1: finding timestamps')
             table_kobs = h5_context.get_pytable_node( 'ML_estimates' )
 
             tzname = h5_context.get_tzname0()
@@ -71,11 +72,11 @@ def convert(infilename,
             try:
                 table_data2d = h5_context.get_pytable_node( 'data2d_distorted',
                                                             from_2d_file=True)
-            except tables.exceptions.NoSuchNodeError, err:
-                print >> sys.stderr, "No timestamps in file. Either specify not to save timestamps ('--no-timestamps') or specify the original .h5 file with the timestamps ('--time-data=FILE2D')"
+            except tables.exceptions.NoSuchNodeError as err:
+                print("No timestamps in file. Either specify not to save timestamps ('--no-timestamps') or specify the original .h5 file with the timestamps ('--time-data=FILE2D')", file=sys.stderr)
                 sys.exit(1)
 
-            print 'caching raw 2D data...',
+            print('caching raw 2D data...', end=' ')
             sys.stdout.flush()
             table_data2d_frames = table_data2d.read(field='frame')
             assert numpy.max(table_data2d_frames) < 2**63
@@ -84,42 +85,42 @@ def convert(infilename,
             table_data2d_frames_find = utils.FastFinder( table_data2d_frames )
             table_data2d_camns = table_data2d.read(field='camn')
             table_data2d_timestamps = table_data2d.read(field='timestamp')
-            print 'done'
-            print '(cached index of %d frame values of dtype %s)'%(len(table_data2d_frames),str(table_data2d_frames.dtype))
+            print('done')
+            print('(cached index of %d frame values of dtype %s)'%(len(table_data2d_frames),str(table_data2d_frames.dtype)))
 
             drift_estimates = h5_context.get_drift_estimates()
             camn2cam_id, cam_id2camns = h5_context.get_caminfo_dicts()
 
             gain = {}; offset = {}
-            print 'hostname time_gain time_offset'
-            print '-------- --------- -----------'
+            print('hostname time_gain time_offset')
+            print('-------- --------- -----------')
             for i,hostname in enumerate(drift_estimates.get('hostnames',[])):
                 tgain, toffset = result_utils.model_remote_to_local(
                     drift_estimates['remote_timestamp'][hostname][::10],
                     drift_estimates['local_timestamp'][hostname][::10])
                 gain[hostname]=tgain
                 offset[hostname]=toffset
-                print '  ',repr(hostname),tgain,toffset
-            print
+                print('  ',repr(hostname),tgain,toffset)
+            print()
 
             if do_nothing:
                 return
 
-            print 'caching Kalman obj_ids...'
+            print('caching Kalman obj_ids...')
             obs_obj_ids = table_kobs.read(field='obj_id')
             fast_obs_obj_ids = utils.FastFinder( obs_obj_ids )
-            print 'finding unique obj_ids...'
+            print('finding unique obj_ids...')
             unique_obj_ids = numpy.unique(obs_obj_ids)
-            print '(found %d)'%(len(unique_obj_ids),)
+            print('(found %d)'%(len(unique_obj_ids),))
             unique_obj_ids = unique_obj_ids[ unique_obj_ids >= start_obj_id ]
             unique_obj_ids = unique_obj_ids[ unique_obj_ids <= stop_obj_id ]
 
             if obj_only is not None:
                 unique_obj_ids = numpy.array([ oid for oid in unique_obj_ids if oid in obj_only ])
-                print 'filtered to obj_only',obj_only
+                print('filtered to obj_only',obj_only)
 
-            print '(will export %d)'%(len(unique_obj_ids),)
-            print 'finding 2d data for each obj_id...'
+            print('(will export %d)'%(len(unique_obj_ids),))
+            print('finding 2d data for each obj_id...')
             timestamp_time = numpy.zeros( unique_obj_ids.shape, dtype=numpy.float64)
             table_kobs_frame = table_kobs.read(field='frame')
             if len(table_kobs_frame)==0:
@@ -142,14 +143,14 @@ def convert(infilename,
                     remote_timestamp = table_data2d_timestamps[frame_idx]
 
                 if this_camn is None:
-                    print 'skipping frame %d (obj %d): no data2d_distorted data'%(framenumber,obj_id)
+                    print('skipping frame %d (obj %d): no data2d_distorted data'%(framenumber,obj_id))
                     continue
 
                 cam_id = camn2cam_id[this_camn]
                 try:
                     remote_hostname = cam_id2hostname(cam_id, h5_context)
-                except ValueError, e:
-                    print 'error getting hostname of cam: %s' % e.message
+                except ValueError as e:
+                    print('error getting hostname of cam: %s' % e.message)
                     continue
                 if remote_hostname not in gain:
                     warnings.warn('no host %s in timestamp data. making up '
@@ -163,7 +164,7 @@ def convert(infilename,
             extra_vars['obj_ids'] = unique_obj_ids
             extra_vars['timestamps'] = timestamp_time
 
-            print 'STAGE 2: running Kalman smoothing operation'
+            print('STAGE 2: running Kalman smoothing operation')
 
         #also save the experiment data if present
         uuid=None
@@ -193,7 +194,7 @@ def convert(infilename,
 
         if obj_only is not None:
             obj_ids = numpy.array(obj_only )
-            print 'filtered to obj_only',obj_ids
+            print('filtered to obj_only',obj_ids)
 
         if frames_per_second is None:
             frames_per_second = h5_context.get_fps()
@@ -206,10 +207,10 @@ def convert(infilename,
                 dynamic_model_name = dynamic_models.DEFAULT_MODEL
                 warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
             else:
-                print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+                print('detected file loaded with dynamic model "%s"'%dynamic_model_name)
             if dynamic_model_name.startswith('EKF '):
                 dynamic_model_name = dynamic_model_name[4:]
-            print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+            print('  for smoothing, will use dynamic model "%s"'%dynamic_model_name)
 
         allrows = []
         allqualrows=[]
@@ -372,7 +373,7 @@ def main(hdf5_only=False):
         import cProfile
 
         out_stats_filename = outfilename + '.profile'
-        print 'profiling, stats will be saved to %r'%out_stats_filename
+        print('profiling, stats will be saved to %r'%out_stats_filename)
         cProfile.runctx('''convert(infilename,outfilename,
                 file_time_data=options.file2d,
                 save_timestamps = not options.no_timestamps,

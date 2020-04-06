@@ -1,4 +1,5 @@
 """Position and Quaternion orientation math"""
+from __future__ import print_function
 
 import math
 import cgtypes # cgkit 1.x
@@ -168,38 +169,38 @@ convert orientation to euler angles (in radians)
 
 results are yaw, pitch (no roll is provided)
 
->>> print orientation_to_euler( (1, 0, 0) )
+>>> print(orientation_to_euler( (1, 0, 0) ))
 (0.0, 0.0)
 
->>> print orientation_to_euler( (0, 1, 0) )
+>>> print(orientation_to_euler( (0, 1, 0) ))
 (1.5707963267948966, 0.0)
 
->>> print orientation_to_euler( (-1, 0, 0) )
+>>> print(orientation_to_euler( (-1, 0, 0) ))
 (3.141592653589793, 0.0)
 
->>> print orientation_to_euler( (0, -1, 0) )
+>>> print(orientation_to_euler( (0, -1, 0) ))
 (-1.5707963267948966, 0.0)
 
->>> print orientation_to_euler( (0, 0, 1) )
+>>> print(orientation_to_euler( (0, 0, 1) ))
 (0.0, 1.5707963267948966)
 
->>> print orientation_to_euler( (0, 0, -1) )
+>>> print(orientation_to_euler( (0, 0, -1) ))
 (0.0, -1.5707963267948966)
 
->>> print orientation_to_euler( (0,0,0) ) # This is not a unit vector.
+>>> print(orientation_to_euler( (0,0,0) )) # This is not a unit vector.
 Traceback (most recent call last):
     ...
 AssertionError
 
 >>> r1=math.sqrt(2)/2
 
->>> print math.pi/4
+>>> print(math.pi/4)
 0.785398163397
 
->>> print orientation_to_euler( (r1,0,r1) )
+>>> print(orientation_to_euler( (r1,0,r1) ))
 (0.0, 0.7853981633974483)
 
->>> print orientation_to_euler( (r1,r1,0) )
+>>> print(orientation_to_euler( (r1,r1,0) ))
 (0.7853981633974483, 0.0)
 
 """
@@ -393,7 +394,7 @@ def smooth_position( P, delta_t, alpha, lmbda, eps, verbose=False ):
         err = nx.sum( nx.sum( del_F**2 ) )
         Pstar = Pstar - lmbda*del_F
         if verbose:
-            print 'err %g (eps %g)'%(err,eps)
+            print('err %g (eps %g)'%(err,eps))
     return Pstar
 
 class QuatSeq(list):
@@ -754,9 +755,9 @@ class QuatSmoother(object):
             of_class = CachingObjectiveFunctionQuats
         elif objective_func_name == 'ObjectiveFunctionQuats':
             of_class = ObjectiveFunctionQuats
-        if display_progress: print 'constructing objective function...'
+        if display_progress: print('constructing objective function...')
         of = of_class(Q, self.delta_t, self.beta, self.gamma,no_distance_penalty_idxs=no_distance_penalty_idxs)
-        if display_progress: print 'done constructing objective function.'
+        if display_progress: print('done constructing objective function.')
 
         #lambda2 = 2e-9
         #lambda2 = 1e-9
@@ -771,43 +772,43 @@ class QuatSmoother(object):
         while count<self.max_iter2:
             count += 1
             if display_progress: start = time.time()
-            if display_progress: print 'initializing cache'
+            if display_progress: print('initializing cache')
             of.set_cache_qs(Q_k) # set the cache (no-op on non-caching version)
-            if display_progress: print 'computing del_G'
+            if display_progress: print('computing del_G')
             del_G = of.get_del_G(Q_k)
-            if display_progress: print 'del_G done'
+            if display_progress: print('del_G done')
             D = of._getDistance(Q_k,changed_idx=no_index_changed) # no change since we set the cache a few lines ago
-            if display_progress: print 'D done'
+            if display_progress: print('D done')
             E = of._getEnergy(Q_k,changed_idx=no_index_changed) # no change since we set the cache a few lines ago
-            if display_progress: print 'E done'
+            if display_progress: print('E done')
             R = of._getRoll(Q_k)
-            if display_progress: print '  G = %s + %s*%s + %s*%s'%(str(D),str(self.beta),str(E),str(self.gamma),str(R))
+            if display_progress: print('  G = %s + %s*%s + %s*%s'%(str(D),str(self.beta),str(E),str(self.gamma),str(R)))
             if display_progress: stop = time.time()
             err = np.sqrt(np.sum(np.array(abs(del_G))**2))
 
             if err < self.epsilon2:
-                if display_progress: print 'reached epsilon2'
+                if display_progress: print('reached epsilon2')
                 break
             elif last_err is not None:
                 pct_err = (last_err-err)/last_err*100.0
-                if display_progress: print 'Q elapsed: % 6.2f secs,'%(stop-start,),
-                if display_progress: print 'current gradient:',err,
-                if display_progress: print '   (%4.2f%%)'%(pct_err,)
+                if display_progress: print('Q elapsed: % 6.2f secs,'%(stop-start,), end=' ')
+                if display_progress: print('current gradient:',err, end=' ')
+                if display_progress: print('   (%4.2f%%)'%(pct_err,))
 
                 if err > last_err:
-                    if display_progress: print 'ERROR: error is increasing, aborting'
+                    if display_progress: print('ERROR: error is increasing, aborting')
                     break
                 if pct_err < self.percent_error_eps_quats:
-                    if display_progress: print 'reached percent_error_eps_quats'
+                    if display_progress: print('reached percent_error_eps_quats')
                     break
             else:
-                if display_progress: print 'Q elapsed: % 6.2f secs,'%(stop-start,),
-                if display_progress: print 'current gradient:',err
+                if display_progress: print('Q elapsed: % 6.2f secs,'%(stop-start,), end=' ')
+                if display_progress: print('current gradient:',err)
                 pass
             last_err = err
             Q_k = Q_k*(del_G*-self.lambda2).exp()
         if count>=self.max_iter2:
-            if display_progress: print 'reached max_iter2'
+            if display_progress: print('reached max_iter2')
             pass
         Qsmooth = Q_k
         return Qsmooth
@@ -828,7 +829,7 @@ def _test():
             # forward and backward test 1
             yaw2,pitch2 = orientation_to_euler(euler_to_orientation(yaw,pitch))
             if abs(yaw-yaw2)>eps or abs(pitch-pitch2)>eps:
-                print 'orientation problem at',repr((yaw,pitch))
+                print('orientation problem at',repr((yaw,pitch)))
                 had_err = True
 
             if 1:
@@ -846,11 +847,11 @@ def _test():
                     if abs(yaw-yaw3)>eps or abs(pitch-pitch3)>eps:
                         if not (abs(yaw)==math.pi and (abs(yaw)-abs(yaw3)<eps)):
                             if not (at_singularity or singularity_is_ok):
-                                print 'quat problem at',repr((yaw,pitch,roll))
-                                print '               ',repr((yaw3, pitch3, roll3))
-                                print '    ',abs(yaw-yaw3)
-                                print '    ',abs(pitch-pitch3)
-                                print
+                                print('quat problem at',repr((yaw,pitch,roll)))
+                                print('               ',repr((yaw3, pitch3, roll3)))
+                                print('    ',abs(yaw-yaw3))
+                                print('    ',abs(pitch-pitch3))
+                                print()
                                 had_err = True
 
             # triangle test 1
@@ -858,23 +859,23 @@ def _test():
             xyz2=quat_to_orient( euler_to_quat( yaw=yaw, pitch=pitch ))
             l2dist = math.sqrt(nx.sum((nx.array(xyz1)-nx.array(xyz2))**2))
             if l2dist > eps:
-                print 'other problem at',repr((yaw,pitch))
-                print ' ',xyz1
-                print ' ',xyz2
-                print
+                print('other problem at',repr((yaw,pitch)))
+                print(' ',xyz1)
+                print(' ',xyz2)
+                print()
                 had_err = True
 
             # triangle test 2
             yaw4, pitch4, roll4 = quat_to_euler(orientation_to_quat( xyz1 ))
             if abs(yaw-yaw4)>eps or abs(pitch-pitch4)>eps:
-                print 'yet another problem at',repr((yaw,pitch))
-                print
+                print('yet another problem at',repr((yaw,pitch)))
+                print()
                 had_err = True
 
             total_count += 1
             if had_err:
                 err_count += 1
-    print 'Error count: (%d of %d)'%(err_count,total_count)
+    print('Error count: (%d of %d)'%(err_count,total_count))
 
     # do doctest
     import doctest, PQmath

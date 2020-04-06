@@ -1,3 +1,4 @@
+from __future__ import print_function
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -24,7 +25,7 @@ def main():
     (options, args) = parser.parse_args()
 
     if len(args)>1:
-        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        print("arguments interpreted as FILE supplied more than once", file=sys.stderr)
         parser.print_help()
         return
 

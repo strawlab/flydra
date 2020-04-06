@@ -1,5 +1,7 @@
-import result_utils
-import smdfile
+from __future__ import print_function
+from __future__ import absolute_import
+from . import result_utils
+from . import smdfile
 import motmot.FlyMovieFormat.FlyMovieFormat as FlyMovieFormat
 import numpy as nx
 
@@ -93,7 +95,7 @@ class CachingMovieOpener:
                               'full_frame_fmf']:
             raise ValueError('unsupported frame_type')
 
-        print 'XY0'
+        print('XY0')
         if frame_type != 'full_frame_fmf' and suffix is not None:
             raise ValueError("suffix has no meaning unless frame_type is full_frame_fmf")
 
@@ -106,12 +108,12 @@ class CachingMovieOpener:
             remote_timestamp = remote_timestamp_or_frame
         else:
             frame = remote_timestamp_or_frame
-            print 'XY0.5 frame',frame
+            print('XY0.5 frame',frame)
             camn, remote_timestamp = result_utils.get_camn_and_remote_timestamp(results,cam,frame)
-            print 'XY0.6 remote_timestamp',remote_timestamp
+            print('XY0.6 remote_timestamp',remote_timestamp)
 
         cam_info = results.root.cam_info
-        print 'XY1'
+        print('XY1')
         if isinstance(cam,int): # camn
             camn = cam
             cam_id = [x['cam_id'] for x in cam_info.where( cam_info.cols.camn == camn) ][0]
@@ -121,32 +123,32 @@ class CachingMovieOpener:
 
         if frame is None or camn is None:
             camn, frame = result_utils.get_camn_and_frame(results,cam_id,remote_timestamp)
-        print 'XY3'
-        print 'camn',camn
-        print 'frame',frame
-        print 'remote_timestamp',remote_timestamp
-        print
+        print('XY3')
+        print('camn',camn)
+        print('frame',frame)
+        print('remote_timestamp',remote_timestamp)
+        print()
 
         indexes = (results, camn, cam_id, frame_type, remote_timestamp)
 
-        print 'XY4'
+        print('XY4')
         if indexes not in self.cache:
-            print 'XY4.5'
+            print('XY4.5')
             try:
-                print 'XY4.6'
+                print('XY4.6')
                 self.cache[indexes] = self._load_fmf_and_smd(indexes)
-                print 'XY4.7'
+                print('XY4.7')
             except NoFrameRecordedHere:
-                print 'XY4.8'
+                print('XY4.8')
                 self.cache[indexes] = None
-                print 'XY4.85'
-        print 'XY4.9'
+                print('XY4.85')
+        print('XY4.9')
         (fmf,smd) = self.cache[indexes]
-        print 'XY5'
+        print('XY5')
 
         if fmf is None:
             raise NoFrameRecordedHere("")
-        print 'XY6'
+        print('XY6')
 
         if frame_type == 'small_frame_and_bg':
             # get background frame
@@ -158,11 +160,11 @@ class CachingMovieOpener:
                 raise ValueError('for frame_type="small_frame_only" must specify width and height')
             bg_frame = 255*nx.ones((height,width),nx.UInt8)
 
-        print 'XY7'
+        print('XY7')
         # get frame
         try:
             frame, movie_timestamp = fmf.get_frame_at_timestamp( remote_timestamp )
-        except ValueError,err:
+        except ValueError as err:
             if str(err).startswith('no frame at timestamp given'):
                 if return_bg_instead_of_error_if_frame_missing:
                     frame = None
@@ -172,8 +174,8 @@ class CachingMovieOpener:
             else:
                 raise
 
-        print 'XY7.1 fmf.filename',fmf.filename
-        print 'XY7.2 movie_timestamp',movie_timestamp
+        print('XY7.1 fmf.filename',fmf.filename)
+        print('XY7.2 movie_timestamp',movie_timestamp)
 
         # make full frame
         if frame_type != 'full_frame_fmf':

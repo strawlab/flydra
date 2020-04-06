@@ -1,4 +1,6 @@
 from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -11,10 +13,10 @@ import numpy
 import numpy as np
 import tables as PT
 from optparse import OptionParser
-import core_analysis
-import stimulus_positions
+from . import core_analysis
+from . import stimulus_positions
 import scipy.io
-import conditions
+from . import conditions
 import flydra_analysis.a2.xml_stimulus as xml_stimulus
 import flydra_core.reconstruct as reconstruct
 import pkg_resources
@@ -35,7 +37,7 @@ class AnimationPath(object):
             fl = map(float,split_line)
             data.append(fl)
         self.data = numpy.array(data)
-        print 'self.data',self.data
+        print('self.data',self.data)
     def get_pos_ori(self,t):
         file_ts = self.data[:,0]
         tdiff = file_ts[1:]-file_ts[:-1]
@@ -82,7 +84,7 @@ def doit(filename,
 
     if not use_kalman_smoothing:
         if (dynamic_model_name is not None):
-            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model option (--dynamic-model)'
+            print('ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model option (--dynamic-model)', file=sys.stderr)
             sys.exit(1)
     dynamic_model_name = options.dynamic_model
 
@@ -99,8 +101,8 @@ def doit(filename,
             mat_data = scipy.io.mio.loadmat(data_filename)
         finally:
             del sys.path[0]
-    except IOError, err:
-        print 'not a .mat file at %s, treating as .hdf5 file'%(os.path.join(data_path, data_filename))
+    except IOError as err:
+        print('not a .mat file at %s, treating as .hdf5 file'%(os.path.join(data_path, data_filename)))
 
     ca = core_analysis.get_global_CachingAnalyzer()
     obj_ids, use_obj_ids, is_mat_file, data_file, extra = ca.initial_file_load(filename)
@@ -123,17 +125,17 @@ def doit(filename,
             use_obj_ids = include_obj_ids
         if exclude_obj_ids is not None:
             use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
-        print 'using object ids specified in fanout .xml file'
+        print('using object ids specified in fanout .xml file')
 
     if dynamic_model_name is None:
         if 'dynamic_model_name' in extra:
             dynamic_model_name = extra['dynamic_model_name']
-            print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+            print('detected file loaded with dynamic model "%s"'%dynamic_model_name)
             if dynamic_model_name.startswith('EKF '):
                 dynamic_model_name = dynamic_model_name[4:]
-            print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+            print('  for smoothing, will use dynamic model "%s"'%dynamic_model_name)
         else:
-            print 'no dynamic model name specified, and it could not be determined from the file, either'
+            print('no dynamic model name specified, and it could not be determined from the file, either')
 
     filename_trimmed = os.path.split(os.path.splitext(filename)[0])[-1]
 
@@ -162,7 +164,7 @@ def doit(filename,
 
     for obj_id in use_obj_ids:
 
-        print 'loading %d'%obj_id
+        print('loading %d'%obj_id)
         results = ca.calculate_trajectory_metrics(obj_id,
                                                   data_file,
                                                   use_kalman_smoothing=use_kalman_smoothing,
@@ -239,7 +241,7 @@ def doit(filename,
 
         if 0:
             rwi = rw.interactor
-            print 'rwi',rwi
+            print('rwi',rwi)
             marker.orientation_marker = axes
             #marker.interactive = False
             marker.interactor = rwi
@@ -299,16 +301,16 @@ def doit(filename,
         data_dt = 0.0
         dur = 0.0
 
-    print 'data_fps',data_fps
-    print 'data_dt',data_dt
-    print 'save_fps',save_fps
+    print('data_fps',data_fps)
+    print('data_dt',data_dt)
+    print('save_fps',save_fps)
 
     t_now = 0.0
     frame_number = 0
     while t_now <= dur:
         frame_number += 1
         t_now += save_dt
-        print 't_now',t_now
+        print('t_now',t_now)
 
         pos, ori = camera_animation_path.get_pos_ori(t_now)
         focal_point, view_up = pos_ori2fu(pos,ori)
@@ -323,7 +325,7 @@ def doit(filename,
             draw_n_frames = int(round(t_now / data_dt))
         else:
             draw_n_frames = len(obj_verts)
-        print 'frame_number, draw_n_frames', frame_number, draw_n_frames
+        print('frame_number, draw_n_frames', frame_number, draw_n_frames)
 
         #################
 
@@ -332,7 +334,7 @@ def doit(filename,
         real_frame_number = real_frames[:draw_n_frames][-1]
         pd.point_data.scalars = speeds
         if numpy.any(speeds>max_vel):
-            print 'WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),)
+            print('WARNING: maximum speed (%.3f m/s) exceeds color map max'%(speeds.max(),))
 
         g = tvtk.Glyph3D(scale_mode='data_scaling_off',
                          vector_mode = 'use_vector',
@@ -352,7 +354,7 @@ def doit(filename,
             writer.input = imf.output
             #fname = 'movie_%s_%03d_frame%05d.png'%(filename_trimmed,obj_id,frame_number)
             fname = 'movie_%s_%03d_frame%05d.png'%(filename_trimmed,obj_id,real_frame_number)
-            print 'saving',fname
+            print('saving',fname)
             full_fname = os.path.join(output_dir, fname)
             writer.file_name = full_fname
             writer.write()
@@ -365,7 +367,7 @@ def doit(filename,
     while t_now < dur:
         frame_number += 1
         t_now += save_dt
-        print 't_now',t_now
+        print('t_now',t_now)
 
         pos, ori = camera_animation_path.get_pos_ori(t_now)
         focal_point, view_up = pos_ori2fu(pos,ori)
@@ -456,7 +458,7 @@ def main():
         args.append(options.filename)
 
     if len(args)>1:
-        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        print("arguments interpreted as FILE supplied more than once", file=sys.stderr)
         parser.print_help()
         return
 

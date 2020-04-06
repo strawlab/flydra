@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import numpy
 import numpy as np
 import scipy.linalg
@@ -35,7 +36,7 @@ M = P[:,:3]
 # do the work:
 # RQ decomposition: K is upper-triangular matrix and R is
 # orthogonal. Both are components of M such that KR=M
-print 'M',repr(M)
+print('M',repr(M))
 K,R = scipy.linalg.rq(M) # added to scipy 0.5.3
 Knorm = K/K[2,2]
 
@@ -49,30 +50,30 @@ P_ = numpy.dot( K, numpy.concatenate( (R, t), axis=1 ) )
 
 show_results = True
 if show_results:
-    print 'P (original):'
-    print repr(P)
-    print
+    print('P (original):')
+    print(repr(P))
+    print()
 
-    print 'C~ (center):'
-    print repr(C_)
-    print
+    print('C~ (center):')
+    print(repr(C_))
+    print()
 
-    print 'K (calibration):'
-    print repr(K)
-    print
+    print('K (calibration):')
+    print(repr(K))
+    print()
 
-    print 'normalized K (calibration):'
-    print repr(Knorm)
-    print
+    print('normalized K (calibration):')
+    print(repr(Knorm))
+    print()
 
-    print 'R (orientation):' # same as rotation matrix
-    print repr(R)
-    print
+    print('R (orientation):') # same as rotation matrix
+    print(repr(R))
+    print()
 
-    print 't (translation in world coordinates):'
-    print repr(t)
-    print
+    print('t (translation in world coordinates):')
+    print(repr(t))
+    print()
 
-    print 'P (reconstructed):'
-    print repr(P_)
-    print
+    print('P (reconstructed):')
+    print(repr(P_))
+    print()

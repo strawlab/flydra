@@ -1,3 +1,4 @@
+from __future__ import print_function
 import argparse
 import numpy as np
 import progressbar
@@ -159,7 +160,7 @@ def retrack_reuse_data_association(h5_filename=None,
                             #no frame for that camera (start or stop of file)
                             continue
                         elif len(idxs)>1:
-                            print "MEGA WARNING MULTIPLE 2D POINTS\n", camn, frame_pt_idx,"\n\n"
+                            print("MEGA WARNING MULTIPLE 2D POINTS\n", camn, frame_pt_idx,"\n\n")
                             continue
 
                         idx = idxs[0]

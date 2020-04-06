@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import h5py
 import sys
 
@@ -19,11 +20,11 @@ def revert_schema12_to_schema11(fname):
 
     with open(fname,mode='rb') as fd:
         first = fd.read(lef)
-        print 'found %r'%(first,)
+        print('found %r'%(first,))
         if first!=expected_first:
-            print 'schema not 1.2'
+            print('schema not 1.2')
             return
-        print 'schema 1.2 found, reverting'
+        print('schema 1.2 found, reverting')
 
     # now we know we have a schema 1.2 file
     if readonly:
@@ -34,16 +35,16 @@ def revert_schema12_to_schema11(fname):
         dset_orig = f['trajectories']
         fps = dset_orig.attrs['frames_per_second']
         smoothed_source = dset_orig.attrs.get('smoothed_source',None)
-        print 'fps',fps
-        print 'smoothed_source',smoothed_source
+        print('fps',fps)
+        print('smoothed_source',smoothed_source)
         if not readonly:
             trajs = dset_orig[:]
-            print trajs.dtype
+            print(trajs.dtype)
 
             trajs = remove_field_name(trajs, 'covariance_x')
             trajs = remove_field_name(trajs, 'covariance_y')
             trajs = remove_field_name(trajs, 'covariance_z')
-            print trajs.dtype
+            print(trajs.dtype)
 
             del f['trajectories']
             #f['trajectories'] = trajs

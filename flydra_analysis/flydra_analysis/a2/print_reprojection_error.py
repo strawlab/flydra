@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 
 import numpy as np
@@ -24,7 +25,7 @@ def main():
         _med  = dist.quantile(0.5)
         _lq  = dist.quantile(0.1)
         _uq  = dist.quantile(0.9)
-        print camid,"mean", _mean, "std", _std, "max", _max, "med", _med, "10%", _lq, "90%", _uq
+        print(camid,"mean", _mean, "std", _std, "max", _max, "med", _med, "10%", _lq, "90%", _uq)
 
 if __name__=='__main__':
     main()

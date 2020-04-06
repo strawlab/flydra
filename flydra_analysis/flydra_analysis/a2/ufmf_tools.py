@@ -1,4 +1,5 @@
 from __future__ import with_statement
+from __future__ import absolute_import
 import motmot.ufmf.ufmf as ufmf_mod
 import motmot.FlyMovieFormat.FlyMovieFormat as fmf_mod
 import sys, os, tempfile, re, contextlib, warnings, time
@@ -12,7 +13,7 @@ import scipy.misc
 import subprocess
 import motmot.imops.imops as imops
 
-from tables_tools import open_file_safe
+from .tables_tools import open_file_safe
 
 ufmf_fname_regex = re.compile(r'small_([0-9]+)_([0-9]+)_(.*)')
 def get_cam_id_from_ufmf_fname(ufmf_fname):

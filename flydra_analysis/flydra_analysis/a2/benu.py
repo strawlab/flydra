@@ -5,12 +5,13 @@ thought to be the phoenix.
 
 """
 from __future__ import division, with_statement
+from __future__ import absolute_import
 
 import cairo
 import os, warnings
 import numpy as np
 import contextlib
-from benu_colormaps import cmaps
+from .benu_colormaps import cmaps
 
 D2R = np.pi/180.0
 

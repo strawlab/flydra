@@ -7,12 +7,14 @@ Options:
   -h --help     Show this screen.
   --end-idx=N   Only show this many rows [default: 100000]
 """
+from __future__ import print_function
+from __future__ import absolute_import
 from docopt import docopt
 
 import tables
 import numpy as np
 import sys
-import get_clock_sync
+from . import get_clock_sync
 import flydra_analysis.analysis.result_utils as result_utils
 
 def main():
@@ -82,7 +84,7 @@ def main():
             max_latency_sec = np.max(latency_sec)
 
             err_est = worst_sync_dict.get(hostname, np.nan)
-            print '%s (on %s): median: %.1f, mean: %.1f, worst: %.1f (estimate error: %.1f msec). %.2f%% skipped'%(
+            print('%s (on %s): median: %.1f, mean: %.1f, worst: %.1f (estimate error: %.1f msec). %.2f%% skipped'%(
                 cam_id,
                 hostname,
                 median_latency_sec*1000.0,
@@ -90,7 +92,7 @@ def main():
                 max_latency_sec*1000.0,
                 err_est*1000.0,
                 frac_skipped*100.0,
-                )
+                ))
 
 if __name__=='__main__':
     main()

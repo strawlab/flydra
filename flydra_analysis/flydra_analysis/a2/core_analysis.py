@@ -1,6 +1,8 @@
 """core analysis functions for Flydra tracked data files"""
 
 from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
 import tables
 
 # pytables files stored using Numeric would by default return Numeric-based results.
@@ -205,7 +207,7 @@ def my_decimate(x,q):
         return result
 
 def compute_ori_quality(*args,**kwargs):
-    import orientation_ekf_fitter
+    from . import orientation_ekf_fitter
     return orientation_ekf_fitter.compute_ori_quality(*args,**kwargs)
 
 def get_group_for_obj(obj_id,h5,writeable=False):
@@ -230,10 +232,10 @@ class WeakRefAbleDict(object):
         self.val = val
         self.debug = debug
         if self.debug:
-            print 'creating WeakRefAbleDict',self
+            print('creating WeakRefAbleDict',self)
     def __del__(self):
         if self.debug:
-            print 'deleting WeakRefAbleDict',self
+            print('deleting WeakRefAbleDict',self)
     def __getitem__(self,key):
         return self.val[key]
 
@@ -609,23 +611,23 @@ def choose_orientations(rows, directions, frames_per_second=None,
         if DEBUG:
             R2D = 180.0/np.pi
             for i in idxs:
-                print
-                print 'frame %s ====================='%frames[i]
-                print 'X[i]',X[i,:]
-                print 'X[i+1]',X[i+1,:]
-                print 'velocity',velocity[i]
-                print
-                print 'rot1_axis',rot1_axis[i]
-                print 'up_dir',up_dir
-                print 'cross',np.cross(velocity_direction[i], up_dir)
-                print 'velocity_direction',velocity_direction[i]
-                print
-                print 'dist_from_zplus',dist_from_zplus[i]
-                print 'dist (deg)',(dist_from_zplus[i]*R2D)
-                print 'bias_radians',bias_radians
-                print
-                print 'velocity_biaser',velocity_biaser[i]
-                print 'biased_velocity_direction',biased_velocity_direction[i]
+                print()
+                print('frame %s ====================='%frames[i])
+                print('X[i]',X[i,:])
+                print('X[i+1]',X[i+1,:])
+                print('velocity',velocity[i])
+                print()
+                print('rot1_axis',rot1_axis[i])
+                print('up_dir',up_dir)
+                print('cross',np.cross(velocity_direction[i], up_dir))
+                print('velocity_direction',velocity_direction[i])
+                print()
+                print('dist_from_zplus',dist_from_zplus[i])
+                print('dist (deg)',(dist_from_zplus[i]*R2D))
+                print('bias_radians',bias_radians)
+                print()
+                print('velocity_biaser',velocity_biaser[i])
+                print('biased_velocity_direction',biased_velocity_direction[i])
 
     else:
         biased_velocity_direction = velocity_direction
@@ -647,15 +649,15 @@ def choose_orientations(rows, directions, frames_per_second=None,
         #ADS print 'directions[i]',directions[i]
         #ADS print 'directions[i-1]',directions[i-1]
         if DEBUG and i in idxs:
-            print
+            print()
             #print 'i',i
-            print 'frame',frames[i],'='*50
-            print 'directions[i]',directions[i]
-            print 'directions[i-1]',directions[i-1]
-            print 'velocity weight w[i-1]',w[i-1]
-            print 'speed',speed[i-1]
-            print 'velocity_direction[i-1]',velocity_direction[i-1]
-            print 'biased_velocity_direction[i-1]',biased_velocity_direction[i-1]
+            print('frame',frames[i],'='*50)
+            print('directions[i]',directions[i])
+            print('directions[i-1]',directions[i-1])
+            print('velocity weight w[i-1]',w[i-1])
+            print('speed',speed[i-1])
+            print('velocity_direction[i-1]',velocity_direction[i-1])
+            print('biased_velocity_direction[i-1]',biased_velocity_direction[i-1])
 
         for enum_current,sign_current in enumerate(signs):
             direction_current = sign_current*directions[i]
@@ -699,12 +701,12 @@ def choose_orientations(rows, directions, frames_per_second=None,
                 #ADS print 'cost_current', cost_current
                 tmpcost[enum_previous] = costprev[enum_previous] + cost_current
                 if DEBUG and i in idxs:
-                    print '  (sign_current %d)'%sign_current, '-'*10
-                    print '  (sign_previous %d)'%sign_previous
-                    print '  flip_term',flip_term
-                    print '  vel_term',vel_term
-                    print '  up_term',up_term
-                    print '  cost_current',cost_current
+                    print('  (sign_current %d)'%sign_current, '-'*10)
+                    print('  (sign_previous %d)'%sign_previous)
+                    print('  flip_term',flip_term)
+                    print('  vel_term',vel_term)
+                    print('  up_term',up_term)
+                    print('  cost_current',cost_current)
 
             best_enum_previous = np.argmin( tmpcost )
             ## if DEBUG and i in idxs:
@@ -734,8 +736,8 @@ def choose_orientations(rows, directions, frames_per_second=None,
 
     if DEBUG:
         for i in idxs:
-            print 'ultimate directions:'
-            print 'frame',frames[i],directions[i]
+            print('ultimate directions:')
+            print('frame',frames[i],directions[i])
     np.seterr(**orig_np_err_settings)
     return directions
 
@@ -806,7 +808,7 @@ class PreSmoothedDataCache(object):
                         else:
                             mode='r+'
                         cache_h5file = tables.open_file(cache_h5file_name, mode=mode)
-                    except IOError, err:
+                    except IOError as err:
                         warnings.warn(
                             'Broken cache file %s. Deleting'%cache_h5file_name)
                         if int(os.environ.get('CACHE_DEBUG','0')):
@@ -911,7 +913,7 @@ class PreSmoothedDataCache(object):
                 try:
                     cache_h5file = tables.open_file( cache_h5file_name, mode='w',
                                                     title=expected_title )
-                except IOError, err:
+                except IOError as err:
                     tmp_trash, cache_h5file_name = tempfile.mkstemp('.h5')
                     # HDF5 doesn't like pre-existing non-HDF5 file
                     os.unlink(cache_h5file_name)
@@ -1001,7 +1003,7 @@ class PreSmoothedDataCache(object):
                         elevation_up_bias_degrees=elevation_up_bias_degrees,
                         up_dir=up_dir,
                         )
-                except Exception, e:
+                except Exception as e:
                     raise CouldNotCalculateOrientationError(str(e))
 
                 rows['rawdir_x'] = chosen_directions[:,0]
@@ -1512,11 +1514,11 @@ class CachingAnalyzer:
 
         try:
             rows = kresults.root.ML_estimates.read_coordinates(idxs)
-        except tables.exceptions.NoSuchNodeError, err1:
+        except tables.exceptions.NoSuchNodeError as err1:
             #backwards compatibility
             try:
                 rows = kresults.root.kalman_observations.read_coordinates(idxs)
-            except tables.exceptions.NoSuchNodeError, err2:
+            except tables.exceptions.NoSuchNodeError as err2:
                 raise err1
 
         if not len(rows):
@@ -1662,7 +1664,7 @@ class CachingAnalyzer:
                 try:
                     ML_rows = kresults.root.ML_estimates.read_coordinates(
                         obs_idxs)
-                except tables.exceptions.NoSuchNodeError, err:
+                except tables.exceptions.NoSuchNodeError as err:
                     ML_rows = kresults.root.kalman_observations.read_coordinates(
                         obs_idxs)
 
@@ -2003,7 +2005,7 @@ class CachingAnalyzer:
         full, obj_id2idx = self._load_full_recarray(data_file,which_data=which_data)
         try:
             start,stop = obj_id2idx[obj_id]
-        except KeyError,err:
+        except KeyError as err:
             raise NoObjectIDError('obj_id not found')
         rows = full[start:stop]
         return rows
@@ -2100,8 +2102,8 @@ def test_choose_orientations():
 
     input_directions[14:,:] = [1,0,0]
 
-    print 'input_directions'
-    print input_directions
+    print('input_directions')
+    print(input_directions)
 
     result_directions = choose_orientations( rows, input_directions,
                                              frames_per_second=1.0,
@@ -2109,11 +2111,11 @@ def test_choose_orientations():
                                              max_velocity_weight=1.0,
                                              elevation_up_bias_degrees=0.0,
                                              )
-    print 'true_directions'
-    print true_directions
-    print
-    print 'result_directions'
-    print result_directions
+    print('true_directions')
+    print(true_directions)
+    print()
+    print('result_directions')
+    print(result_directions)
 
     assert np.allclose( result_directions, true_directions )
 
@@ -2261,7 +2263,7 @@ class TestCoreAnalysis:
                 try:
                     obs_obj_ids = data_file.root.ML_estimates.read(
                         field='obj_id')
-                except tables.exceptions.NoSuchNodeError, err:
+                except tables.exceptions.NoSuchNodeError as err:
                     obs_obj_ids = data_file.root.kalman_observations.read(
                         field='obj_id')
                 obs_idxs = numpy.nonzero(obs_obj_ids == obj_id)[0]
@@ -2271,7 +2273,7 @@ class TestCoreAnalysis:
                 try:
                     orig_rows = data_file.root.ML_estimates.read_coordinates(
                         obs_idxs)
-                except tables.exceptions.NoSuchNodeError, err:
+                except tables.exceptions.NoSuchNodeError as err:
                     orig_rows = data_file.root.kalman_observations.read_coordinates(
                         obs_idxs)
 

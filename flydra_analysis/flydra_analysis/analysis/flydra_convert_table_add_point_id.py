@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import tables as PT
 import tables
@@ -30,7 +31,7 @@ def main():
     new_row = data2d_distorted.row
     for rownum,row in enumerate(orig_data2d):
         if rownum%1000==0:
-            print 'row %d of %d'%(rownum,orig_data2d.nrows)
+            print('row %d of %d'%(rownum,orig_data2d.nrows))
         if row['frame'] != this_frame:
             this_idx = 0
             this_frame = row['frame']
@@ -48,7 +49,7 @@ def main():
         new_row.append()
         this_idx += 1
     orig_data2d._f_remove()
-    print 'you may want to call ptrepack!'
+    print('you may want to call ptrepack!')
 
 if __name__=='__main__':
     main()

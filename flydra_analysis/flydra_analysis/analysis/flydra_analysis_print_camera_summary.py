@@ -1,4 +1,6 @@
-import result_utils
+from __future__ import print_function
+from __future__ import absolute_import
+from . import result_utils
 import sys
 from optparse import OptionParser
 
@@ -9,7 +11,7 @@ def main():
     (options, args) = parser.parse_args()
 
     if len(args)>1:
-        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        print("arguments interpreted as FILE supplied more than once", file=sys.stderr)
         parser.print_help()
         return
 
@@ -21,14 +23,14 @@ def main():
 
     results = result_utils.get_results( h5_filename, create_camera_summary=True)
 
-    print results.root.data2d_camera_summary.colnames
+    print(results.root.data2d_camera_summary.colnames)
     for row in results.root.data2d_camera_summary[:]:
-        print row
+        print(row)
 
-    print
-    print results.root.cam_info.colnames
+    print()
+    print(results.root.cam_info.colnames)
     for row in results.root.cam_info[:]:
-        print row
+        print(row)
     results.close()
 
 if __name__=='__main__':

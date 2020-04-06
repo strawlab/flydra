@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as nx
 svd = nx.linalg.svd
 
@@ -120,27 +121,27 @@ def _test():
 
     line1 = LineFromIntersectingPlanes(X1,X2)
 
-    print pt1,'in',X1,'?=',pt1.is_on_plane(X1)
-    print line1
+    print(pt1,'in',X1,'?=',pt1.is_on_plane(X1))
+    print(line1)
 
     pt2 = PointFromIntersectingPlaneAndLine( X3, line1)
-    print pt2
+    print(pt2)
 
-    print pt2,'in',X1,'?=',pt1.is_on_plane(X1)
-    print pt2,'in',X2,'?=',pt1.is_on_plane(X2)
-    print pt2,'in',X3,'?=',pt1.is_on_plane(X3)
+    print(pt2,'in',X1,'?=',pt1.is_on_plane(X1))
+    print(pt2,'in',X2,'?=',pt1.is_on_plane(X2))
+    print(pt2,'in',X3,'?=',pt1.is_on_plane(X3))
 
-    print
+    print()
 
     # example 3.4
     lmat = nx.zeros( (4,4), nx.Float )
     lmat[0,3]=-1
     lmat[3,0]=1
     xaxis = LinePlueckerMatrix( *lmat )
-    print xaxis
+    print(xaxis)
     planex1 = Plane(1,0,0,-1)
-    print planex1
-    print PointFromIntersectingPlaneAndLine( planex1, xaxis)
+    print(planex1)
+    print(PointFromIntersectingPlaneAndLine( planex1, xaxis))
 
 if __name__=='__main__':
     _test()

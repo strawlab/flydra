@@ -1,11 +1,13 @@
 #!/usr/bin/env python
+from __future__ import print_function
+from __future__ import absolute_import
 from optparse import OptionParser
 import numpy as np
 import flydra_analysis.a2.core_analysis as core_analysis
 import flydra_core.align as align
 from flydra_core.reconstruct import Reconstructor, DEFAULT_WATER_REFRACTIVE_INDEX
 import flydra_core.water as water
-import ransac
+from . import ransac
 import cgtypes # cgkit 1.x
 import os
 
@@ -161,7 +163,7 @@ def doit(filename=None,
 
     dst = os.path.splitext(filename)[0] + '-water-aligned.xml'
     r2.save_to_xml_filename(dst)
-    print 'saved to',dst
+    print('saved to',dst)
 
     if show:
         import matplotlib.pyplot as plt

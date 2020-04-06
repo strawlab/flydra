@@ -4,6 +4,8 @@
 
 from __future__ import division
 from __future__ import with_statement
+from __future__ import print_function
+from __future__ import absolute_import
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -23,11 +25,11 @@ rcParams = matplotlib.rcParams
 rcParams['xtick.major.pad'] = 10
 rcParams['ytick.major.pad'] = 10
 
-import core_analysis
+from . import core_analysis
 import flydra_analysis.a2.xml_stimulus as xml_stimulus
-import analysis_options
+from . import analysis_options
 from optparse import OptionParser
-import densities # from scikits.learn
+from . import densities # from scikits.learn
 
 import warnings
 
@@ -116,7 +118,7 @@ def plot_top_and_side_views(subplot=None,
 
     if not use_kalman_smoothing:
         if (dynamic_model is not None):
-            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)'
+            print('ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model options (--dynamic-model)', file=sys.stderr)
             sys.exit(1)
 
     ca = core_analysis.get_global_CachingAnalyzer()
@@ -171,11 +173,11 @@ def plot_top_and_side_views(subplot=None,
                 "dynamic model specified or found.")
             use_kalman_smoothing = False
     else:
-        print 'detected file loaded with dynamic model "%s"'%dynamic_model
+        print('detected file loaded with dynamic model "%s"'%dynamic_model)
         if use_kalman_smoothing:
             if dynamic_model.startswith('EKF '):
                 dynamic_model = dynamic_model[4:]
-            print '  for smoothing, will use dynamic model "%s"'%dynamic_model
+            print('  for smoothing, will use dynamic model "%s"'%dynamic_model)
 
     subplots = subplot.keys()
     subplots.sort() # ensure consistency across runs

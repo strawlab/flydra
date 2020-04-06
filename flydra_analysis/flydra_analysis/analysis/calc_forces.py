@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import absolute_import
 from pylab import *
 from matplotlib.collections import LineCollection
 from matplotlib.patches import Rectangle
@@ -14,7 +16,7 @@ import tables # pytables
 import scipy.signal
 import scipy.io
 
-from PQmath import *
+from .PQmath import *
 
 import sets
 
@@ -49,14 +51,14 @@ def interpolate_P( results, start_frame, stop_frame, typ='best' ):
     frame = fXl[:,0].astype(nx.int64)
     P = fXl[:,1:4]
 
-    print '  ',start_frame, P[0,:]
+    print('  ',start_frame, P[0,:])
 
     dPdt = (P[1,:]-P[0,:])/float(frame[1]-frame[0])
     for frame_no in range(start_frame+1, stop_frame):
         frac = float(frame_no-start_frame)/float(stop_frame-start_frame)
         newP = P[0,:]+dPdt*frac
 
-        print '  ',frame_no,newP,'<- new value'
+        print('  ',frame_no,newP,'<- new value')
 
         # now save to disk
         old_nrow = None
@@ -92,7 +94,7 @@ def interpolate_P( results, start_frame, stop_frame, typ='best' ):
         new_row.append()
         data3d.flush()
 
-    print '  ',stop_frame, P[1,:]
+    print('  ',stop_frame, P[1,:])
 
 def sort_on_col0( a, b ):
     a0 = a[0]
@@ -219,7 +221,7 @@ def do_it(results,
         #data3d.where( start_frame <= data3d.cols.frame <= stop_frame )]
         fXl.sort( sort_on_col0 )
     else:
-        print 'assuming results are numeric'
+        print('assuming results are numeric')
         fXl = results
     fXl = nx.asarray(fXl)
     frame = fXl[:,0].astype(nx.int64)
@@ -237,13 +239,13 @@ def do_it(results,
         fXl = fXl[valid_cond]
         frame = fXl[:,0].astype(nx.int64)
 
-    print 'frame[:5]',frame[:5]
+    print('frame[:5]',frame[:5])
 
     P = fXl[:,1:4]
     line3d = fXl[:,4:]
 
-    print 'P[:5]',P[:5]
-    print 'line3d[:5]',line3d[:5]
+    print('P[:5]',P[:5])
+    print('line3d[:5]',line3d[:5])
 
     # reality check on data to ensure no big jumps -- drops frames
     framediff = frame[1:]-frame[:-1]
@@ -260,13 +262,13 @@ def do_it(results,
         err_tol = n_sigma*std_Pdiff_dist
         if err_tol < 30:
             err_tol = 30
-            print 'at lower limit',# 30 mm/IFI = 3 meters/sec
+            print('at lower limit', end=' ')# 30 mm/IFI = 3 meters/sec
         else:
-            print 'calculated',
+            print('calculated', end=' ')
     else:
         err_tol = force_err_tol
-        print 'given',
-    print 'err_tol',err_tol
+        print('given', end=' ')
+    print('err_tol',err_tol)
 
     outputs = []
 
@@ -280,7 +282,7 @@ def do_it(results,
         #Pdiff_dist = math.sqrt(nx.sum((newP[-1] - P[cur_ptr])**2))
         Pdiff_dist = math.sqrt(nx.sum((tmpP2-tmpP1)**2))
         if abs(Pdiff_dist-mean_Pdiff_dist) > err_tol:
-            print 'WARNING: frame %d position difference exceeded %d sigma, ignoring data'%(frame[cur_ptr],n_sigma)
+            print('WARNING: frame %d position difference exceeded %d sigma, ignoring data'%(frame[cur_ptr],n_sigma))
             continue
         newframe.append( frame[cur_ptr] )
         newP.append( P[cur_ptr] )
@@ -325,12 +327,12 @@ def do_it(results,
                     new_row = nx.array( [fno, new_x, new_y, new_z, nan, nan, nan, nan, nan, nan],
                                         dtype=fXl[0].dtype )
                     fXl.append( new_row )
-                    print '  linear interpolation at time %0.2f (frame %d)'%((fno-start_frame)*0.01,fno,)
+                    print('  linear interpolation at time %0.2f (frame %d)'%((fno-start_frame)*0.01,fno,))
 
                     interpolated_xyz_frames.append( fno )
             else:
                 frames_missing = True
-                print 'are you missing frames between %d and %d?'%(frame[i], frame[i+1])
+                print('are you missing frames between %d and %d?'%(frame[i], frame[i+1]))
     if frames_missing:
         raise ValueError("results have missing frames (hint: interp_OK=True)")
 
@@ -369,7 +371,7 @@ def do_it(results,
     Q = QuatSeq([ orientation_to_quat(U) for U in phi_with_nans ])
     slerp_quats( Q, slerped_q_idxs, allow_roll=False )
     for cur_idx in slerped_q_idxs:
-        print '  SLERPed missing quat at time %.2f (frame %d)'%(cur_idx*IFI, frame[cur_idx])
+        print('  SLERPed missing quat at time %.2f (frame %d)'%(cur_idx*IFI, frame[cur_idx]))
     t_bad = nx.take(t_P,slerped_q_idxs)
     #frame_bad = frame[slerped_q_idxs]
     frame_bad = nx.take(frame,slerped_q_idxs)
@@ -419,14 +421,14 @@ def do_it(results,
                 fPQ = nx.array(fPQ)
                 Psmooth = fPQ[:,1:4]
                 Psmooth = nx.array(Psmooth)*to_meters
-                print 'loaded cached Psmooth from file',results.filename
+                print('loaded cached Psmooth from file',results.filename)
                 if Qsmooth is None and not do_smooth_quats:
                     Qsmooth = QuatSeq( [ cgtypes.quat( q_wxyz ) for q_wxyz in fPQ[:,4:] ])
-                    print 'loaded cached Qsmooth from file',results.filename
-                print 'Psmooth.shape',Psmooth.shape
-            except Exception, exc:
-                print 'WARNING:',str(exc)
-                print 'Not using cached smoothed data'
+                    print('loaded cached Qsmooth from file',results.filename)
+                print('Psmooth.shape',Psmooth.shape)
+            except Exception as exc:
+                print('WARNING:',str(exc))
+                print('Not using cached smoothed data')
         else:
             ftype='cheby1'
             wp_hz = 14.0;  gp = 0.001
@@ -462,19 +464,19 @@ def do_it(results,
             start = time.time()
             del_F = of.get_del_F(Psmooth)
             stop = time.time()
-            print 'P elapsed: % 4.2f secs,'%(stop-start,),
+            print('P elapsed: % 4.2f secs,'%(stop-start,), end=' ')
             err = nx.sum(nx.sum(del_F**2,axis=1))
-            print 'sum( norm(del F)):',err
+            print('sum( norm(del F)):',err)
             if err < epsilon1:
                 break
             elif last_err is not None:
                 if err > last_err:
-                    print 'ERROR: error is increasing, aborting'
+                    print('ERROR: error is increasing, aborting')
                     break
                 pct_err = (last_err-err)/last_err*100.0
-                print '   (%3.1f%%)'%(pct_err,)
+                print('   (%3.1f%%)'%(pct_err,))
                 if pct_err < percent_error_eps:
-                    print 'reached percent_error_eps'
+                    print('reached percent_error_eps')
                     break
             last_err = err
             Psmooth = Psmooth - lambda1*del_F
@@ -485,7 +487,7 @@ def do_it(results,
         d2Pdt2_smooth = (Psmooth[2:] - 2*Psmooth[1:-1] + Psmooth[:-2]) / (delta_t**2)
 
     if Qsmooth is None and do_smooth_quats:
-        print 'smoothing quats...'
+        print('smoothing quats...')
         #gamma = 1000
         #gamma = 0.0
         of = ObjectiveFunctionQuats(Q, delta_t, beta, gamma,
@@ -507,31 +509,31 @@ def do_it(results,
             D = of._getDistance(Q_k)
             E = of._getEnergy(Q_k)
             R = of._getRoll(Q_k)
-            print '  G = %s + %s*%s + %s*%s'%(str(D),str(beta),str(E),str(gamma),str(R))
+            print('  G = %s + %s*%s + %s*%s'%(str(D),str(beta),str(E),str(gamma),str(R)))
             stop = time.time()
             err = math.sqrt(nx.sum(nx.array(abs(del_G))**2))
             if err < epsilon2:
-                print 'reached epsilon2'
+                print('reached epsilon2')
                 break
             elif last_err is not None:
                 pct_err = (last_err-err)/last_err*100.0
-                print 'Q elapsed: % 6.2f secs,'%(stop-start,),
-                print 'current gradient:',err,
-                print '   (%4.2f%%)'%(pct_err,)
+                print('Q elapsed: % 6.2f secs,'%(stop-start,), end=' ')
+                print('current gradient:',err, end=' ')
+                print('   (%4.2f%%)'%(pct_err,))
 
                 if err > last_err:
-                    print 'ERROR: error is increasing, aborting'
+                    print('ERROR: error is increasing, aborting')
                     break
                 if pct_err < percent_error_eps_quats:
-                    print 'reached percent_error_eps_quats'
+                    print('reached percent_error_eps_quats')
                     break
             else:
-                print 'Q elapsed: % 6.2f secs,'%(stop-start,),
-                print 'current gradient:',err
+                print('Q elapsed: % 6.2f secs,'%(stop-start,), end=' ')
+                print('current gradient:',err)
             last_err = err
             Q_k = Q_k*(del_G*-lambda2).exp()
         if count>=max_iter2:
-            print 'reached max_iter2'
+            print('reached max_iter2')
         Qsmooth = Q_k
     if do_smooth_quats or return_smooth_quats:
         outputs.append(Qsmooth)
@@ -565,7 +567,7 @@ def do_it(results,
         tmp_V2_b = dPdt_air[:,0]**2 + dPdt_air[:,1]**2 + dPdt_air[:,2]**2
 
         for i in range(len(tmp_V2_a)):
-            print abs(tmp_V2_a[i]-tmp_V2_b[i]),' near 0?'
+            print(abs(tmp_V2_a[i]-tmp_V2_b[i]),' near 0?')
 
     if Qsmooth is not None:
         body_air_V_smooth = rotate_velocity_by_orientation(dPdt_smooth_air,Qsmooth[1:-1])
@@ -674,7 +676,7 @@ def do_it(results,
         if return_drag_force:
             outputs.append( (frame[1:-1], drag_force) ) # return frame numbers also
 
-        print 'used drag model:',drag_model_for_roll,'to compute roll angle'
+        print('used drag model:',drag_model_for_roll,'to compute roll angle')
         thrust_force = resultant - drag_force
 
         if return_thrust_force:
@@ -715,7 +717,7 @@ def do_it(results,
 
             if 0:
                 for r1, r2 in zip(guess_roll, guess_roll2):
-                    print r1,'?=',r2
+                    print(r1,'?=',r2)
 
         if 1:
             # XXX hack to fix some sign error somewhere (ARGH!!)
@@ -825,7 +827,7 @@ def do_it(results,
         vert_vel = dPdt[:,2]
 
     if plot_hists:
-        print 'plot_hists'
+        print('plot_hists')
         ax1 = subplot(3,1,1)
         n,bins,patches = hist( dPdt[:,0], bins=30)
         setp(patches,'facecolor',(1,0,0))
@@ -839,7 +841,7 @@ def do_it(results,
         setp(patches,'facecolor',(0,0,1))
 
     elif plot_force_angle_info:
-        print 'plot_force_angle_info'
+        print('plot_force_angle_info')
         R = [make_norm(r) for r in resultant] # resultant orientation in V3
         B = [make_norm(r) for r in orient_parallel] # body orientation in V3
         angle = nx.arccos( [ nx.dot(r,b) for (r,b) in zip(R,B) ])*rad2deg
@@ -874,19 +876,19 @@ def do_it(results,
         ylabel('force angle (degrees)')
 
     elif plot_hist_horiz_vel:
-        print 'plot_hist_horiz_vel'
+        print('plot_hist_horiz_vel')
         hist( horiz_vel, bins=30 )
         xlabel( 'horizontal velocity (m/sec)')
         ylabel( 'count' )
 
     elif plot_hist_vert_vel:
-        print 'plot_hist_vert_vel'
+        print('plot_hist_vert_vel')
         hist( vert_vel, bins=30 )
         xlabel( 'vertical velocity (m/sec)')
         ylabel( 'count' )
 
     elif plot_forward_vel_vs_pitch_angle:
-        print 'plot_forward_vel_vs_pitch_angle'
+        print('plot_forward_vel_vs_pitch_angle')
         vert_vel_limit = 0.1 # meter/sec
         hvels = []
         pitches = []
@@ -900,14 +902,14 @@ def do_it(results,
         ylabel( 'pitch angle (degrees)' )
 
     elif plot_pos_and_vel:
-        print 'plot_pos_and_vel'
+        print('plot_pos_and_vel')
         ioff()
         try:
             linewidth = 1.5
             ax1=subplot(3,1,1)
             title('ground speed, global reference frame')
             plot( t_P, P[:,0], 'rx', t_P, P[:,1], 'gx', t_P, P[:,2], 'bx' )
-            print 't_P, P[:,0]',len(t_P), len(P[:,0])
+            print('t_P, P[:,0]',len(t_P), len(P[:,0]))
             if Psmooth is not None:
                 smooth_lines = plot( t_P, Psmooth[:,0], 'r-', t_P, Psmooth[:,1], 'g-', t_P, Psmooth[:,2], 'b-' )
                 setp(smooth_lines,'linewidth',linewidth)
@@ -941,7 +943,7 @@ def do_it(results,
             ion()
 
     elif plot_ffts:
-        print 'plot_ffts'
+        print('plot_ffts')
         ioff()
         try:
             NFFT=128
@@ -1060,11 +1062,11 @@ def do_it(results,
             ion()
 
     elif plot_vel_vs_accel or return_vel_vs_pitch_info:
-        print 'plot_vel_vs_accel'
+        print('plot_vel_vs_accel')
 #    elif plot_vel_vs_accel or return_vel_vs_pitch_info or plot_z_vel_vs_horiz_vel:
         if Psmooth is None:
             #raise RuntimeError("need smoothed postion data")
-            print 'WARNING: using un-smoothed acceleration data'
+            print('WARNING: using un-smoothed acceleration data')
             z_vel = dPdt[:,2]
             abs_z_vel = nx.abs(z_vel)
             acc_mag = nx.sqrt(nx.sum(d2Pdt2**2, axis=1))
@@ -1168,7 +1170,7 @@ def do_it(results,
                 ion()
 
     elif plot_pos_err_histogram:
-        print 'plot_pos_err_histogram'
+        print('plot_pos_err_histogram')
 
         #subplot(2,1,1)
         axes([.075,.575,.85,.375])
@@ -1247,7 +1249,7 @@ def do_it(results,
         xlabel('distance from smoothed data (deg)')
 
     elif plot_srini_landing_fig:
-        print 'plot_srini_landing_fig'
+        print('plot_srini_landing_fig')
         ioff()
         try:
             clf()
@@ -1325,10 +1327,10 @@ def do_it(results,
             ion()
 
     elif plot_xy:
-        print 'plot_xy'
+        print('plot_xy')
         ioff()
         try:
-            print 'plotting'
+            print('plotting')
             axes([.1,.1,.8,.8])
             title('top view')
 
@@ -1340,7 +1342,7 @@ def do_it(results,
 
     ##        title('top view (ground frame)')
             plot(P[:,0]*1000,P[:,1]*1000,'ko',mfc=(1,1,1),markersize=2)
-            print 'len(P[:,0])',len(P[:,0])
+            print('len(P[:,0])',len(P[:,0]))
     ##        plot(P[:,0]*1000,P[:,1]*1000,'ko',mfc=(1,1,1),markersize=4)
 
             if 1:
@@ -1361,7 +1363,7 @@ def do_it(results,
                     gca().add_collection(collection)
 
             if plot_xy_Psmooth:
-                print 'plotted Psmooth'
+                print('plotted Psmooth')
                 plot(Psmooth[:,0]*1000,Psmooth[:,1]*1000,'b-')#,mfc=(1,1,1),markersize=2)
 
             for idx in range(len(t_P)):
@@ -1401,7 +1403,7 @@ def do_it(results,
 ##        show()
 ##        print 'shown...'
     elif plot_xz:
-        print 'plot_xz'
+        print('plot_xz')
         ioff()
         try:
             axes([.1,.1,.8,.8])
@@ -1482,7 +1484,7 @@ def do_it(results,
             ion()
 
     elif plot_xy_air:
-        print 'plot_xy_air'
+        print('plot_xy_air')
         axes([.1,.1,.8,.8])
         title('position (wind frame)')
 
@@ -1527,7 +1529,7 @@ def do_it(results,
         grid()
 
     elif plot_accel:
-        print 'plot_accel'
+        print('plot_accel')
         subplot(3,1,1)
         plot( t_d2Pdt2, d2Pdt2[:,0], 'r-' )
         grid()
@@ -1540,7 +1542,7 @@ def do_it(results,
         plot( t_d2Pdt2, d2Pdt2[:,2], 'b-' )
         grid()
     elif plot_smooth_pos_and_vel:
-        print 'plot_smooth_pos_and_vel'
+        print('plot_smooth_pos_and_vel')
         linewidth = 1.5
         subplot(3,1,1)
         title('Global reference frame, ground speed')
@@ -1566,7 +1568,7 @@ def do_it(results,
         xlabel('Time (sec)')
         grid()
     elif plot_Q:
-        print 'plot_Q'
+        print('plot_Q')
         linewidth = 1.5
         ax1=subplot(3,1,1)
         title('quaternions in R4')
@@ -1621,7 +1623,7 @@ def do_it(results,
         grid()
 
     elif plot_body_angular_vel:
-        print 'plot_body_angular_vel'
+        print('plot_body_angular_vel')
         rad2deg = 180/math.pi
         linewidth = 1.5
         smooth = 1
@@ -1784,7 +1786,7 @@ def do_it(results,
             xlabel('frame')
         grid()
     elif plot_body_angular_vel2: # angular vels w and w/o roll guess
-        print 'plot_body_angular_vel2'
+        print('plot_body_angular_vel2')
         rad2deg = 180/math.pi
         linewidth = 1.5
         smooth = 1
@@ -1883,13 +1885,13 @@ def do_it(results,
         if 0:
             xlim = .09,.86
             ylim = -1115,2270
-            print 'setting xlim to',xlim
-            print 'setting ylim to',ylim
+            print('setting xlim to',xlim)
+            print('setting ylim to',ylim)
             setp(gca(),'xlim',xlim)
             setp(gca(),'ylim',ylim)
 
     elif plot_error_angles:
-        print 'plot_error_angles'
+        print('plot_error_angles')
         # plot
         linewidth=1.5
         subplot(2,1,1)
@@ -1912,7 +1914,7 @@ def do_it(results,
         xlabel('time (sec)')
         grid()
     elif plot_body_ground_V:
-        print 'plot_body_ground_V'
+        print('plot_body_ground_V')
         linewidth = 1.5
         subplot(4,1,1)
         title('groundspeed (body frame)')
@@ -1939,7 +1941,7 @@ def do_it(results,
         xlabel('time (sec)')
         grid()
     elif plot_body_air_V:
-        print 'plot_body_air_V'
+        print('plot_body_air_V')
         linewidth = 1.5
         subplot(4,1,1)
         title('airspeed (body frame)')
@@ -1962,7 +1964,7 @@ def do_it(results,
         ylabel('|V|\n(m/sec)')
         xlabel('time (sec)')
     elif plot_forces:
-        print 'plot_forces'
+        print('plot_forces')
 
         ax1=subplot(3,1,1)
         title('predicted aerodynamic forces on body')
@@ -1988,7 +1990,7 @@ def do_it(results,
         ax4=subplot(3,1,3,sharex=ax1)
         xlabel('time (sec)')
 
-    print 'returning...'
+    print('returning...')
     return outputs
 
 def two_posts():
@@ -2132,7 +2134,7 @@ def calculate_roll_and_save( results, start_frame, stop_frame, **kwargs):
                                          results,
                                          frames,
                                          resultants)
-        print 'saved resultants table'
+        print('saved resultants table')
 
 def delete_calculated_roll(results):
     del results.root.smooth_data

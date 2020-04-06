@@ -1,3 +1,4 @@
+from __future__ import print_function
 import time, sys
 import socket, struct
 import Queue, threading
@@ -553,7 +554,7 @@ if __name__=='__main__':
         import cProfile
         import lsprofcalltree
         p = cProfile.Profile()
-        print 'running test in profile mode'
+        print('running test in profile mode')
         p.runctx('benchmark()',globals(),locals())
         k = lsprofcalltree.KCacheGrind(p)
         data = open(kcachegrind_output_fname, 'w')

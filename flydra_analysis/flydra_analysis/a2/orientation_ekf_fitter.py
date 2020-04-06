@@ -1,5 +1,7 @@
 from __future__ import division
 from __future__ import with_statement
+from __future__ import print_function
+from __future__ import absolute_import
 
 import flydra_analysis.analysis.result_utils as result_utils
 import flydra_analysis.a2.core_analysis as core_analysis
@@ -9,7 +11,7 @@ import flydra_core.reconstruct as reconstruct
 import collections, time, sys, os
 from optparse import OptionParser
 
-from tables_tools import clear_col, open_file_safe
+from .tables_tools import clear_col, open_file_safe
 import flydra_core.kalman.ekf as kalman_ekf
 import flydra_analysis.analysis.PQmath as PQmath
 import flydra_core.geom as geom
@@ -242,16 +244,16 @@ def doit(output_h5_filename=None,
     dx_symbolic = M.get_process_model(x)
 
     if 0:
-        print 'G_symbolic'
+        print('G_symbolic')
         sympy.pprint(G_symbolic)
-        print
+        print()
 
     G_linearized = [ G_symbolic.diff(x[i]) for i in range(7)]
     if 0:
-        print 'G_linearized'
+        print('G_linearized')
         for i in range(len(G_linearized)):
             sympy.pprint(G_linearized[i])
-        print
+        print()
 
     arg_tuple_x = (M.P00, M.P01, M.P02, M.P03,
                    M.P10, M.P11, M.P12, M.P13,
@@ -283,9 +285,9 @@ def doit(output_h5_filename=None,
     eval_linH=lambdify(arg_tuple_x_xm, H_linearized, 'numpy')
 
     if 0:
-        print 'dx_symbolic'
+        print('dx_symbolic')
         sympy.pprint(dx_symbolic)
-        print
+        print()
 
     eval_dAdt = drop_dims( lambdify( x,dx_symbolic,'numpy'))
 
@@ -311,11 +313,11 @@ def doit(output_h5_filename=None,
 
                 try:
                     dest_table = output_h5.root.ML_estimates
-                except tables.exceptions.NoSuchNodeError, err1:
+                except tables.exceptions.NoSuchNodeError as err1:
                     # backwards compatibility
                     try:
                         dest_table = output_h5.root.kalman_observations
-                    except tables.exceptions.NoSuchNodeError, err2:
+                    except tables.exceptions.NoSuchNodeError as err2:
                         raise err1
                 for colname in ['hz_line%d'%i for i in range(6)]:
                     clear_col(dest_table,colname)
@@ -372,8 +374,8 @@ def doit(output_h5_filename=None,
                 # Use data association step from kalmanization to load potentially
                 # relevant 2D orientations, but discard previous 3D orientation.
                     if obj_id_enum%100==0:
-                        print 'obj_id %d (%d of %d)'%(
-                            obj_id,obj_id_enum,len(use_obj_ids))
+                        print('obj_id %d (%d of %d)'%(
+                            obj_id,obj_id_enum,len(use_obj_ids)))
                     if options.show:
                         all_xhats = []
                         all_ori = []
@@ -476,7 +478,7 @@ def doit(output_h5_filename=None,
                     assert int(max_frame+1)==max_frame+1
                     frame_range = np.arange(int(min_frame),int(max_frame+1))
                     if debug_level >= 1:
-                        print 'frame range %d-%d'%(frame_range[0],frame_range[-1])
+                        print('frame range %d-%d'%(frame_range[0],frame_range[-1]))
                     camn_list = slopes_by_camn_by_frame.keys()
                     camn_list.sort()
                     cam_id_list = [camn2cam_id[camn] for camn in camn_list]
@@ -581,16 +583,16 @@ def doit(output_h5_filename=None,
                         this_dx = eval_dAdt( previous_posterior_x )
                         A = preA + this_dx*dt
                         if debug_level >= 1:
-                            print
-                            print 'frame',absolute_frame_number,'-'*40
-                            print 'previous posterior',previous_posterior_x
+                            print()
+                            print('frame',absolute_frame_number,'-'*40)
+                            print('previous posterior',previous_posterior_x)
                             if debug_level > 6:
-                                print 'A'
-                                print A
+                                print('A')
+                                print(A)
 
                         xhatminus, Pminus=ekf.step1__calculate_a_priori(A,Q)
                         if debug_level >= 1:
-                            print 'new prior',xhatminus
+                            print('new prior',xhatminus)
 
                         # 1. Gate per-camera orientations.
 
@@ -599,7 +601,7 @@ def doit(output_h5_filename=None,
                         this_frame_x0d = x0ds[frame_idx,:]
                         this_frame_y0d = y0ds[frame_idx,:]
                         if debug_level >= 5:
-                            print 'this_frame_slopes',this_frame_slopes
+                            print('this_frame_slopes',this_frame_slopes)
 
                         save_cols['frame'].append( absolute_frame_number )
                         for j,camn in enumerate(camn_list):
@@ -631,13 +633,13 @@ def doit(output_h5_filename=None,
                             try:
                                 assert len(smoothed_pos_idxs)==1
                             except:
-                                print 'obj_id',obj_id
-                                print 'absolute_frame_number',absolute_frame_number
+                                print('obj_id',obj_id)
+                                print('absolute_frame_number',absolute_frame_number)
                                 if len(frame_range):
-                                    print 'frame_range[0],frame_rang[-1]',frame_range[0],frame_range[-1]
+                                    print('frame_range[0],frame_rang[-1]',frame_range[0],frame_range[-1])
                                 else:
-                                    print 'no frame range'
-                                print 'len(smoothed_pos_idxs)',len(smoothed_pos_idxs)
+                                    print('no frame range')
+                                print('len(smoothed_pos_idxs)',len(smoothed_pos_idxs))
                                 raise
                             smoothed_pos_idx = smoothed_pos_idxs[0]
                             smooth_row = smoothed_3d_rows[smoothed_pos_idx]
@@ -646,7 +648,7 @@ def doit(output_h5_filename=None,
                                                         smooth_row['y'],
                                                         smooth_row['z']))
                             if debug_level >= 2:
-                                print 'center_position',center_position
+                                print('center_position',center_position)
 
                         if not all_data_this_frame_missing:
                             if expected_orientation_method == 'trust_prior':
@@ -674,7 +676,7 @@ def doit(output_h5_filename=None,
                             cams_with_data = ~cams_without_data
                             possible_cam_idxs = np.nonzero(cams_with_data)[0]
                             if debug_level >= 6:
-                                print 'possible_cam_idxs',possible_cam_idxs
+                                print('possible_cam_idxs',possible_cam_idxs)
                             gate_vector = np.zeros( (n_cams,), dtype=np.bool)
                             ## flip_vector = np.zeros( (n_cams,), dtype=np.bool)
                             for camn_idx in possible_cam_idxs:
@@ -694,15 +696,15 @@ def doit(output_h5_filename=None,
                                 ##     this_frame_slopes[camn_idx])
                                 theta_measured = this_frame_theta_measured[camn_idx]
                                 if debug_level >= 6:
-                                    print 'cam_id %s, camn %d'%(cam_id,camn)
+                                    print('cam_id %s, camn %d'%(cam_id,camn))
                                 if debug_level >= 3:
                                     a = reconst.find2d( cam_id, center_position)
                                     other_position = get_point_on_line(xhatminus,
                                                                        center_position)
                                     b = reconst.find2d( cam_id, other_position)
                                     theta_expected=find_theta_mod_pi_between_points(a,b)
-                                    print ('  theta_expected,theta_measured',
-                                           theta_expected*R2D,theta_measured*R2D)
+                                    print(('  theta_expected,theta_measured',
+                                           theta_expected*R2D,theta_measured*R2D))
 
                                 P = reconst.get_pmat( cam_id )
                                 if 0:
@@ -730,8 +732,8 @@ def doit(output_h5_filename=None,
                                     this_hx = eval_H(*args_x_xm)
                                     this_C = eval_linH(*args_x_xm)
                                     if debug_level >= 3:
-                                        print ('  this_phi,this_y',
-                                               this_phi*R2D,this_y*R2D)
+                                        print(('  this_phi,this_y',
+                                               this_phi*R2D,this_y*R2D))
 
                                 save_cols['dist%d'%camn][-1] = this_y # save
 
@@ -740,7 +742,7 @@ def doit(output_h5_filename=None,
                                     save_cols['used%d'%camn][-1] = 1
                                     gate_vector[camn_idx]=1
                                     if debug_level >= 3:
-                                        print '    good'
+                                        print('    good')
                                     if options.show:
                                         _save_plot_rows_used[-1][camn_idx] = this_y
                                     y.append(this_y)
@@ -760,9 +762,9 @@ def doit(output_h5_filename=None,
                                     if options.show:
                                         _save_plot_rows[-1][camn_idx] = this_y
                                     if debug_level >= 6:
-                                        print '    bad'
+                                        print('    bad')
                             if debug_level >= 1:
-                                print 'gate_vector',gate_vector
+                                print('gate_vector',gate_vector)
                                 #print 'flip_vector',flip_vector
                             all_data_this_frame_missing = not bool(np.sum(gate_vector))
 
@@ -784,20 +786,20 @@ def doit(output_h5_filename=None,
                                     beyond = max(0,beyond) # clip at zero
                                     R[i:i] = R_scalar * (1+10*beyond)
                             if debug_level >= 6:
-                                print 'full values'
-                                print 'C',C
-                                print 'hx',hx
-                                print 'y',y
-                                print 'R',R
+                                print('full values')
+                                print('C',C)
+                                print('hx',hx)
+                                print('y',y)
+                                print('R',R)
 
                         if debug_level >= 1:
-                            print 'all_data_this_frame_missing',all_data_this_frame_missing
+                            print('all_data_this_frame_missing',all_data_this_frame_missing)
                         xhat,P = ekf.step2__calculate_a_posteriori(
                             xhatminus, Pminus, y=y, hx=hx,
                             C=C,R=R,
                             missing_data=all_data_this_frame_missing)
                         if debug_level >= 1:
-                            print 'xhat',xhat
+                            print('xhat',xhat)
                         previous_posterior_x = xhat
                         if center_position is not None:
                             # save
@@ -885,7 +887,7 @@ def doit(output_h5_filename=None,
 
     if 0:
         debug_fname = 'temp_results.pkl'
-        print 'saving debug results to file',
+        print('saving debug results to file', end=' ')
         fd = open(debug_fname,mode='w')
         pickle.dump(used_camn_dict,fd)
         fd.close()
@@ -948,10 +950,10 @@ def smooth(x,window_len=10,window='hanning'):
     # copied from http://www.scipy.org/Cookbook/SignalSmooth
 
     if x.ndim != 1:
-        raise ValueError, "smooth only accepts 1 dimension arrays."
+        raise ValueError("smooth only accepts 1 dimension arrays.")
 
     if x.size < window_len:
-        raise ValueError, "Input vector needs to be bigger than window size."
+        raise ValueError("Input vector needs to be bigger than window size.")
 
 
     if window_len<3:
@@ -959,7 +961,7 @@ def smooth(x,window_len=10,window='hanning'):
 
 
     if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
-        raise ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
+        raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
 
 
     s=np.r_[2*x[0]-x[window_len:1:-1],x,2*x[-1]-x[-1:-window_len:-1]]

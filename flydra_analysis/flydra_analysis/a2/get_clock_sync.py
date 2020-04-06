@@ -1,3 +1,4 @@
+from __future__ import print_function
 import tables
 import numpy
 import sys
@@ -64,8 +65,8 @@ def main():
     hostnames.sort()
 
     for hostname in hostnames:
-        print 'worst clock sync for %s: %.1f msec'%(hostname,
-                                                    result_dict[hostname]*1000.0)
+        print('worst clock sync for %s: %.1f msec'%(hostname,
+                                                    result_dict[hostname]*1000.0))
 
 if __name__=='__main__':
     main()

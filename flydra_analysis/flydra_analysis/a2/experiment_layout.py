@@ -1,4 +1,5 @@
-import conditions_draw
+from __future__ import absolute_import
+from . import conditions_draw
 import numpy
 import numpy as np
 from numpy import array

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import tables
 import argparse
 import warnings
@@ -7,7 +8,7 @@ from flydra_analysis.a2.tables_tools import open_file_safe
 import flydra_core.kalman.flydra_kalman_utils as flydra_kalman_utils
 
 def get_start_stop(src_h5,name,start,stop):
-    print '  finding start and stop row of %s'%name
+    print('  finding start and stop row of %s'%name)
     input_node = getattr(src_h5.root, name)
     frames = input_node[:]['frame']
     if start is not None:
@@ -64,8 +65,8 @@ def copy_selective(src_h5,input_node,output_group,options):
 
         startrow, stoprow= get_start_stop( src_h5, input_node.name,
                                            options.start, options.stop)
-        print '  copying data for frames %s - %s (rows %s - %s)' % (
-            options.start, options.stop, startrow, stoprow )
+        print('  copying data for frames %s - %s (rows %s - %s)' % (
+            options.start, options.stop, startrow, stoprow ))
         input_node._f_copy(output_group,
                            start=startrow,
                            stop=stoprow)
@@ -104,14 +105,14 @@ def h5_shorten(input_filename, output_filename, options):
                     if options.data2d_only:
                         if node.name != 'data2d_distorted':
                             continue
-                    print 'selectively copying',node
+                    print('selectively copying',node)
                     copy_selective(h5,node,output_h5.root,options)
                 elif (hasattr(node,'name') and
                       node.name in ['ML_estimates','ML_estimates_2d_idxs']):
                     continue
                 else:
                     # copy everything from source to dest
-                    print 'copying entire',node
+                    print('copying entire',node)
                     node._f_copy(output_h5.root,recursive=True)
 
 def main():

@@ -1,4 +1,6 @@
 from __future__ import with_statement
+from __future__ import print_function
+from __future__ import absolute_import
 import motmot.ufmf.ufmf as ufmf_mod
 import sys, os, tempfile, re, contextlib, warnings
 from optparse import OptionParser
@@ -16,9 +18,9 @@ from flydra_analysis.a2.orientation_ekf_fitter import compute_ori_quality
 import flydra_core.reconstruct as reconstruct
 import flydra_core.geom as geom
 import cherrypy  # ubuntu: install python-cherrypy3
-import benu
+from . import benu
 
-from tables_tools import open_file_safe
+from .tables_tools import open_file_safe
 
 def get_config_defaults():
     # keep in sync with usage in main() below
@@ -114,10 +116,10 @@ def load_3d_data(kalman_filename,start=None,stop=None,require_qual=True,**kwargs
                 dynamic_model_name = dynamic_models.DEFAULT_MODEL
                 warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
             else:
-                print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+                print('detected file loaded with dynamic model "%s"'%dynamic_model_name)
             if dynamic_model_name.startswith('EKF '):
                 dynamic_model_name = dynamic_model_name[4:]
-            print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+            print('  for smoothing, will use dynamic model "%s"'%dynamic_model_name)
         allrows = []
         if require_qual:
             allqualrows = []
@@ -237,14 +239,14 @@ def make_montage( h5_filename,
                                                          candidate_index=candidate_index,
                                                          verbose=verbose)
         if verbose:
-            print 'autodiscovery: found movie_fnames: %r'%(movie_fnames,)
+            print('autodiscovery: found movie_fnames: %r'%(movie_fnames,))
     else:
         if verbose:
-            print 'autodiscovery: movie_fnames specified, not finding movies'
+            print('autodiscovery: movie_fnames specified, not finding movies')
 
     if len(movie_fnames)==0:
         if verbose:
-            print 'autodiscovery: no FMF files found, looking for ufmfs'
+            print('autodiscovery: no FMF files found, looking for ufmfs')
         movie_fnames = auto_discover_ufmfs.find_ufmfs( h5_filename,
                                                        ufmf_dir=ufmf_dir,
                                                        careful=True,
@@ -252,16 +254,16 @@ def make_montage( h5_filename,
                                                        )
     else:
         if verbose:
-            print 'autodiscovery: prefixing directory'
+            print('autodiscovery: prefixing directory')
         if ufmf_dir is not None:
             if verbose:
-                print 'autodiscovery: prefixing movie names with directory %r'%(ufmf_dir,)
+                print('autodiscovery: prefixing movie names with directory %r'%(ufmf_dir,))
             movie_fnames = [ os.path.join(ufmf_dir,f) for f in movie_fnames]
 
     if len(movie_fnames)==0:
         raise ValueError('no input movies -- nothing to do')
     elif verbose:
-        print 'movie_fnames:',movie_fnames
+        print('movie_fnames:',movie_fnames)
 
     if dest_dir is None:
         dest_dir = os.curdir
@@ -336,7 +338,7 @@ def make_montage( h5_filename,
                 this_frame_this_obj_3d_data = this_frame_3d_data[ zoom_cond_3d ]
 
         if (frame_enum%100)==0:
-            print '%s: frame %d'%(datetime_str,frame)
+            print('%s: frame %d'%(datetime_str,frame))
 
         saved_fnames = []
         for movie_idx,ufmf_fname in enumerate(movie_fnames):
@@ -606,7 +608,7 @@ def make_montage( h5_filename,
         if not no_remove:
             for fname in saved_fnames:
                 os.unlink(fname)
-    print '%s: %d frames montaged'%(datetime_str,len(all_frame_montages),)
+    print('%s: %d frames montaged'%(datetime_str,len(all_frame_montages),))
 
     if save_ogv_movie:
         orig_dir = os.path.abspath(os.curdir)

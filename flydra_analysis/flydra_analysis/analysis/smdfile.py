@@ -1,3 +1,4 @@
+from __future__ import print_function
 import struct
 import numpy as nx
 
@@ -8,9 +9,9 @@ class SMDFile:
         self.fmt = '<dII'
         self.row_sz = struct.calcsize(self.fmt)
         ts = []
-        print 'loading SMD file',filename
+        print('loading SMD file',filename)
         smd = self.fd.read()
-        print ' read buffer, parsing...'
+        print(' read buffer, parsing...')
         len_smd = len(smd)
         idx = 0
         last_ts = None
@@ -21,7 +22,7 @@ class SMDFile:
             cmp_ts, left, bottom = struct.unpack(self.fmt,smd[idx:stop_idx])
             ts.append(cmp_ts)
             idx = stop_idx
-        print ' done parsing buffer'
+        print(' done parsing buffer')
         self.timestamps = nx.array(ts)
         
         check_monotonic=True

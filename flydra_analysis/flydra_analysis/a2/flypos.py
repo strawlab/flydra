@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy
 import numpy as np
 import flydra_analysis.a2.core_analysis as core_analysis
@@ -125,8 +126,8 @@ def fuse_obj_ids(use_obj_ids, data_file,
 
     if 0:
         obs = obs[:100,:]
-        print 'obs'
-        print obs
+        print('obs')
+        print(obs)
 
     if 1:
         # now do kalman smoothing across all obj_ids
@@ -159,9 +160,9 @@ def fuse_obj_ids(use_obj_ids, data_file,
                                                      )
     X = xsmooth[:,:3] # kalman estimates of position
     if 0:
-        print 'X'
-        print X
-        print dynamic_model_name
+        print('X')
+        print(X)
+        print(dynamic_model_name)
         sys.exit()
 
     recarray = numpy.rec.fromarrays([frames_all,

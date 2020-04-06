@@ -1,3 +1,4 @@
+from __future__ import print_function
 import tables
 import numpy
 import scipy
@@ -17,10 +18,10 @@ def doit(filename=None):
             # only a single "color" channel
             image = image[:,:,0] # drop a dimension (3D->2D)
         mean_luminance = numpy.mean(image.flat)
-        print '%s: %dx%d, mean luminance %.1f'%(cam_id,
+        print('%s: %dx%d, mean luminance %.1f'%(cam_id,
                                                 image.shape[1],
                                                 image.shape[0],
-                                                mean_luminance)
+                                                mean_luminance))
         scipy.misc.imsave( '%s.png'%(cam_id,), image )
     results.close()
 
@@ -39,7 +40,7 @@ def main():
     (options, args) = parser.parse_args()
 
     if len(args)>1:
-        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        print("arguments interpreted as FILE supplied more than once", file=sys.stderr)
         parser.print_help()
         return
 
@@ -50,7 +51,7 @@ def main():
     h5_filename=args[0]
 
     if options.version:
-        print '%s %s'%(sys.argv[0],flydra_analysis.version.__version__,)
+        print('%s %s'%(sys.argv[0],flydra_analysis.version.__version__,))
 
     doit(filename = h5_filename)
 

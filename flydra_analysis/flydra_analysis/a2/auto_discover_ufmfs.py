@@ -1,3 +1,4 @@
+from __future__ import print_function
 from optparse import OptionParser
 import tables
 import numpy as np
@@ -54,7 +55,7 @@ def find_ufmfs(filename,ufmf_dir=None,careful=True,verbose=False):
 
     h5_start, h5_stop = get_h5_start_stop(filename,careful=careful)
     if verbose:
-        print 'h5_start, h5_stop',h5_start, h5_stop
+        print('h5_start, h5_stop',h5_start, h5_stop)
 
     possible_ufmfs = []
 
@@ -101,7 +102,7 @@ def find_ufmfs(filename,ufmf_dir=None,careful=True,verbose=False):
     for ufmf_filename in possible_ufmfs:
         try:
             ufmf = motmot.ufmf.ufmf.FlyMovieEmulator(ufmf_filename)
-        except Exception, err:
+        except Exception as err:
             warnings.warn('auto_discover_ufmfs: error while reading %s: %s, '
                           'skipping'%(ufmf_filename,err))
             continue
@@ -131,4 +132,4 @@ def main():
     filename = args[0]
     ufmfs = find_ufmfs(filename,ufmf_dir=options.ufmf_dir)
     for ufmf in ufmfs:
-        print ufmf
+        print(ufmf)

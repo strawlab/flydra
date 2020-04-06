@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import print_function
 import numpy
 import numpy as np
 import scipy.linalg
@@ -44,9 +45,9 @@ def generate_calibration(n_cameras = 5,
                 target = common_point
                 up = (0,0,1)
                 if 0:
-                    print 'pos',pos
-                    print 'target',target
-                    print 'up',up
+                    print('pos',pos)
+                    print('target',target)
+                    print('up',up)
                 R = cgtypes.mat4().lookAt( pos,
                                            target,
                                            up )
@@ -76,7 +77,7 @@ def generate_calibration(n_cameras = 5,
                 Rs = [ R.rotation( pi/2.0, (1,0,0) ) for th in theta ]
                 #Rs = [ R for th in theta ]
             Rs = [ numpy.asarray(R).T for R in Rs ]
-            print 'Rs',Rs
+            print('Rs',Rs)
 
     # 2. intrinsic parameters
 
@@ -107,25 +108,25 @@ def generate_calibration(n_cameras = 5,
         Rt = numpy.concatenate( (R,t), axis=1)
         P= numpy.dot( K, Rt )
         if 0:
-            print 'cam_id',cam_id
-            print 'P'
-            print P
-            print 'K'
-            print K
-            print 'Rt'
-            print Rt
-            print
+            print('cam_id',cam_id)
+            print('P')
+            print(P)
+            print('K')
+            print(K)
+            print('Rt')
+            print(Rt)
+            print()
             KR = numpy.dot(K,R)
-            print 'KR',KR
+            print('KR',KR)
             K3,R3 = reconstruct.my_rq(KR)
-            print 'K3'
-            print K3
-            print 'R3'
-            print R3
+            print('K3')
+            print(K3)
+            print('R3')
+            print(R3)
             K3R3 = numpy.dot(K3,R3)
-            print 'K3R3',K3R3
+            print('K3R3',K3R3)
 
-            print '*'*60
+            print('*'*60)
 
         if radial_distortion:
             f = 1000.0
@@ -146,26 +147,26 @@ def generate_calibration(n_cameras = 5,
             # XXX test
             K2,R2 = scc.get_KR()
             if 0:
-                print 'C',C
-                print 't',t
-                print 'K',K
-                print 'K2',K2
-                print 'R',R
-                print 'R2',R2
-                print 'P',P
-                print 'KR|t',numpy.dot(K,Rt)
+                print('C',C)
+                print('t',t)
+                print('K',K)
+                print('K2',K2)
+                print('R',R)
+                print('R2',R2)
+                print('P',P)
+                print('KR|t',numpy.dot(K,Rt))
                 t2 = scc.get_t()
-                print 't2',t2
+                print('t2',t2)
                 Rt2 = numpy.concatenate((R2,t2),axis=1)
-                print 'KR2|t',numpy.dot(K2,Rt2)
-                print
+                print('KR2|t',numpy.dot(K2,Rt2))
+                print()
             KR2 = numpy.dot(K2,R2)
             KR  = numpy.dot(K,R)
             if not numpy.allclose( KR2, KR):
                 if not numpy.allclose( KR2, -KR):
                     raise ValueError('expected KR2 and KR to be identical')
                 else:
-                    print 'WARNING: weird sign error in calibration math FIXME!'
+                    print('WARNING: weird sign error in calibration math FIXME!')
     recon = reconstruct.Reconstructor(sccs)
 
     full_info = {

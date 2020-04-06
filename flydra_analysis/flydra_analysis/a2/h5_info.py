@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 from __future__ import division
+from __future__ import absolute_import
 import tables
 import argparse
 import numpy as np
 import pprint
-import core_analysis
+from . import core_analysis
 from distutils.version import LooseVersion
-import orientation_ekf_fitter
+from . import orientation_ekf_fitter
 from flydra_analysis.analysis.result_utils import timestamp2string, get_tz
 
 def get_data2d_distorted_info(filename):

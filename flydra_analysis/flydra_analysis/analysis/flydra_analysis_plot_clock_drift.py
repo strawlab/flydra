@@ -1,8 +1,10 @@
+from __future__ import print_function
+from __future__ import absolute_import
 import sys, sets
 import tables
 import pylab
 import numpy
-from result_utils import model_remote_to_local, drift_estimates
+from .result_utils import model_remote_to_local, drift_estimates
 
 def main():
     fname = sys.argv[1]
@@ -15,14 +17,14 @@ def main():
                                                d['local_timestamp'][hostname][::10])
         gain[hostname]=tgain
         offset[hostname]=toffset
-        print repr(hostname),tgain,toffset
+        print(repr(hostname),tgain,toffset)
         
-    print
+    print()
     
     table = results.root.data2d_distorted
 
     if 1:
-        import result_utils
+        from . import result_utils
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
         camn2hostname = {}
         for camn, cam_id in camn2cam_id.iteritems():
@@ -54,7 +56,7 @@ def main():
                 mx = cur_ts.max()
                 spread = mx-mn
                 spread_msec = spread*1e3
-                print '% 9d % 6.2f'%(cur_frame,spread_msec)
+                print('% 9d % 6.2f'%(cur_frame,spread_msec))
 
             # reset for current frame
             cur_ts = [local_timestamp]

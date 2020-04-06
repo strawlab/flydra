@@ -1,5 +1,6 @@
 from __future__ import with_statement
 from __future__ import division
+from __future__ import absolute_import
 import pkg_resources
 import motmot.imops.imops as imops
 from optparse import OptionParser
@@ -9,7 +10,7 @@ import motmot.FlyMovieFormat.FlyMovieFormat as fmf_mod
 import flydra_analysis.a2.core_analysis as core_analysis
 import warnings, os
 import numpy as np
-import benu
+from . import benu
 
 green = (0,1,0,1)
 

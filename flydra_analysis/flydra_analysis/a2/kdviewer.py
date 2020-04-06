@@ -1,4 +1,6 @@
 from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -15,7 +17,7 @@ import numpy
 import numpy as np
 import tables as PT
 from optparse import OptionParser
-import core_analysis
+from . import core_analysis
 import scipy.io
 import datetime
 import pkg_resources
@@ -31,13 +33,13 @@ import flydra_analysis.a2.pos_ori2fu
 import flydra_analysis.version
 
 def print_cam_props(camera):
-    print 'camera.parallel_projection = ',camera.parallel_projection
-    print 'camera.focal_point = ',camera.focal_point
-    print 'camera.position = ',camera.position
-    print 'camera.view_angle = ',camera.view_angle
-    print 'camera.view_up = ',camera.view_up
-    print 'camera.clipping_range = ',camera.clipping_range
-    print 'camera.parallel_scale = ',camera.parallel_scale
+    print('camera.parallel_projection = ',camera.parallel_projection)
+    print('camera.focal_point = ',camera.focal_point)
+    print('camera.position = ',camera.position)
+    print('camera.view_angle = ',camera.view_angle)
+    print('camera.view_up = ',camera.view_up)
+    print('camera.clipping_range = ',camera.clipping_range)
+    print('camera.parallel_scale = ',camera.parallel_scale)
 
 def do_show_cameras(results, renderers, frustums=True, axes=True, labels=True, centers=True, length=2.0):
     actors = []
@@ -249,7 +251,7 @@ def doit(filename,
 
     if not use_kalman_smoothing:
         if (options.dynamic_model is not None):
-            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model option (--dynamic-model)'
+            print('ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting dynamic model option (--dynamic-model)', file=sys.stderr)
             sys.exit(1)
     dynamic_model_name = options.dynamic_model
 
@@ -278,17 +280,17 @@ def doit(filename,
                 use_obj_ids = include_obj_ids
             if exclude_obj_ids is not None:
                 use_obj_ids = list( set(use_obj_ids).difference( exclude_obj_ids ) )
-            print 'using object ids specified in fanout .xml file'
+            print('using object ids specified in fanout .xml file')
 
     if dynamic_model_name is None:
         if 'dynamic_model_name' in extra:
             dynamic_model_name = extra['dynamic_model_name']
-            print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+            print('detected file loaded with dynamic model "%s"'%dynamic_model_name)
             if dynamic_model_name.startswith('EKF '):
                 dynamic_model_name = dynamic_model_name[4:]
-            print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+            print('  for smoothing, will use dynamic model "%s"'%dynamic_model_name)
         else:
-            print 'no dynamic model name specified, and it could not be determined from the file, either'
+            print('no dynamic model name specified, and it could not be determined from the file, either')
 
     if not is_mat_file:
 
@@ -305,8 +307,8 @@ def doit(filename,
             raise ValueError("show_n_longest incompatible with --obj-only limiter")
 
         if len(use_obj_ids):
-            print '%d obj_ids total. Range is %d - %d'%(
-                len(use_obj_ids), use_obj_ids[0],use_obj_ids[-1])
+            print('%d obj_ids total. Range is %d - %d'%(
+                len(use_obj_ids), use_obj_ids[0],use_obj_ids[-1]))
 
         obj_ids_by_n_frames = {}
         for i,obj_id in enumerate(use_obj_ids):
@@ -316,13 +318,13 @@ def doit(filename,
                 continue
 
             if i%100==0:
-                print 'doing %d of %d (obj_id %d)'%(i,len(use_obj_ids),obj_id)
+                print('doing %d of %d (obj_id %d)'%(i,len(use_obj_ids),obj_id))
 
             if not ca.has_obj_id(obj_id, data_file):
                 continue
             try:
                 obs_rows = ca.load_dynamics_free_MLE_position(obj_id,data_file)
-            except core_analysis.ObjectIDDataError,err:
+            except core_analysis.ObjectIDDataError as err:
                 continue
 
             n_frames = int(obs_rows['frame'][-1])-int(obs_rows['frame'][0])+1
@@ -361,7 +363,7 @@ def doit(filename,
             if len(obj_only) >= show_n_longest:
                 break
 
-        print 'longest traces = ',obj_only
+        print('longest traces = ',obj_only)
         use_obj_ids = numpy.array(obj_only)
 
     if obj_start is not None:
@@ -465,13 +467,13 @@ def doit(filename,
         if breakout:
             break
         if (obj_id_enum%100)==0 and len(use_obj_ids) > 5:
-            print 'obj_id %d of %d'%(obj_id_enum,len(use_obj_ids))
+            print('obj_id %d of %d'%(obj_id_enum,len(use_obj_ids)))
             if 0:
                 import time
                 now = time.time()
                 if last_time is not None:
                     dur = now-last_time
-                    print dur,'seconds'
+                    print(dur,'seconds')
                 last_time = now
 
         if not is_mat_file:
@@ -490,29 +492,29 @@ def doit(filename,
                         return_smoothed_directions=return_smoothed_directions,
                         min_ori_quality_required=options.ori_qual,
                         )
-                except core_analysis.ObjectIDDataError, err:
+                except core_analysis.ObjectIDDataError as err:
                     continue
 
             if 0:
                 my_timestamp = my_rows['timestamp'][0]
                 dur = my_rows['timestamp'][-1] - my_timestamp
-                print '%d 3D triangulation started at %s (took %.2f seconds)'%(
+                print('%d 3D triangulation started at %s (took %.2f seconds)'%(
                     obj_id,
                     datetime.datetime.fromtimestamp(my_timestamp),
-                    dur)
-                print '  estimate frames: %d - %d (%d frames)'%(
+                    dur))
+                print('  estimate frames: %d - %d (%d frames)'%(
                     my_rows['frame'][0],
                     my_rows['frame'][-1],
-                    int(my_rows['frame'][-1])-(my_rows['frame'][0])),
+                    int(my_rows['frame'][-1])-(my_rows['frame'][0])), end=' ')
                 if fps is None:
                     fpses = [60.0, 100.0, 200.0]
                 else:
                     fpses = [fps]
                 for my_fps in fpses:
-                        print '(%.1f sec at %.1f fps)'%(
+                        print('(%.1f sec at %.1f fps)'%(
                             (my_rows['frame'][-1]-my_rows['frame'][0])/my_fps,
-                            my_fps),
-                print
+                            my_fps), end=' ')
+                print()
 
         if show_observations:
             obs_rows, obs_directions = ca.load_dynamics_free_MLE_position(
@@ -533,8 +535,8 @@ def doit(filename,
             obs_z = obs_rows['z']
             obs_frames = obs_rows['frame']
             if len(obs_frames):
-                print '  observation frames: %d - %d'%(
-                    obs_frames[0], obs_frames[-1])
+                print('  observation frames: %d - %d'%(
+                    obs_frames[0], obs_frames[-1]))
             obs_X = numpy.vstack((obs_x,obs_y,obs_z)).T
 
             pd = tvtk.PolyData()
@@ -543,7 +545,7 @@ def doit(filename,
             g = tvtk.Glyph3D(scale_mode='data_scaling_off',
                              vector_mode = 'use_vector',
                              input=pd)
-            print 'radius/3',radius/3
+            print('radius/3',radius/3)
             ss = tvtk.SphereSource(radius = radius/3,
                                    #theta_resolution=3,
                                    #phi_resolution=3,
@@ -589,7 +591,7 @@ def doit(filename,
                 del verts # make sure it's not used below
 
         if options.fuse:
-            print 'fusing %s'%use_obj_ids
+            print('fusing %s'%use_obj_ids)
             rows = flydra_analysis.a2.flypos.fuse_obj_ids(
                 use_obj_ids, data_file,
                 dynamic_model_name = dynamic_model_name,
@@ -674,7 +676,7 @@ def doit(filename,
                 all_max_vel = max( all_max_vel, max_speed_this_obj )
                 if max_vel is not None:
                     if max_speed_this_obj > max_vel:
-                        print 'WARNING: max_vel = %s, but max speed is %.2f'%(max_vel,max_speed_this_obj)
+                        print('WARNING: max_vel = %s, but max speed is %.2f'%(max_vel,max_speed_this_obj))
 
         else:
             x0 = rows.field('x')[0]
@@ -808,7 +810,7 @@ def doit(filename,
 
         if show_obj_ids:
             if len(verts):
-                print 'showing obj_id %d at %s'%(obj_id,str(verts[0]))
+                print('showing obj_id %d at %s'%(obj_id,str(verts[0])))
                 obj_id_ta = tvtk.TextActor(input=str( obj_id )+' start')
                 obj_id_ta.text_property = tvtk.TextProperty(
                     color = (0.0, 0.0, 0.0), # black
@@ -818,7 +820,7 @@ def doit(filename,
                 actors.append(obj_id_ta)
                 actor2obj_id[a] = obj_id
             else:
-                print 'no data for obj_id %d'%obj_id
+                print('no data for obj_id %d'%obj_id)
 
         if options.show_frames != 0:
             if len(frames):
@@ -827,7 +829,7 @@ def doit(filename,
                 doverts = verts[docond]
 
                 for thisframe,thisvert in zip(doframes,doverts):
-                    print 'thisframe',thisframe
+                    print('thisframe',thisframe)
 
                     obj_id_ta = tvtk.TextActor(input='%d'%(
                         thisframe*options.show_frames_gain,))
@@ -922,9 +924,9 @@ def doit(filename,
 
         try:
             PluginClass = plugin_loader(draw_stim_func_str)
-        except Exception,err:
-            print 'possible values for --draw-stim:'
-            print plugin_loader.all_names
+        except Exception as err:
+            print('possible values for --draw-stim:')
+            print(plugin_loader.all_names)
             raise
 
         plugin = PluginClass(filename=filename,
@@ -944,7 +946,7 @@ def doit(filename,
         verts = numpy.array( track_end_verts )
 
         if 1:
-            print 'limiting ends shown to approximate arena boundaries'
+            print('limiting ends shown to approximate arena boundaries')
             cond = (verts[:,2] < 0.25) & (verts[:,2] > -0.05)
             #cond = cond & (verts[:,1] < 0.29) & (verts[:,1] > 0.0)
             showverts = verts[cond]
@@ -1061,9 +1063,9 @@ def doit(filename,
             #print 'viewdir2',(cgtypes.vec3(ren.active_camera.focal_point)-cpos).normalize()
             #print
             p = cgtypes.vec3(camera.position)
-            print 'animation path variable (t=time) (t,x,y,z,qw,qx,qy,qz):'
-            print 't', p[0], p[1], p[2], q.w, q.x, q.y, q.z
-            print
+            print('animation path variable (t=time) (t,x,y,z,qw,qx,qy,qz):')
+            print('t', p[0], p[1], p[2], q.w, q.x, q.y, q.z)
+            print()
 
             if not picker.cell_id < 0:
                 found = set([])
@@ -1079,8 +1081,8 @@ def doit(filename,
                     dists3d = verts-picker.pick_position
                     dists = numpy.sum(dists3d**2,axis=1)
                     idx = numpy.argmin(dists)
-                    print 'obj_id %d, frame %d, closest vert: %s'%(
-                        objid,this_obj_frames[idx],verts[idx])
+                    print('obj_id %d, frame %d, closest vert: %s'%(
+                        objid,this_obj_frames[idx],verts[idx]))
 
             if 1:
                 imf = tvtk.WindowToImageFilter(input=rw, input_buffer_type='rgba', read_front_buffer='off')
@@ -1306,7 +1308,7 @@ def main():
         args.append(options.filename)
 
     if len(args)>1:
-        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        print("arguments interpreted as FILE supplied more than once", file=sys.stderr)
         parser.print_help()
         return
 
@@ -1328,7 +1330,7 @@ def main():
         up_dir = None
 
     if options.version:
-        print 'kdviewer %s'%(flydra_analysis.version.__version__,)
+        print('kdviewer %s'%(flydra_analysis.version.__version__,))
 
     doit(filename=h5_filename,
          start=options.start,

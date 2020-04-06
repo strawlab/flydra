@@ -4,6 +4,7 @@
 # Last Change: Thu Jul 12 04:00 PM 2007 J
 """This module implements various basic functions related to multivariate
 gaussian, such as pdf estimation, confidence interval/ellipsoids, etc..."""
+from __future__ import absolute_import
 
 __docformat__ = 'restructuredtext'
 
@@ -11,7 +12,7 @@ import numpy as N
 import numpy.linalg as lin
 #from numpy.random import randn
 from scipy.stats import chi2
-import misc
+from . import misc
 
 # Error classes
 class DenError(Exception):

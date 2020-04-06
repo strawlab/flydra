@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy
 import scipy # use numpy if scipy unavailable
 import scipy.linalg # use numpy if scipy unavailable
@@ -94,7 +95,7 @@ return bestfit
             #print 'numpy.mean(test_err)',numpy.mean(test_err)
             #print 'iteration %d:len(alsoinliers) = %d'%(
             #    iterations,len(alsoinliers))
-            print '  %  20.3f         % 6d     % 6d'%(numpy.mean(test_err), iterations, len(alsoinliers))
+            print('  %  20.3f         % 6d     % 6d'%(numpy.mean(test_err), iterations, len(alsoinliers)))
         if len(alsoinliers) > d:
             betterdata = numpy.concatenate( (maybeinliers, alsoinliers) )
             bettermodel = model.fit(betterdata)

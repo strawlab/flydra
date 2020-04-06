@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import print_function
 import numpy
 import tables as PT
 import scipy.io
@@ -51,11 +52,11 @@ def do_it(filename=None,
 
     if filename is not None:
         kresults = PT.open_file(filename,mode="r")
-        print 'reading files...'
+        print('reading files...')
         table1 = kresults.root.kalman_estimates.read()
         if not ignore_observations:
             table2 = kresults.root.ML_estimates.read()
-        print 'done.'
+        print('done.')
         kresults.close()
         del kresults
 
@@ -146,7 +147,7 @@ def do_it(filename=None,
         data.update(extra)
 
     if 0:
-        print "converting int32 to float64 to avoid scipy.io.savemat bug"
+        print("converting int32 to float64 to avoid scipy.io.savemat bug")
         for key in data:
             #print 'converting field',key, data[key].dtype, data[key].dtype.char
             if data[key].dtype.char == 'l':
@@ -154,7 +155,7 @@ def do_it(filename=None,
 
     for key,value in extra_vars.iteritems():
         if key in data:
-            print 'WARNING: requested to save extra variable %s, but already in data, not overwriting'%key
+            print('WARNING: requested to save extra variable %s, but already in data, not overwriting'%key)
             continue
         data[key] = value
 
@@ -227,5 +228,5 @@ def do_it(filename=None,
         scipy.io.savemat(newfilename,data,appendmat=False)
 
 if __name__=='__main__':
-    print "WARNING: are you sure you want to run this program and not 'data2smoothed'?"
+    print("WARNING: are you sure you want to run this program and not 'data2smoothed'?")
     main()

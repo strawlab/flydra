@@ -1,3 +1,4 @@
+from __future__ import print_function
 import unittest
 import flydra_core.reconstruct as reconstruct
 import pkg_resources
@@ -45,10 +46,10 @@ class TestGeomParametric:
         strhzL = str(hzL)
         assert strL==strhzL
         if 0:
-            print 'hz_p',hz_p
-            print 'correct',L
-            print 'test   ',hzL
-            print
+            print('hz_p',hz_p)
+            print('correct',L)
+            print('test   ',hzL)
+            print()
 
     def tst_line_from_points(self,geom):
         line=geom.line_from_points(geom.ThreeTuple((2,1,0)),
@@ -65,7 +66,7 @@ class TestGeomParametric:
                                     geom.ThreeTuple((.5,0,1)))
         result = xaxis.get_my_point_closest_to_line( zline )
         eps = 1e-10
-        print 'result',result
+        print('result',result)
         assert result.dist_from( geom.ThreeTuple( (0.5, 0, 0) )) < eps
 
     def tst_init(self,geom):

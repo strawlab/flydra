@@ -1,5 +1,6 @@
 # see a2/save_movies_overlay.py
 from __future__ import division, with_statement
+from __future__ import print_function
 import numpy
 import numpy as np
 import warnings
@@ -89,7 +90,7 @@ class ShowIt(object):
           h - save all intersected 3D points to 'points.h5'
         """
 
-        print 'received key',repr(event.key)
+        print('received key',repr(event.key))
 
         if event.key=='c':
             del self.cam_ids_and_points2d[:]
@@ -105,17 +106,17 @@ class ShowIt(object):
             X = self.reconstructor.find3d(self.cam_ids_and_points2d,return_X_coords = True, return_line_coords=False)
             self.points3d.append(X)
 
-            print 'maximum liklihood intersection:'
-            print repr(X)
+            print('maximum liklihood intersection:')
+            print(repr(X))
             if 1:
-                print 'reprojection errors:'
+                print('reprojection errors:')
                 for (cam_id, value_tuple) in self.cam_ids_and_points2d:
                     newx,newy=self.reconstructor.find2d(cam_id,X,distorted=True)
                     #origx,origy=self.reconstructor.undistort(cam_id, value_tuple[:2] )
                     origx,origy=value_tuple[:2]
                     reproj_error = numpy.sqrt((newx-origx)**2+(newy-origy)**2)
-                    print '  %s: %.1f'%(cam_id,reproj_error)
-                print
+                    print('  %s: %.1f'%(cam_id,reproj_error))
+                print()
 
             for cam_id, ax in self.subplot_by_cam_id.iteritems():
                 newx,newy=self.reconstructor.find2d(cam_id,X,distorted=True)
@@ -130,12 +131,12 @@ class ShowIt(object):
             # new point -- project onto other images
 
             if not event.inaxes:
-                print 'not in axes -- nothing to do'
+                print('not in axes -- nothing to do')
                 return
 
             ax = event.inaxes  # the axes instance
             cam_id = self.find_cam_id(ax)
-            print 'click on',cam_id
+            print('click on',cam_id)
 
             xlim = ax.get_xlim()
             ylim = ax.get_ylim()
@@ -145,7 +146,7 @@ class ShowIt(object):
             ax.set_ylim(ylim)
 
             if self.reconstructor is None:
-                print 'no reconstructor... cannot plot projection'
+                print('no reconstructor... cannot plot projection')
                 return
 
             x,y = self.reconstructor.undistort(cam_id, [event.xdata, event.ydata])
@@ -248,10 +249,10 @@ current list of 2D points
                     dynamic_model_name = dynamic_models.DEFAULT_MODEL
                     warnings.warn('no dynamic model specified, using "%s"'%dynamic_model_name)
                 else:
-                    print 'detected file loaded with dynamic model "%s"'%dynamic_model_name
+                    print('detected file loaded with dynamic model "%s"'%dynamic_model_name)
                 if dynamic_model_name.startswith('EKF '):
                     dynamic_model_name = dynamic_model_name[4:]
-                print '  for smoothing, will use dynamic model "%s"'%dynamic_model_name
+                print('  for smoothing, will use dynamic model "%s"'%dynamic_model_name)
 
 
         if hasattr(results.root,'images'):
@@ -294,25 +295,25 @@ current list of 2D points
 
         data2d = results.root.data2d_distorted # make sure we have 2d data table
 
-        print 'reading frames...'
+        print('reading frames...')
         frames = data2d.read(field='frame')
-        print 'OK'
+        print('OK')
 
         if frame_start is not None:
-            print 'selecting frames after start'
+            print('selecting frames after start')
             #after_start = data2d.get_where_list( 'frame>=frame_start')
             after_start = numpy.nonzero(frames>=frame_start)[0]
         else:
             after_start = None
 
         if frame_stop is not None:
-            print 'selecting frames before stop'
+            print('selecting frames before stop')
             #before_stop = data2d.get_where_list( 'frame<=frame_stop')
             before_stop = numpy.nonzero(frames<=frame_stop)[0]
         else:
             before_stop = None
 
-        print 'finding all frames'
+        print('finding all frames')
         if after_start is not None and before_stop is not None:
             use_idxs = numpy.intersect1d(after_start,before_stop)
         elif after_start is not None:
@@ -324,18 +325,18 @@ current list of 2D points
 
         # OK, we have data coords, plot
 
-        print 'reading cameras'
+        print('reading cameras')
         frames = frames[use_idxs]#data2d.read_coordinates( use_idxs, field='frame')
         if len(frames):
-            print 'frame range: %d - %d (%d frames total)'%(
-                frames[0], frames[-1],len(frames) )
+            print('frame range: %d - %d (%d frames total)'%(
+                frames[0], frames[-1],len(frames) ))
         camns = data2d.read(field='camn')
         camns = camns[use_idxs]
         #camns = data2d.read_coordinates( use_idxs, field='camn')
         unique_camns = numpy.unique(camns)
         unique_cam_ids = list(set([camn2cam_id[camn] for camn in unique_camns]))
         unique_cam_ids.sort()
-        print '%d cameras with data'%(len(unique_cam_ids),)
+        print('%d cameras with data'%(len(unique_cam_ids),))
 
         # plot all cameras, not just those with data
         all_cam_ids = cam_id2camns.keys()
@@ -519,7 +520,7 @@ current list of 2D points
                             break
                     if not found:
                         if 1:
-                            print 'WARNING:point not found in data -- 3D data starts before 2D I guess.'
+                            print('WARNING:point not found in data -- 3D data starts before 2D I guess.')
                             continue
                         else:
                             raise RuntimeError('point not found in data!?')
@@ -628,7 +629,7 @@ def main():
         options.obj_only = core_analysis.parse_seq(options.obj_only)
 
     if len(args)>1:
-        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        print("arguments interpreted as FILE supplied more than once", file=sys.stderr)
         parser.print_help()
         return
 
@@ -655,7 +656,7 @@ def main():
                    options=options,
                    )
     if options.save_fig is not None:
-        print 'saving to %s'%options.save_fig
+        print('saving to %s'%options.save_fig)
         pylab.savefig( options.save_fig )
     else:
         pylab.show()

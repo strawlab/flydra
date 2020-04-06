@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import print_function
 import pkg_resources
 import os
 from optparse import OptionParser
@@ -9,7 +10,7 @@ import pylab
 def doit(caldir):
     filename = os.path.join(caldir,'camera_order.txt')
     cam_ids = open(filename,mode='r').read().split()
-    print 'cam_ids',cam_ids
+    print('cam_ids',cam_ids)
 
     filename = os.path.join(caldir,'obj_ids_zero_indexed.dat')
     if os.path.exists(filename):
@@ -20,7 +21,7 @@ def doit(caldir):
     filename = os.path.join(caldir,'points.dat')
 
     points = np.loadtxt(filename)
-    print points.shape
+    print(points.shape)
     N_cams = points.shape[0]//3
     assert N_cams*3 == points.shape[0]
     assert len(cam_ids)==N_cams

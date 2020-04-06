@@ -1,10 +1,12 @@
+from __future__ import print_function
+from __future__ import absolute_import
 import xml.etree.ElementTree as ET
 import flydra_core.reconstruct as reconstruct
 import numpy
 import numpy as np
 import os
 import hashlib
-from core_analysis import parse_seq
+from .core_analysis import parse_seq
 
 class WrongXMLTypeError(Exception):
     pass
@@ -408,7 +410,7 @@ class Stimulus(object):
 
         """
         if not isinstance(projection,StimProjection):
-            print 'projection',projection
+            print('projection',projection)
             raise ValueError('projection must be instance of '
                              'xml_stimulus.StimProjection class')
 
@@ -613,8 +615,8 @@ def print_kh5_files_in_fanout(filename):
     sf = xml_fanout_from_filename( filename )
     for single_episode in sf.root.findall("single_episode"):
         for kh5_file in single_episode.findall('kh5_file'):
-            print kh5_file.attrib['name'],
-    print
+            print(kh5_file.attrib['name'], end=' ')
+    print()
 
 def main():
     import sys
@@ -627,9 +629,9 @@ def print_linesegs():
     stim = xml_stimulus_from_filename( filename )
     linesegs, colors= stim.get_distorted_linesegs('mama01_0')
     for i in range(len(linesegs)):
-        print linesegs[i]
-        print colors[i]
-        print
+        print(linesegs[i])
+        print(colors[i])
+        print()
 
 if __name__=='__main__':
     main()

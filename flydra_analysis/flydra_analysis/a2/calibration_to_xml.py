@@ -1,3 +1,4 @@
+from __future__ import print_function
 import flydra_core.reconstruct as reconstruct
 from optparse import OptionParser
 import xml.etree.ElementTree as ET
@@ -14,9 +15,9 @@ def doit(calsource,options=None):
     if options.dest:
 	with open(options.dest, 'wb') as the_file:
 		the_file.write(result)
-	print 'saved calibration to %s' %options.dest
+	print('saved calibration to %s' %options.dest)
     else:
-	print result
+	print(result)
 
 def main():
     usage = '%prog CALSOURCE [options]'

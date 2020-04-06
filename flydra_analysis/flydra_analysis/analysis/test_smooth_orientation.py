@@ -1,7 +1,8 @@
+from __future__ import absolute_import
 import pkg_resources
 
 import numpy as np
-from PQmath import ObjectiveFunctionQuats, QuatSeq, orientation_to_quat, \
+from .PQmath import ObjectiveFunctionQuats, QuatSeq, orientation_to_quat, \
      quat_to_orient, CachingObjectiveFunctionQuats, QuatSmoother
 import nose
 

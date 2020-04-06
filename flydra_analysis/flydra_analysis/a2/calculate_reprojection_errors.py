@@ -1,3 +1,4 @@
+from __future__ import print_function
 import argparse
 import numpy as np
 import pandas
@@ -91,7 +92,7 @@ def calculate_reprojection_errors(h5_filename=None,
                         dynamic_model_name = dynamic_model_name,
                         frames_per_second=fps,
                         )
-                except core_analysis.NotEnoughDataToSmoothError, err:
+                except core_analysis.NotEnoughDataToSmoothError as err:
                     # OK, we don't have data from this obj_id
                     pass
                 except core_analysis.DiscontiguousFramesError:
@@ -153,7 +154,7 @@ def calculate_reprojection_errors(h5_filename=None,
                         #no frame for that camera (start or stop of file)
                         continue
                     elif len(idxs)>1:
-                        print "MEGA WARNING MULTIPLE 2D POINTS\n", camn, camn_pt_no,"\n\n"
+                        print("MEGA WARNING MULTIPLE 2D POINTS\n", camn, camn_pt_no,"\n\n")
                         continue
 
                     idx = idxs[0]
@@ -242,10 +243,10 @@ def print_summarize_file(fname):
     orig_store = pandas.HDFStore(fname,mode='r')
     orig_df = orig_store['reprojection']
     cam_df = orig_store['cameras']
-    print fname,'-'*50
-    print cam_df
+    print(fname,'-'*50)
+    print(cam_df)
     for camn, y in orig_df.groupby('camn'):
-        print camn, y.dist.mean()
+        print(camn, y.dist.mean())
 
 if __name__=='__main__':
     main()

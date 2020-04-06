@@ -3,6 +3,8 @@
 # wrote that one a long time ago. - ADS 20070112
 
 from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
 import pkg_resources
 if 1:
     # deal with old files, forcing to numpy
@@ -29,12 +31,13 @@ if PLOT=='image':
 import motmot.FlyMovieFormat.FlyMovieFormat as FMF
 import flydra_analysis.analysis.result_utils as result_utils
 import progressbar
-import core_analysis
+from . import core_analysis
 
 import warnings
 import datetime
 
-def ensure_minsize_image( arr, (h,w), fill=0):
+def ensure_minsize_image( arr, xxx_todo_changeme, fill=0):
+    (h,w) = xxx_todo_changeme
     if ((arr.shape[0] < h) or (arr.shape[1] < w)):
         arr_new = numpy.ones( (h,w), dtype=arr.dtype )*fill
         arr_new[:arr.shape[0],:arr.shape[1]] = arr
@@ -56,9 +59,9 @@ class KObsRowCacher:
             try:
                 qualities = core_analysis.compute_ori_quality(
                     self.h5,frames,obj_id)
-            except Exception, err:
-                print
-                print 'len(frames)',len(frames)
+            except Exception as err:
+                print()
+                print('len(frames)',len(frames))
                 # this is probably missing data. no time to debug now.
                 warnings.warn('ignoring pytables error %s'%err)
                 qualities = np.zeros( frames.shape )
@@ -95,7 +98,7 @@ def doit(fmf_filename=None,
         raise ValueError('style ("%s") is not one of %s'%(style,str(styles)))
 
     if options.debug_ori_pickle is not None:
-        print 'options.debug_ori_pickle',options.debug_ori_pickle
+        print('options.debug_ori_pickle',options.debug_ori_pickle)
         import pickle
         fd = open(options.debug_ori_pickle,mode='rb')
         used_camn_dict = pickle.load(fd)
@@ -103,7 +106,7 @@ def doit(fmf_filename=None,
 
     if not use_kalman_smoothing:
         if (fps is not None) or (dynamic_model is not None):
-            print >> sys.stderr, 'ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)'
+            print('ERROR: disabling Kalman smoothing (--disable-kalman-smoothing) is incompatable with setting fps and dynamic model options (--fps and --dynamic-model)', file=sys.stderr)
             sys.exit(1)
 
     if fmf_filename.endswith('.ufmf'):
@@ -133,7 +136,7 @@ def doit(fmf_filename=None,
         try:
             bg_fmf = FMF.FlyMovie(bg_fmf_filename)
             cmp_fmf = FMF.FlyMovie(cmp_fmf_filename)
-        except FMF.InvalidMovieFileException, err:
+        except FMF.InvalidMovieFileException as err:
             bg_OK = False
 
     if bg_OK:
@@ -143,7 +146,7 @@ def doit(fmf_filename=None,
         assert numpy.all((bg_fmf_timestamps == cmp_fmf_timestamps))
         fmf2bg = bg_fmf_timestamps.searchsorted( fmf_timestamps, side='right')-1
     else:
-        print 'Not loading background movie - it does not exist or it is invalid.'
+        print('Not loading background movie - it does not exist or it is invalid.')
         bg_fmf = None
         cmp_fmf = None
         bg_fmf_timestamps = None
@@ -168,10 +171,10 @@ def doit(fmf_filename=None,
 
         if dynamic_model is None:
             dynamic_model = extra['dynamic_model_name']
-            print 'detected file loaded with dynamic model "%s"'%dynamic_model
+            print('detected file loaded with dynamic model "%s"'%dynamic_model)
             if dynamic_model.startswith('EKF '):
                 dynamic_model = dynamic_model[4:]
-            print '  for smoothing, will use dynamic model "%s"'%dynamic_model
+            print('  for smoothing, will use dynamic model "%s"'%dynamic_model)
 
 
         if is_mat_file:
@@ -181,7 +184,7 @@ def doit(fmf_filename=None,
 
         R = reconstruct.Reconstructor(data_file)
 
-        print 'loading frame numbers for kalman objects (estimates)'
+        print('loading frame numbers for kalman objects (estimates)')
         kalman_rows = []
         if options.obj_only is not None:
             use_obj_ids = options.obj_only
@@ -196,7 +199,7 @@ def doit(fmf_filename=None,
                                         min_ori_quality_required=options.ori_qual,
                                         )
             except core_analysis.NotEnoughDataToSmoothError:
-                print 'not enough data to smooth for obj_id %d, skipping...'%obj_id
+                print('not enough data to smooth for obj_id %d, skipping...'%obj_id)
             else:
                 kalman_rows.append(my_rows)
 
@@ -204,7 +207,7 @@ def doit(fmf_filename=None,
             kalman_rows = numpy.concatenate( kalman_rows )
             kalman_3d_frame = kalman_rows['frame']
 
-            print 'loading frame numbers for kalman objects (observations)'
+            print('loading frame numbers for kalman objects (observations)')
             kobs_rows = []
             for obj_id in use_obj_ids:
                 my_rows = ca.load_dynamics_free_MLE_position(
@@ -214,9 +217,9 @@ def doit(fmf_filename=None,
                 kobs_rows.append(my_rows)
             kobs_rows = numpy.concatenate( kobs_rows )
             kobs_3d_frame = kobs_rows['frame']
-            print 'loaded'
+            print('loaded')
         else:
-            print 'WARNING: kalman filename specified, but objects found'
+            print('WARNING: kalman filename specified, but objects found')
             kalman_filename = None
 
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(h5)
@@ -227,7 +230,7 @@ def doit(fmf_filename=None,
             n+=1
             found_cam_id = cam_id
     if n!=1:
-        print >> sys.stderr, 'Could not automatically determine cam_id from fmf_filename. Exiting'
+        print('Could not automatically determine cam_id from fmf_filename. Exiting', file=sys.stderr)
         h5.close()
         sys.exit(1)
     cam_id = found_cam_id
@@ -253,7 +256,7 @@ def doit(fmf_filename=None,
     cur_bg_idx = None
 
     # find frame correspondence
-    print 'Finding frame correspondence... ',
+    print('Finding frame correspondence... ', end=' ')
     sys.stdout.flush()
     frame_match_h5 = None
     first_match = None
@@ -272,28 +275,28 @@ def doit(fmf_filename=None,
                 break
 
     if frame_match_h5 is None:
-        print >> sys.stderr, "ERROR: no timestamp corresponding to .fmf '%s' for %s in '%s'"%(
-            fmf_filename, cam_id, h5_filename)
+        print("ERROR: no timestamp corresponding to .fmf '%s' for %s in '%s'"%(
+            fmf_filename, cam_id, h5_filename), file=sys.stderr)
         h5.close()
         sys.exit(1)
 
-    print 'done.'
+    print('done.')
 
     if stop is None:
         stop = frame_match_h5
         last_match = frame_match_h5
-        print 'Frames in both the .fmf movie and the .h5 data file are in range %d - %d.'%(first_match, last_match)
+        print('Frames in both the .fmf movie and the .h5 data file are in range %d - %d.'%(first_match, last_match))
     else:
-        print 'Frames in both the .fmf movie and the .h5 data file start at %d.'%(first_match,)
+        print('Frames in both the .fmf movie and the .h5 data file start at %d.'%(first_match,))
 
     if 1:
         #if first_match is not None and last_match is not None:
         h5frames = h5.root.data2d_distorted.read( field='frame' )[:]
-        print 'The .h5 file has frames %d - %d.'%( h5frames.min(), h5frames.max() )
+        print('The .h5 file has frames %d - %d.'%( h5frames.min(), h5frames.max() ))
         del h5frames
 
     if start > stop:
-        print >> sys.stderr, "ERROR: start (frame %d) is after stop (frame %d)!"%(start,stop)
+        print("ERROR: start (frame %d) is after stop (frame %d)!"%(start,stop), file=sys.stderr)
         h5.close()
         sys.exit(1)
 
@@ -325,7 +328,7 @@ def doit(fmf_filename=None,
         pen_obs = aggdraw.Pen(cb_blue_green, width=2 )
         font_obs = aggdraw.Font(cb_blue_green,'/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf')
 
-    print 'loading frame information...'
+    print('loading frame information...')
     # step through .fmf file to get map of h5frame <-> fmfframe
     mymap = {}
     all_frame = h5.root.data2d_distorted.read(field='frame')
@@ -349,11 +352,11 @@ def doit(fmf_filename=None,
             mymap[real_h5_frame]= fmf_fno
     if not options.no_progress:
         pbar.finish()
-        print 'done loading frame information.'
+        print('done loading frame information.')
 
     kobs_row_cacher = KObsRowCacher(data_file)
 
-    print 'start, stop',start, stop
+    print('start, stop',start, stop)
     if not options.no_progress:
         widgets[0]='stage 2 of 2: '
         pbar=progressbar.ProgressBar(widgets=widgets,maxval=(stop-start+1)).start()
@@ -388,7 +391,7 @@ def doit(fmf_filename=None,
 
             del fmf_fno
             del fmf_timestamp2
-        except KeyError,err:
+        except KeyError as err:
             frame = blank_image
 
         if PLOT=='image':

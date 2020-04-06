@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import print_function
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -48,7 +49,7 @@ def do_filter(filename,
     objid_by_n_observations = {}
     for obj_id_enum,obj_id in enumerate(use_obj_ids):
         if obj_id_enum%100==0:
-            print 'reading %d of %d'%(obj_id_enum,len(use_obj_ids))
+            print('reading %d of %d'%(obj_id_enum,len(use_obj_ids)))
 
         if PT.__version__ <= '1.3.3':
             obj_id_find=int(obj_id)
@@ -72,7 +73,7 @@ def do_filter(filename,
 
 
         if n_observations < min_length:
-            print 'obj_id %d: %d observation frames, skipping'%(obj_id,n_observations,)
+            print('obj_id %d: %d observation frames, skipping'%(obj_id,n_observations,))
             continue
 
         obs_recarray = kresults.root.ML_estimates.read_coordinates(
@@ -121,7 +122,7 @@ def main():
             raise ValueError("cannot specify start and stop with --obj-only option")
 
     if len(args)>1:
-        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        print("arguments interpreted as FILE supplied more than once", file=sys.stderr)
         parser.print_help()
         return
 

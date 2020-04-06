@@ -1,9 +1,11 @@
 from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
 import math
 import numpy
 from tvtk.api import tvtk
-import conditions
-import stimulus_positions
+from . import conditions
+from . import stimulus_positions
 import flydra_core.geom as geom
 
 def draw_cubic_solid(origin,size):
@@ -275,12 +277,12 @@ class default(DrawBase):
         stim = None
         try:
             condition, stim = conditions.get_condition_stimname_from_filename(filename, **kwargs)
-            print 'Data from condition "%s",with stimulus'%(condition,),stim
-        except KeyError, err:
+            print('Data from condition "%s",with stimulus'%(condition,),stim)
+        except KeyError as err:
             if kwargs.get('force_stimulus',False):
                 raise
             else:
-                print 'Unknown condition and stimname'
+                print('Unknown condition and stimname')
 
         if stim is None:
             return actors

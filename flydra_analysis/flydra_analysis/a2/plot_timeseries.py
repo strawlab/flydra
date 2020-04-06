@@ -1,4 +1,6 @@
 from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -12,7 +14,7 @@ import numpy
 import tables as PT
 import flydra_core.reconstruct as reconstruct
 import flydra_analysis.analysis.result_utils as result_utils
-import analysis_options
+from . import analysis_options
 import flydra_analysis.a2.xml_stimulus as xml_stimulus
 import flydra_analysis.a2.flypos
 import flydra_analysis.a2.utils as utils
@@ -25,7 +27,7 @@ rcParams['ytick.major.pad'] = 10
 
 import flydra_analysis.analysis.result_utils as result_utils
 
-import core_analysis
+from . import core_analysis
 
 import datetime, time
 
@@ -98,9 +100,9 @@ def plot_timeseries(subplot=None,options = None):
 
     if not use_kalman_smoothing:
         if (dynamic_model is not None):
-            print >> sys.stderr, ('WARNING: disabling Kalman smoothing '
+            print(('WARNING: disabling Kalman smoothing '
                                   '(--disable-kalman-smoothing) is incompatable '
-                                  'with setting dynamic model options (--dynamic-model)')
+                                  'with setting dynamic model options (--dynamic-model)'), file=sys.stderr)
 
     ca = core_analysis.get_global_CachingAnalyzer()
 
@@ -112,8 +114,8 @@ def plot_timeseries(subplot=None,options = None):
     actual_md5 = m.hexdigest()
     (obj_ids, use_obj_ids, is_mat_file, data_file,
      extra) = ca.initial_file_load(kalman_filename)
-    print 'opened kalman file %s %s, %d obj_ids'%(
-        kalman_filename,actual_md5,len(use_obj_ids))
+    print('opened kalman file %s %s, %d obj_ids'%(
+        kalman_filename,actual_md5,len(use_obj_ids)))
 
     if 'frames' in extra:
         if (start is not None) or (stop is not None):
@@ -145,10 +147,10 @@ def plot_timeseries(subplot=None,options = None):
 
     if dynamic_model is None:
         dynamic_model = extra['dynamic_model_name']
-        print 'detected file loaded with dynamic model "%s"'%dynamic_model
+        print('detected file loaded with dynamic model "%s"'%dynamic_model)
         if dynamic_model.startswith('EKF '):
             dynamic_model = dynamic_model[4:]
-        print '  for smoothing, will use dynamic model "%s"'%dynamic_model
+        print('  for smoothing, will use dynamic model "%s"'%dynamic_model)
 
     if not is_mat_file:
         mat_data = None
@@ -186,15 +188,15 @@ def plot_timeseries(subplot=None,options = None):
 
     if options.timestamp_file is not None:
         h5 = tables.open_file(options.timestamp_file,mode='r')
-        print 'reading timestamps and frames'
+        print('reading timestamps and frames')
         table_data2d_frames=h5.root.data2d_distorted.read(field='frame')
         table_data2d_timestamps=h5.root.data2d_distorted.read(field='timestamp')
-        print 'done'
+        print('done')
         h5.close()
         table_data2d_frames_find = utils.FastFinder( table_data2d_frames )
 
     if len(use_obj_ids)==0:
-        print 'No obj_ids to plot, quitting'
+        print('No obj_ids to plot, quitting')
         sys.exit(0)
 
     time0 = 0.0 # set default value
@@ -574,19 +576,19 @@ def doit(
                 if obj_id not in self.obj_ids:
                     self.obj_ids.append( obj_id )
                     self.obj_ids.sort()
-                    print 'picked',obj_id
-                    print 'all:'
-                    print self.obj_ids
+                    print('picked',obj_id)
+                    print('all:')
+                    print(self.obj_ids)
                 ## else:
                 ##     print '(already had obj_id %d)'%obj_id
         def on_key_press(self,event):
             #print 'received key',repr(event.key)
             if event.key=='c':
                 del self.obj_ids[:]
-                print self.obj_ids
+                print(self.obj_ids)
             if event.key=='l':
                 del self.obj_ids[-1]
-                print self.obj_ids
+                print(self.obj_ids)
             #print 'all:'
             #print self.obj_ids
 

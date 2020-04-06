@@ -1,3 +1,4 @@
+from __future__ import print_function
 import flydra_analysis.a2.core_analysis as core_analysis
 import numpy as np
 import flydra_analysis.a2.utils as utils
@@ -103,4 +104,4 @@ class EquivalentObjectFinder:
 if __name__=='__main__':
     finder = EquivalentObjectFinder('DATA20090301_200059.h5','DATA20090301_200059.kalmanized.h5')
     obj_id = finder.find_equiv(13,mean_distance_maximum = 1e-4)
-    print 'obj_id',obj_id
+    print('obj_id',obj_id)

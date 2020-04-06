@@ -1,4 +1,5 @@
 from __future__ import division, print_function
+from __future__ import absolute_import
 if 1:
     # deal with old files, forcing to numpy
     import tables.flavor
@@ -19,7 +20,7 @@ import matplotlib.ticker as ticker
 import flydra_analysis.analysis.result_utils as result_utils
 import flydra_analysis.a2.utils as utils
 from flydra_core.kalman.point_prob import some_rough_negative_log_likelihood
-import core_analysis
+from . import core_analysis
 
 import datetime, time
 import collections
@@ -327,7 +328,7 @@ def doit(
                 try:
                     kobs_2d_data = data_file.root.ML_estimates_2d_idxs[
                         int(obs_2d_idx)]
-                except tables.exceptions.NoSuchNodeError, err:
+                except tables.exceptions.NoSuchNodeError as err:
                     # backwards compatibility
                     kobs_2d_data = data_file.root.kalman_observations_2d_idxs[
                         int(obs_2d_idx)]
@@ -404,7 +405,7 @@ def doit(
                         frames_per_second=fps,
                         up_dir=up_dir,
                         )
-                except core_analysis.NotEnoughDataToSmoothError, err:
+                except core_analysis.NotEnoughDataToSmoothError as err:
                     # OK, we don't have data from this obj_id
                     continue
                 else:

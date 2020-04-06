@@ -1,11 +1,13 @@
 from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
 import numpy as np
 import matplotlib
 
-import plot_timeseries
-import plot_top_view
-import analysis_options
-import core_analysis
+from . import plot_timeseries
+from . import plot_top_view
+from . import analysis_options
+from . import core_analysis
 from optparse import OptionParser
 import os
 
@@ -26,7 +28,7 @@ def doit(options=None):
     #out_fname = 'summary-' + os.path.splitext(in_fname)[0] + '.png'
     out_fname = os.path.splitext(in_fname)[0] + '.png'
 
-    print 'plotting'
+    print('plotting')
     options.unicolor = True
     options.show_obj_id = False
     options.show_landing = True
@@ -45,7 +47,7 @@ def doit(options=None):
         subplot[key].set_xlabel('')
         subplot[key].set_ylabel('')
 
-    print 'saving',out_fname
+    print('saving',out_fname)
 
     fig.savefig(out_fname)
     if options.interactive:

@@ -1,5 +1,6 @@
 # see a2/save_movies_overlay.py
 from __future__ import division
+from __future__ import print_function
 import numpy
 from numpy import nan, pi
 import tables as PT
@@ -44,23 +45,23 @@ def show_it(fig,
     camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
     data2d = results.root.data2d_distorted # make sure we have 2d data table
 
-    print 'reading frames...'
+    print('reading frames...')
     frames = data2d.read(field='frame')
-    print 'OK'
+    print('OK')
 
     if frame_start is not None:
-        print 'selecting frames after start'
+        print('selecting frames after start')
         after_start = numpy.nonzero(frames>=frame_start)[0]
     else:
         after_start = None
 
     if frame_stop is not None:
-        print 'selecting frames before stop'
+        print('selecting frames before stop')
         before_stop = numpy.nonzero(frames<=frame_stop)[0]
     else:
         before_stop = None
 
-    print 'finding all frames'
+    print('finding all frames')
     if after_start is not None and before_stop is not None:
         use_idxs = numpy.intersect1d(after_start,before_stop)
     elif after_start is not None:
@@ -71,14 +72,14 @@ def show_it(fig,
         use_idxs = numpy.arange(data2d.nrows)
 
     # OK, we have data coords, plot
-    print 'reading cameras'
+    print('reading cameras')
     frames = frames[use_idxs]
     camns = data2d.read(field='camn')
     camns = camns[use_idxs]
     unique_camns = numpy.unique1d(camns)
     unique_cam_ids = list(sets.Set([camn2cam_id[camn] for camn in unique_camns]))
     unique_cam_ids.sort()
-    print '%d cameras with data'%(len(unique_cam_ids),)
+    print('%d cameras with data'%(len(unique_cam_ids),))
 
     if len(unique_cam_ids)==1:
         n_rows=1
@@ -194,15 +195,15 @@ def show_it(fig,
 
         this_use_idxs = use_idxs[frames==kframe]
         if debugADS:
-            print
-            print kframe,'==============='
-            print 'this_use_idxs', this_use_idxs
+            print()
+            print(kframe,'===============')
+            print('this_use_idxs', this_use_idxs)
 
         d2d = data2d.read_coordinates( this_use_idxs )
         if debugADS:
-            print 'd2d ---------------'
+            print('d2d ---------------')
             for row in d2d:
-                print row
+                print(row)
         for this_camn,this_camn_idx in zip(this_camns,this_camn_idxs):
             this_idxs_tmp = numpy.nonzero(d2d['camn'] == this_camn)[0]
             this_camn_d2d = d2d[d2d['camn'] == this_camn]
@@ -213,7 +214,7 @@ def show_it(fig,
                     break
             if not found:
                 if 0:
-                    print 'WARNING:point not found in data!?'
+                    print('WARNING:point not found in data!?')
                     continue
                 else:
                     raise RuntimeError('point not found in data!?')
@@ -237,7 +238,7 @@ def show_it(fig,
     for cam_id in subplot_by_cam_id.keys():
         ax = subplot_by_cam_id[cam_id]
         ax.legend()
-    print 'note: could/should also plot re-projection of Kalman filtered/smoothed data'
+    print('note: could/should also plot re-projection of Kalman filtered/smoothed data')
 
 def main():
     usage = '%prog FILE [options]'
@@ -266,7 +267,7 @@ def main():
         args.append(options.filename)
 
     if len(args)>1:
-        print >> sys.stderr,  "arguments interpreted as FILE supplied more than once"
+        print("arguments interpreted as FILE supplied more than once", file=sys.stderr)
         parser.print_help()
         return
 
