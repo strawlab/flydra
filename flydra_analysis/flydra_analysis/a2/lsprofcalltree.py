@@ -1,4 +1,5 @@
 from __future__ import print_function
+
 # Script downloaded on 20071109 from:
 # http://divmod.org/users/exarkun/lsprofcalltree.py
 
@@ -8,12 +9,12 @@ from __future__ import print_function
 # Usage tips from:
 # http://oubiwann.blogspot.com/2006/08/python-and-kcachegrind.html
 
+
 def label(code):
     if isinstance(code, str):
-        return ('~', 0, code)    # built-in functions ('~' sorts at the end)
+        return ("~", 0, code)  # built-in functions ('~' sorts at the end)
     else:
-        return '%s %s:%d' % (code.co_name, code.co_filename, code.co_firstlineno)
-
+        return "%s %s:%d" % (code.co_name, code.co_filename, code.co_firstlineno)
 
 
 class KCacheGrind(object):
@@ -23,7 +24,7 @@ class KCacheGrind(object):
 
     def output(self, out_file):
         self.out_file = out_file
-        print('events: Ticks', file=out_file)
+        print("events: Ticks", file=out_file)
         self._print_summary()
         for entry in self.data:
             self._entry(entry)
@@ -33,22 +34,22 @@ class KCacheGrind(object):
         for entry in self.data:
             totaltime = int(entry.totaltime * 1000)
             max_cost = max(max_cost, totaltime)
-        print('summary: %d' % (max_cost,), file=self.out_file)
+        print("summary: %d" % (max_cost,), file=self.out_file)
 
     def _entry(self, entry):
         out_file = self.out_file
         code = entry.code
         inlinetime = int(entry.inlinetime * 1000)
-        #print >> out_file, 'ob=%s' % (code.co_filename,)
+        # print >> out_file, 'ob=%s' % (code.co_filename,)
         if isinstance(code, str):
-            print('fi=~', file=out_file)
+            print("fi=~", file=out_file)
         else:
-            print('fi=%s' % (code.co_filename,), file=out_file)
-        print('fn=%s' % (label(code),), file=out_file)
+            print("fi=%s" % (code.co_filename,), file=out_file)
+        print("fn=%s" % (label(code),), file=out_file)
         if isinstance(code, str):
-            print('0 ', inlinetime, file=out_file)
+            print("0 ", inlinetime, file=out_file)
         else:
-            print('%d %d' % (code.co_firstlineno, inlinetime), file=out_file)
+            print("%d %d" % (code.co_firstlineno, inlinetime), file=out_file)
         # recursive calls are counted in entry.calls
         if entry.calls:
             calls = entry.calls
@@ -66,13 +67,14 @@ class KCacheGrind(object):
         out_file = self.out_file
         code = subentry.code
         totaltime = int(subentry.totaltime * 1000)
-        #print >> out_file, 'cob=%s' % (code.co_filename,)
-        print('cfn=%s' % (label(code),), file=out_file)
+        # print >> out_file, 'cob=%s' % (code.co_filename,)
+        print("cfn=%s" % (label(code),), file=out_file)
         if isinstance(code, str):
-            print('cfi=~', file=out_file)
-            print('calls=%d 0' % (subentry.callcount,), file=out_file)
+            print("cfi=~", file=out_file)
+            print("calls=%d 0" % (subentry.callcount,), file=out_file)
         else:
-            print('cfi=%s' % (code.co_filename,), file=out_file)
-            print('calls=%d %d' % (
-                subentry.callcount, code.co_firstlineno), file=out_file)
-        print('%d %d' % (lineno, totaltime), file=out_file)
+            print("cfi=%s" % (code.co_filename,), file=out_file)
+            print(
+                "calls=%d %d" % (subentry.callcount, code.co_firstlineno), file=out_file
+            )
+        print("%d %d" % (lineno, totaltime), file=out_file)
