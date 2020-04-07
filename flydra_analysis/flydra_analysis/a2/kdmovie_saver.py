@@ -278,7 +278,7 @@ def doit(filename,
         scalar_bar.label_text_property.color = 0.0, 0.0, 0.0
         scalar_bar.label_text_property.shadow = False
 
- 	scalar_bar.position_coordinate.coordinate_system = 'normalized_viewport'
+        scalar_bar.position_coordinate.coordinate_system = 'normalized_viewport'
         if vertical_scale:
             scalar_bar.position_coordinate.value = 0.01, 0.01, 0.0
         else:

@@ -13,11 +13,11 @@ def doit(calsource,options=None):
     child = root[0]
     result = reconstruct.pretty_dump(child,ind='  ')
     if options.dest:
-	with open(options.dest, 'wb') as the_file:
-		the_file.write(result)
-	print('saved calibration to %s' %options.dest)
+        with open(options.dest, 'wb') as the_file:
+                the_file.write(result)
+        print('saved calibration to %s' %options.dest)
     else:
-	print(result)
+        print(result)
 
 def main():
     usage = '%prog CALSOURCE [options]'
