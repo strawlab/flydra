@@ -10,6 +10,30 @@ version = flydra_analysis.version.__version__
 
 import numpy as np
 
+INSTALL_REQUIRES = [
+    # these are Depends in stdeb.cfg. (The Build-Depends must be already installed.)
+    "flydra_core",
+    "numpy",
+    "scipy",
+    "cgkit1",
+    "nose",
+    "h5py",
+    "aggdraw",
+    "pandas",
+    "mayavi",
+    "sympy",
+    "docopt",
+    "CherryPy",
+    "pymvg",
+    "benu",
+    "motmot.ufmf",
+    "adskalman",
+    "matplotlib",
+    "progressbar",
+    "tables",
+    "six",
+]
+
 ext_modules = []
 
 ext_modules.append(
@@ -107,4 +131,5 @@ setup(
             "Makefile.kalmanize",
         ],
     },
+    install_requires=INSTALL_REQUIRES,
 )
