@@ -236,11 +236,11 @@ class PlueckerLine:
         """return point on line closest to origin
         Examples
         --------
-        >>> a = ThreeTuple((1,0,0))
-        >>> b = ThreeTuple((1,1,0))
+        >>> a = ThreeTuple((1.0, 0.0, 0.0))
+        >>> b = ThreeTuple((1.0, 1.0, 0.0))
         >>> line = line_from_points(a,b)
         >>> line.closest()
-        ThreeTuple((1,0,0))
+        ThreeTuple((1.0,0.0,-0.0))
         """
         VxU = self.v.cross(self.u)
         UdotU = self.u.dot(self.u)
@@ -277,19 +277,19 @@ def line_from_points(p, q):
 
     example2:
 
-    >>> p1 = ThreeTuple((2,3,7))
-    >>> p2 = ThreeTuple((2,1,0))
+    >>> p1 = ThreeTuple((2.0, 3.0, 7.0))
+    >>> p2 = ThreeTuple((2.0, 1.0, 0.0))
     >>> L = line_from_points(p1,p2)
     >>> print(L)
-    PlueckerLine(ThreeTuple((0,2,7)),ThreeTuple((-7,14,-4)))
+    PlueckerLine(ThreeTuple((0.0,2.0,7.0)),ThreeTuple((-7.0,14.0,-4.0)))
 
-    >>> q1 = ThreeTuple((0,2,7))
-    >>> q2 = ThreeTuple((0,2,0))
+    >>> q1 = ThreeTuple((0.0, 2.0, 7.0))
+    >>> q2 = ThreeTuple((0.0, 2.0, 0.0))
     >>> L2 = line_from_points(q1,q2)
     >>> print(L2.dist2())
-    4
+    4.0
     >>> print(L2.closest())
-    ThreeTuple((0,2,0))
+    ThreeTuple((0.0,2.0,-0.0))
     """
 
     if not isinstance(p, ThreeTuple):
