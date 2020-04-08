@@ -297,7 +297,7 @@ gave_water_warning = 0
 
 def hypothesis_testing_algorithm__find_best_3d( object recon, object found_data_dict,
                                                 double ACCEPTABLE_DISTANCE_PIXELS,
-                                                int debug=0, int max_n_cams=5,
+                                                int debug=0, Py_ssize_t max_n_cams=5,
                                                 int with_water = 0):
     """Use hypothesis testing algorithm to find best 3D point
 
