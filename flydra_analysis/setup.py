@@ -16,7 +16,6 @@ INSTALL_REQUIRES = [
     "h5py",
     "aggdraw",
     "pandas",
-    "mayavi",
     "sympy",
     "docopt",
     "CherryPy",
