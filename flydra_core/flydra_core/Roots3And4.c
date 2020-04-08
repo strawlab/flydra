@@ -32,7 +32,7 @@
 #include    <math.h>
 #include "Roots3And4.h"
 
-inline int IsZero(double x, double eps) {
+int IsZero(double x, double eps) {
   return ((x) > -eps && (x) < eps);
 }
 
