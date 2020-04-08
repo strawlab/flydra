@@ -1,6 +1,8 @@
 # flydra - multi-camera tracking system
 
 [![build](https://github.com/strawlab/flydra/workflows/build-and-test/badge.svg?branch=master)](https://github.com/strawlab/flydra/actions?query=branch%3Amaster)
+[![PyPI version](https://badge.fury.io/py/flydra_core.svg)](https://badge.fury.io/py/flydra_core)
+[![PyPI version](https://badge.fury.io/py/flydra_analysis.svg)](https://badge.fury.io/py/flydra_analysis)
 
 Flydra is a markerless, multi-camera tracking system capable of tracking the
 three-dimensional position and body orientation of animals such as flies and
