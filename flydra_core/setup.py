@@ -81,6 +81,7 @@ setup(
     version="0.7.10",  # keep in sync with flydra_core/version.py
     author="Andrew Straw",
     author_email="strawman@astraw.com",
+    url="https://github.com/strawlab/flydra",
     description="flydra mainbrain and core lib",
     long_description=long_description,
     long_description_content_type="text/markdown",

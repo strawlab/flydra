@@ -49,6 +49,7 @@ setup(
     version="0.7.10",  # keep in sync with flydra_analysis/version.py
     author="Andrew Straw",
     author_email="strawman@astraw.com",
+    url="https://github.com/strawlab/flydra",
     description="flydra analysis tools",
     long_description=long_description,
     long_description_content_type="text/markdown",
