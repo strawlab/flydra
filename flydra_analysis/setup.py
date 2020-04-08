@@ -4,10 +4,6 @@ from Cython.Build import cythonize
 import os
 import sys
 
-import flydra_analysis.version
-
-version = flydra_analysis.version.__version__
-
 import numpy as np
 
 INSTALL_REQUIRES = [
@@ -46,7 +42,7 @@ ext_modules.append(
 
 setup(
     name="flydra_analysis",
-    version=version,
+    version="0.7.8",  # keep in sync with flydra_analysis/version.py
     author="Andrew Straw",
     author_email="strawman@astraw.com",
     description="flydra analysis tools",
