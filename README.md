@@ -1,5 +1,7 @@
 # flydra - multi-camera tracking system
 
+[![build](https://github.com/strawlab/flydra/workflows/build-and-test/badge.svg?branch=master)](https://github.com/strawlab/flydra/actions?query=branch%3Amaster)
+
 Flydra is a markerless, multi-camera tracking system capable of tracking the
 three-dimensional position and body orientation of animals such as flies and
 birds. The system operates with less than 40 ms latency and can track multiple
