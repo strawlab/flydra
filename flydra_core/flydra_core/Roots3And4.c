@@ -26,6 +26,9 @@
  *                  Make IsZero a function. Remove compiler warnings.
  */
 
+// According to https://stackoverflow.com/a/26065595, I need to define
+// this to avoid an M_PI undefined error on Windows.
+#define _USE_MATH_DEFINES
 #include    <math.h>
 #include "Roots3And4.h"
 

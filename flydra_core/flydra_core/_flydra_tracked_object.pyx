@@ -131,9 +131,6 @@ def obs2d_hashable( arr ):
     val = newarr.tostring()
     return val
 
-cdef extern from "sys/types.h":
-    ctypedef int u_int32_t
-
 cdef class TrackedObject:
     """
     Track one object using a Kalman filter.
@@ -155,7 +152,7 @@ cdef class TrackedObject:
     cdef readonly object observations_frames, observations_2d
     cdef int disable_image_stat_gating, orientation_consensus
     cdef object fake_timestamp
-    cdef readonly u_int32_t obj_id
+    cdef readonly unsigned int obj_id
     cdef object ekf_kalman_A, ekf_kalman_Q
 
     def __init__(self,
