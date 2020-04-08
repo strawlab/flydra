@@ -16,6 +16,7 @@ INSTALL_REQUIRES = [
     "tzlocal",
     "tables",
     "six",
+    "nose",
 ]
 
 ext_modules = []
