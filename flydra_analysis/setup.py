@@ -1,10 +1,15 @@
 from setuptools import setup, find_packages
 from distutils.core import Extension  # actually monkey-patched by setuptools
 from Cython.Build import cythonize
-import os
-import sys
 
 import numpy as np
+
+from io import open
+from os import path
+
+this_directory = path.abspath(path.dirname(__file__))
+with open(path.join(this_directory, "README.md"), encoding="utf-8") as f:
+    long_description = f.read()
 
 INSTALL_REQUIRES = [
     # these are Depends in stdeb.cfg. (The Build-Depends must be already installed.)
@@ -45,6 +50,8 @@ setup(
     author="Andrew Straw",
     author_email="strawman@astraw.com",
     description="flydra analysis tools",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     packages=find_packages(),
     test_suite="nose.collector",
     ext_modules=cythonize(ext_modules),
