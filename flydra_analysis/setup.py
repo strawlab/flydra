@@ -46,7 +46,7 @@ ext_modules.append(
 
 setup(
     name="flydra_analysis",
-    version="0.7.8",  # keep in sync with flydra_analysis/version.py
+    version="0.7.10",  # keep in sync with flydra_analysis/version.py
     author="Andrew Straw",
     author_email="strawman@astraw.com",
     description="flydra analysis tools",
