@@ -8,3 +8,4 @@ flydra_core/_pmat_jacobian_water.so
 flydra_core/_reconstruct_utils.so
 flydra_core/_refraction.so
 build
+dist
