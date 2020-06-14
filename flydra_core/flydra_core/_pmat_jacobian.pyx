@@ -1,4 +1,6 @@
 #emacs, this is -*-Python-*- mode
+#cython: language_level=2
+
 """calculate jacobian matrices for pinhole camera model
 
 see pinhole_jacobian_demo.py for the derivation of the math in this module.

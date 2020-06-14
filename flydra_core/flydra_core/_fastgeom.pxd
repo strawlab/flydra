@@ -1,4 +1,5 @@
 # emacs, this is -*-Python-*- mode
+#cython: language_level=2
 
 cdef class ThreeTuple:
     cdef readonly double a

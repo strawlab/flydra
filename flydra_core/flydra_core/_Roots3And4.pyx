@@ -1,3 +1,4 @@
+#cython: language_level=2
 import warnings
 
 cdef extern from "Roots3And4.h":

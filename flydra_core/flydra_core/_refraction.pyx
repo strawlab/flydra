@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+#cython: language_level=2
 cimport _Roots3And4
 import _Roots3And4
 

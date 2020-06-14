@@ -1,4 +1,6 @@
 #emacs, this is -*-Python-*- mode
+#cython: language_level=2
+
 import numpy as np
 cimport numpy as np
 cimport _fastgeom
