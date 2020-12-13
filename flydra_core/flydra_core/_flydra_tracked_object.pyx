@@ -140,7 +140,7 @@ cdef class TrackedObject:
     """
     cdef readonly long current_frameno
     cdef readonly long last_frameno_with_data
-    cdef long max_frames_skipped
+    cdef long long max_frames_skipped
     cdef readonly mybool kill_me
     cdef mybool save_all_data
     cdef double area_threshold, area_threshold_for_orientation
@@ -528,7 +528,7 @@ cdef class TrackedObject:
         used_camns_and_idxs = []
         if debug>2:
             print '_filter_data():'
-        for camn,candidate_point_list in data_dict.iteritems():
+        for camn, candidate_point_list in data_dict.items():
             cam_id = camn2cam_id[camn]
 
             if pixel_dist_cmp is not None:

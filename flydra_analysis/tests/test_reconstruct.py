@@ -1,6 +1,6 @@
 import os
 import pickle
-import StringIO
+from io import BytesIO
 import xml.etree.ElementTree as ET
 import flydra_core.reconstruct as reconstruct
 import pkg_resources
@@ -28,7 +28,7 @@ class TestReconstructor(unittest.TestCase):
         x.add_element(root)
 
         tree = ET.ElementTree(root)
-        fd = StringIO.StringIO()
+        fd = BytesIO()
         tree.write(fd)
         if 0:
             tree.write("test.xml")
@@ -114,5 +114,8 @@ def test_find_line():
 
     assert np.allclose(X, ptA)
 
-    norm = reconstruct.norm_vec
-    assert np.allclose(norm(pluecker_expected), norm(Lcoords))
+    v1 = reconstruct.norm_vec(pluecker_expected)
+    v2 = reconstruct.norm_vec(Lcoords)
+    same1 = np.allclose( v1, v2)
+    same2 = np.allclose( v1, -v2)
+    assert same1 or same2

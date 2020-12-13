@@ -72,7 +72,7 @@ class ShowIt(object):
 
     def find_cam_id(self, ax):
         found = False
-        for cam_id, axtest in self.subplot_by_cam_id.iteritems():
+        for cam_id, axtest in self.subplot_by_cam_id.items():
             if ax is axtest:
                 found = True
                 break
@@ -125,7 +125,7 @@ class ShowIt(object):
                     print("  %s: %.1f" % (cam_id, reproj_error))
                 print()
 
-            for cam_id, ax in self.subplot_by_cam_id.iteritems():
+            for cam_id, ax in self.subplot_by_cam_id.items():
                 newx, newy = self.reconstructor.find2d(cam_id, X, distorted=True)
                 xlim = ax.get_xlim()
                 ylim = ax.get_ylim()
@@ -571,7 +571,7 @@ current list of 2D points
 
             for obj_id in xys_by_obj_id:
                 xys_by_cam_id = xys_by_obj_id[obj_id]
-                for cam_id, (xs, ys) in xys_by_cam_id.iteritems():
+                for cam_id, (xs, ys) in xys_by_cam_id.items():
                     ax = self.subplot_by_cam_id[cam_id]
                     ax.plot(xs, ys, "x-", label="obs: %d" % obj_id)
                     ax.text(xs[0], ys[0], "%d:" % (obj_id,))

@@ -223,7 +223,7 @@ def convert_format(current_data, camn2cam_id, area_threshold=0.0, only_likely=Fa
     """convert data from format used for Kalman tracker to hypothesis tester"""
     found_data_dict = {}
     first_idx_by_cam_id = {}
-    for camn, stuff_list in current_data.iteritems():
+    for camn, stuff_list in current_data.items():
         if not len(stuff_list):
             # no data for this camera, continue
             continue

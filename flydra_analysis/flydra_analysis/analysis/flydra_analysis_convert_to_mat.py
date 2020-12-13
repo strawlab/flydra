@@ -162,7 +162,7 @@ def do_it(
             if data[key].dtype.char == "l":
                 data[key] = data[key].astype(numpy.float64)
 
-    for key, value in extra_vars.iteritems():
+    for key, value in extra_vars.items():
         if key in data:
             print(
                 "WARNING: requested to save extra variable %s, but already in data, not overwriting"

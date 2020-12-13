@@ -15,6 +15,12 @@ import xml.etree.ElementTree as ET
 import warnings
 import os
 
+from libc.math cimport sqrt
+
+cdef extern from "numpy/npy_math.h":
+    bint npy_isnan(double x)
+    bint npy_isinf(double x)
+
 cdef float MINIMUM_ECCENTRICITY
 MINIMUM_ECCENTRICITY = flydra_core.common_variables.MINIMUM_ECCENTRICITY
 
@@ -22,11 +28,6 @@ STRICT_WATER = int(os.environ.get('STRICT_WATER_HYPOTHESIS_TEST','0'))
 
 class NoAcceptablePointFound(Exception):
     pass
-
-cdef extern from "math.h":
-    double sqrt(double)
-    int isnan(double x)
-    int isinf(double x)
 
 def make_ReconstructHelper_from_rad_file(filename):
     params = {}
@@ -355,7 +356,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object found_data_
         # was a 2d point found?
         xy_values = value_tuple[:2]
         x,y = xy_values
-        if isnan(x):
+        if npy_isnan(x):
             bad_cam_ids.append( cam_id )
             continue # don't build this row
 
@@ -381,7 +382,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object found_data_
         alpha = 1.0/n_cams
 
         # Can we short-circuit the rest of these computations?
-        if not isinf(least_err_by_n_cameras[n_cams-1]): # if it's infinity, it must be n_cams 0 or 1.
+        if not npy_isinf(least_err_by_n_cameras[n_cams-1]): # if it's infinity, it must be n_cams 0 or 1.
             # If we've calculated error for 2 less than n_cams
             if least_err_by_n_cameras[n_cams-1] > ACCEPTABLE_DISTANCE_PIXELS:
                 if debug>5:
@@ -442,7 +443,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object found_data_
         least_err = least_err_by_n_cameras[n_cams]
         if debug>5:
             print 'HYPOTHESIS TEST - n_cams %d: %f'%(n_cams,least_err)
-        if isinf(least_err):
+        if npy_isinf(least_err):
             break # if we don't have e.g. 4 cameras, we won't have 5
         if least_err < ACCEPTABLE_DISTANCE_PIXELS:
             mean_dist = least_err
@@ -497,7 +498,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object found_data_
                         -(P[3]*Q[0]) + P[0]*Q[3],
                         -(P[2]*Q[0]) + P[0]*Q[2],
                         -(P[1]*Q[0]) + P[0]*Q[1] )
-            if isnan(Lcoords[0]):
+            if npy_isnan(Lcoords[0]):
                 Lcoords = None
     ## c_lib.free(least_err_by_n_cameras)
     return X, Lcoords, cam_ids_used, mean_dist

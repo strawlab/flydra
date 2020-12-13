@@ -9,7 +9,6 @@ import tables.flavor
 tables.flavor.restrict_flavors(keep=["numpy"])  # ensure pytables 2.x
 import pytz  # from http://pytz.sourceforge.net/
 import datetime
-import sets
 import sys
 from optparse import OptionParser
 import pylab
@@ -78,7 +77,7 @@ def show_it(
     camns = data2d.read(field="camn")
     camns = camns[use_idxs]
     unique_camns = numpy.unique1d(camns)
-    unique_cam_ids = list(sets.Set([camn2cam_id[camn] for camn in unique_camns]))
+    unique_cam_ids = list(set([camn2cam_id[camn] for camn in unique_camns]))
     unique_cam_ids.sort()
     print("%d cameras with data" % (len(unique_cam_ids),))
 
@@ -228,7 +227,7 @@ def show_it(
 
     for obj_id in xys_by_obj_id:
         xys_by_cam_id = xys_by_obj_id[obj_id]
-        for cam_id, (xs, ys) in xys_by_cam_id.iteritems():
+        for cam_id, (xs, ys) in xys_by_cam_id.items():
             ax = subplot_by_cam_id[cam_id]
             if 0:
                 ax.plot(xs, ys, label="obs: %d" % obj_id)

@@ -1,3 +1,4 @@
+import sys
 from setuptools import setup, find_packages
 from distutils.core import Extension  # actually monkey-patched by setuptools
 from Cython.Build import cythonize
@@ -11,35 +12,12 @@ this_directory = path.abspath(path.dirname(__file__))
 with open(path.join(this_directory, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
-INSTALL_REQUIRES = [
-    # these are Depends in stdeb.cfg. (The Build-Depends must be already installed.)
-    "flydra_core",
-    "numpy",
-    "scipy",
-    "cgkit1",
-    "nose",
-    "h5py",
-    "aggdraw",
-    "pandas",
-    "sympy",
-    "docopt",
-    "CherryPy",
-    "pymvg",
-    "benu",
-    "motmot.ufmf",
-    "adskalman",
-    "matplotlib",
-    "progressbar",
-    "tables",
-    "six",
-]
-
 ext_modules = []
 
 ext_modules.append(
     Extension(
-        name="flydra_analysis.a2.fastfinder_help",
-        sources=["flydra_analysis/a2/fastfinder_help.pyx"],
+        name="flydra_fastfinder_help",
+        sources=["flydra_fastfinder_help.pyx"],
         include_dirs=[np.get_include()],
     )
 )
@@ -134,5 +112,4 @@ setup(
             "Makefile.kalmanize",
         ],
     },
-    install_requires=INSTALL_REQUIRES,
 )

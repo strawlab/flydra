@@ -1532,7 +1532,7 @@ class Reconstructor:
         ct = h5file.create_table  # shorthand
         root = h5file.root  # shorthand
 
-        cam_ids = self.Pmat.keys()
+        cam_ids = list(self.Pmat.keys())
         cam_ids.sort()
 
         if hasattr(root, "calibration"):

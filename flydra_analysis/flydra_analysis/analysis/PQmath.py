@@ -231,8 +231,8 @@ AssertionError
 
 >>> r1=math.sqrt(2)/2
 
->>> print(math.pi/4)
-0.785398163397
+>>> '%.5f' % (math.pi/4)
+'0.78540'
 
 >>> print(orientation_to_euler( (r1,0,r1) ))
 (0.0, 0.7853981633974483)
@@ -496,6 +496,14 @@ class QuatSeq(list):
         return QuatSeq([cgtypes.quat(q) for q in self])
 
     def __div__(self, other):
+        # Python 2 only
+        try:
+            other = float(other)
+        except ValueError:
+            raise ValueError("only know how to divide QuatSeq with floats")
+        return QuatSeq([p / other for p in self])
+
+    def __truediv__(self, other):
         try:
             other = float(other)
         except ValueError:
@@ -523,7 +531,14 @@ class QuatSeq(list):
     def log(self):
         return QuatSeq([q.log() for q in self])
 
+    def __getitem__(self, expr):
+        if type(expr) is slice:
+            return QuatSeq(list.__getitem__(self, expr))
+        else:
+            return list.__getitem__(self, expr)
+
     def __getslice__(self, *args, **kw):
+        # Python 2 only
         return QuatSeq(list.__getslice__(self, *args, **kw))
 
     def get_w(self):

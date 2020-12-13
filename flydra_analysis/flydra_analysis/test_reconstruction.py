@@ -1,7 +1,11 @@
 from __future__ import print_function
 import time, sys
 import socket, struct
-import Queue, threading
+import threading
+if sys.version_info.major <= 2:
+    import Queue as queue
+else:
+    import queue
 import tempfile, os
 import pprint
 import pkg_resources
@@ -352,7 +356,7 @@ class FakeRemoteApi:
 
 class FakeMainBrain:
     def __init__(self, trigger_device):
-        self.queue_error_ros_msgs = Queue.Queue()
+        self.queue_error_ros_msgs = queue.Queue()
         self.trigger_device = trigger_device
         self.remote_api = FakeRemoteApi()
         self.counts = {}
@@ -551,13 +555,13 @@ def check_online_reconstruction(
             # has enough time to run.
             try:
                 coord_processor.queue_realtime_ros_packets.get(True, 10 * dt)
-            except Queue.Empty:
+            except queue.Empty:
                 pass
 
         else:
             try:
                 next = coord_processor.queue_realtime_ros_packets.get(True, 10 * dt)
-            except Queue.Empty:
+            except queue.Empty:
                 if skip_frames == "too many":
                     assert framenumber == (stop_skip_frame + 1)
                     # this is what we expect, the tracking should end

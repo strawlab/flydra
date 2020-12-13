@@ -15,7 +15,7 @@ import sys, os, re, hashlib
 import json
 
 import warnings
-from distutils.version import StrictVersion, LooseVersion
+from distutils.version import StrictVersion
 
 import datetime
 import pytz  # from http://pytz.sourceforge.net/
@@ -435,7 +435,7 @@ def read_textlog_header(results, fail_on_error=True):
             raise
         else:
             return None
-    infostr = textlog1["message"].tostring().strip("\x00")
+    infostr = textlog1["message"].tostring().strip(b"\x00").decode("utf-8")
     if not (
         infostr.startswith("MainBrain running at")
         or infostr.startswith("kalmanize running at")
@@ -450,7 +450,9 @@ def read_textlog_header(results, fail_on_error=True):
     paren_contents = paren_contents.groups()[0]
     paren_contents = paren_contents.split(",")
     for pc in paren_contents:
-        name, strvalue = pc.strip().split()
+        elements = pc.strip().split()
+        name = elements.pop(0)
+        strvalue = ' '.join(elements)
         if strvalue == "unknown":
             continue
         parsed[name] = strvalue
@@ -464,8 +466,8 @@ def read_textlog_header(results, fail_on_error=True):
             pass
         else:
             if textlog2["mainbrain_timestamp"] == textlog1["mainbrain_timestamp"]:
-                assert textlog2["cam_id"] == "mainbrain"
-                message2 = textlog2["message"].tostring().strip("\x00")
+                assert textlog2["cam_id"] == b"mainbrain"
+                message2 = textlog2["message"].tostring().strip(b"\x00").decode("utf-8")
                 version_start_string = "using flydra version "
                 if message2.startswith(version_start_string):
                     test_version = message2[len(version_start_string) :]
@@ -643,7 +645,7 @@ def drift_estimates(results):
     """calculate clock information"""
     table = results.root.host_clock_info
     remote_hostnames = np.asarray(table.read(field="remote_hostname"))
-    hostnames = [str(x) for x in list(set(remote_hostnames))]
+    hostnames = [x.decode() for x in list(set(remote_hostnames))]
     hostnames.sort()
 
     del remote_hostnames
@@ -651,12 +653,9 @@ def drift_estimates(results):
     result = {}
 
     for hostname in hostnames:
-        if LooseVersion(tables.__version__) < LooseVersion("3.0.0"):
-            row_idx = table.get_where_list("remote_hostname == hostname")
-        else:
-            row_idx = table.get_where_list(
-                "remote_hostname == hostname", condvars={"hostname": hostname}
-            )
+        row_idx = table.get_where_list(
+            "remote_hostname == hostname", condvars={"hostname": hostname}
+        )
         assert len(row_idx) > 0
         start_timestamp = np.asarray(
             table.read_coordinates(row_idx, field="start_timestamp")
@@ -812,7 +811,7 @@ def check_qi(dtype):
     if dtype == "int":
         frames = frameso
     elif dtype == "float":
-        frames = map(float, frameso)
+        frames = list(map(float, frameso))
         frames.extend([0.1, 3.3, 3.04, 3.0004])
     qi = Quick1DIndexer(frames)
 

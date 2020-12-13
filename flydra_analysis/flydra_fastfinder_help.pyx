@@ -2,7 +2,7 @@ import numpy as np
 cimport numpy as np
 
 import cython
-import utils # flydra_analysis.a2.utils
+from flydra_analysis.a2.missing_value_error import MissingValueError
 
 # see also FastFinder class in flydra_analysis.a2.utils
 
@@ -36,7 +36,7 @@ def get_first_idx_long(np.ndarray[long, ndim=1] haystack, np.ndarray[long, ndim=
 
     if not missing_ok:
         if np.any(found==-1):
-            raise utils.MissingValueError('some of your needles were not found')
+            raise MissingValueError('some of your needles were not found')
 
     return found
 
@@ -70,6 +70,6 @@ def get_first_idx_double(np.ndarray[double, ndim=1] haystack, np.ndarray[double,
 
     if not missing_ok:
         if np.any(found==-1):
-            raise utils.MissingValueError('some of your needles were not found')
+            raise MissingValueError('some of your needles were not found')
 
     return found

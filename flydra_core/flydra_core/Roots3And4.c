@@ -38,6 +38,7 @@ int IsZero(double x, double eps) {
 
 int SolveQuadric(double c[3], double s[2], double eps) {
     double p, q, D;
+    double sqrt_D;
 
     /* normal form: x^2 + px + q = 0 */
 
@@ -56,13 +57,21 @@ int SolveQuadric(double c[3], double s[2], double eps) {
 	return 0;
     }
     // (D > 0)
-    double sqrt_D = sqrt(D);
+    sqrt_D = sqrt(D);
 
     s[ 0 ] =   sqrt_D - p;
     s[ 1 ] = - sqrt_D - p;
     return 2;
 }
 
+double
+cbrt(double x)
+{
+    if (x > 0.0)
+	return pow(x, 1.0/3.0);
+    else
+	return -pow(-x, 1.0/3.0);
+}
 
 int SolveCubic(double c[4], double s[3], double eps)
 {

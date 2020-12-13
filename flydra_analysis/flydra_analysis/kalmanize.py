@@ -650,7 +650,7 @@ def kalmanize(
                                 continue
 
                         if last_frame != new_frame:
-                            if new_frame < last_frame:
+                            if last_frame is not None and new_frame < last_frame:
                                 print("new_frame", new_frame)
                                 print("last_frame", last_frame)
                                 raise RuntimeError(

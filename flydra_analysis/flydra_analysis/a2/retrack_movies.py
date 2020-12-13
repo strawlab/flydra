@@ -11,8 +11,6 @@ import flydra_analysis.a2.ufmf_tools as ufmf_tools
 import scipy.ndimage
 import flydra_core.data_descriptions
 from .tables_tools import open_file_safe
-import motmot.FastImage.FastImage as FastImage
-import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_analysis
 import cherrypy  # ubuntu: install python-cherrypy3
 import collections, shutil
 
@@ -53,6 +51,12 @@ def retrack_movies(
     ufmf_filenames=None,
     save_debug_images=False,
 ):
+    # We do a deferred import so test runners can import this python script
+    # without depending on these, which depend on Intel IPP.
+
+    import motmot.FastImage.FastImage as FastImage
+    import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_analysis
+
 
     # 2D data format for PyTables:
     Info2D = flydra_core.data_descriptions.Info2D
@@ -88,7 +92,7 @@ def retrack_movies(
         if cam_id == "default":
             continue
         # ensure default key/value pairs in each cam_id
-        for key, value in default_camcfg.iteritems():
+        for key, value in default_camcfg.items():
             if key not in config[cam_id]:
                 config[cam_id][key] = value
 

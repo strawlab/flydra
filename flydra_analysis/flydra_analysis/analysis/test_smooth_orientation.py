@@ -85,7 +85,7 @@ class TestPQmath:
         # If these are really missing and not considered from the
         # distance function, the two results should converge.
 
-        Qtest = self.Q[:]
+        Qtest = self.Q.copy()
         for i in no_distance_penalty_idxs:
             Qtest[i] = orientation_to_quat((1, 0, 0))
         Qsmooth_v1 = QuatSmoother(frames_per_second=self.fps).smooth_quats(

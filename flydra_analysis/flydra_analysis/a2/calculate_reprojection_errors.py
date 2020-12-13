@@ -291,6 +291,7 @@ def print_summarize_file(fname):
     print(cam_df)
     for camn, y in orig_df.groupby("camn"):
         print(camn, y.dist.mean())
+    orig_store.close()
 
 
 if __name__ == "__main__":

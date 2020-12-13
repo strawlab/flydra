@@ -1,6 +1,6 @@
 from __future__ import print_function
 from __future__ import absolute_import
-import sys, sets
+import sys
 import tables
 import pylab
 import numpy
@@ -31,7 +31,7 @@ def main():
 
         camn2cam_id, cam_id2camns = result_utils.get_caminfo_dicts(results)
         camn2hostname = {}
-        for camn, cam_id in camn2cam_id.iteritems():
+        for camn, cam_id in camn2cam_id.items():
             hostname = "_".join(cam_id.split("_")[:-1])
             camn2hostname[camn] = hostname
 

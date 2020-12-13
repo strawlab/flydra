@@ -158,7 +158,7 @@ files = {
 # access the results of these using get_stimname_from_filename() function
 _filename2stimname = {}
 _filename2conditions = {}
-for condition, filenames in files.iteritems():
+for condition, filenames in files.items():
     stim_name = stim_names[condition]
     for filename in filenames:
         _filename2conditions.setdefault(filename, []).append(condition)

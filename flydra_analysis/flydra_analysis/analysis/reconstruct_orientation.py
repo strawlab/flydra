@@ -113,7 +113,7 @@ def reconstruct_line_3ds(kresults, recon2, use_obj_id, return_fXl=False):
             continue
 
         d2 = {}
-        for camn, row in by_this_camns.iteritems():
+        for camn, row in by_this_camns.items():
             cam_id = camn2cam_id[camn]
             rx = row["x"]
             ry = row["y"]

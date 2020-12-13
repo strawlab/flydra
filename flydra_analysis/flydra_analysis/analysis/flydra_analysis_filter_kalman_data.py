@@ -11,7 +11,6 @@ import numpy
 from numpy import nan, pi
 import tables as PT
 import flydra_core.reconstruct
-import sets
 
 import sys
 from optparse import OptionParser

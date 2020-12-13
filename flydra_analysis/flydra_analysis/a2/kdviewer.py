@@ -59,7 +59,7 @@ def do_show_cameras(
     if centers:
         cam_centers = tvtk.Points()
 
-        for cam_id, pmat in R.Pmat.iteritems():
+        for cam_id, pmat in R.Pmat.items():
             X = reconstruct.pmat2cam_center(pmat)  # X is column vector (matrix)
             X = numpy.array(X.flat)
             cam_centers.insert_next_point(*X)
@@ -202,7 +202,7 @@ def do_show_cameras(
         actors.append(profile)
 
     if labels:
-        for cam_id, pmat in R.Pmat.iteritems():
+        for cam_id, pmat in R.Pmat.items():
             X = reconstruct.pmat2cam_center(pmat)  # X is column vector (matrix)
             X = numpy.array(X.flat)
 

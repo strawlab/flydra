@@ -13,14 +13,13 @@ if 1:
 
     tables.flavor.restrict_flavors(keep=["numpy"])
 
-import sets, os, sys, math
+import os, sys, math
 
 import numpy
 import numpy as np
 import tables as PT
 from optparse import OptionParser
 import flydra_core.reconstruct as reconstruct
-import sets
 import motmot.ufmf.ufmf as ufmf
 import flydra_analysis.a2.utils as utils
 import flydra_analysis.a2.aggdraw_coord_shifter as aggdraw_coord_shifter
@@ -28,7 +27,7 @@ import flydra_analysis.a2.aggdraw_coord_shifter as aggdraw_coord_shifter
 PLOT = "image"
 
 if PLOT == "image":
-    import Image
+    import PIL.Image
     import aggdraw
 import motmot.FlyMovieFormat.FlyMovieFormat as FMF
 import flydra_analysis.analysis.result_utils as result_utils
@@ -612,7 +611,7 @@ def doit(
                     maxabsdiff = []
                     maxcmp = []
                     meancmp = []
-                plotted_pt_nos = sets.Set()
+                plotted_pt_nos = set()
                 radius = 10
                 h, w = fg.shape
                 for (xy, XYZ, obj_id, Pmean_meters) in kalman_vert_images:
@@ -694,7 +693,7 @@ def doit(
                                 )
                                 plotted_pt_nos.add(int(pt_no))
                         this2ds.append(this2d)
-                all_pt_nos = sets.Set(range(len(rows)))
+                all_pt_nos = set(range(len(rows)))
                 missing_pt_nos = list(
                     all_pt_nos - plotted_pt_nos
                 )  # those not plotted yet due to being kalman objects
@@ -831,8 +830,8 @@ def doit(
 
                     newframe = numpy.clip(newframe, 0, 255)
                     im = newframe.astype(numpy.uint8)  # scale and offset
-                    im = Image.fromstring(
-                        "L", (im.shape[1], im.shape[0]), im.tostring()
+                    im = PIL.Image.frombuffer(
+                        "L", (im.shape[1], im.shape[0]), im
                     )
                     w, h = im.size
                     rescale_factor = 5
@@ -998,8 +997,8 @@ def doit(
             if PLOT == "image":
                 assert fmf.format == "MONO8"
                 imframe = np.clip(frame, 0, 255).astype(np.uint8)
-                im = Image.fromstring(
-                    "L", (imframe.shape[1], imframe.shape[0]), imframe.tostring()
+                im = PIL.Image.frombuffer(
+                    "L", (imframe.shape[1], imframe.shape[0]), imframe
                 )
                 im = im.convert("RGB")
                 # draw = aggdraw.Draw(im)

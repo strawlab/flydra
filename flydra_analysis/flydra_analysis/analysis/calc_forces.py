@@ -18,8 +18,6 @@ import scipy.io
 
 from .PQmath import *
 
-import sets
-
 ### restore builtin functions which may have been overridden
 ##min = __builtins__.min
 ##max = __builtins__.max
@@ -1267,11 +1265,11 @@ def do_it(
 
         # find where acceleration meets criterea
         if 1:  # not much trend
-            criterion1 = sets.Set(nx.where(acc_mag < 1.2)[0])
-            criterion2 = sets.Set(nx.where(abs_z_vel < 0.025)[0])
+            criterion1 = set(nx.where(acc_mag < 1.2)[0])
+            criterion2 = set(nx.where(abs_z_vel < 0.025)[0])
         else:
-            criterion1 = sets.Set(nx.where(acc_mag < 2)[0])
-            criterion2 = sets.Set(nx.where(abs_z_vel < 0.05)[0])
+            criterion1 = set(nx.where(acc_mag < 2)[0])
+            criterion2 = set(nx.where(abs_z_vel < 0.05)[0])
 
         ok_acc_idx = list(criterion1 & criterion2)
         ok_acc_idx.sort()

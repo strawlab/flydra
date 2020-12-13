@@ -21,8 +21,6 @@ import flydra_analysis.a2.utils as utils
 import flydra_analysis.analysis.result_utils as result_utils
 from . import core_analysis
 import scipy.ndimage
-import motmot.FastImage.FastImage as FastImage
-import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_analysis
 
 import cairo
 from . import benu
@@ -298,6 +296,13 @@ def doit(
     kalman_filename.
 
     """
+
+    # We do a deferred import so test runners can import this python script
+    # without depending on these, which depend on Intel IPP.
+
+    import motmot.FastImage.FastImage as FastImage
+    import motmot.realtime_image_analysis.realtime_image_analysis as realtime_image_analysis
+
     if view is None:
         view = ["orig" for f in ufmf_filenames]
     else:

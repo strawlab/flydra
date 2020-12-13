@@ -2,13 +2,9 @@ from __future__ import absolute_import
 import numpy as np
 import time, warnings
 
-# import pyximport; pyximport.install() # requires recent Cython
-from . import fastfinder_help
+import flydra_fastfinder_help
 
-
-class MissingValueError(Exception):
-    pass
-
+from flydra_analysis.a2.missing_value_error import MissingValueError
 
 class FastFinder(object):
     """fast search by use of a cached, sorted copy of the original data
@@ -68,7 +64,7 @@ class FastFinder(object):
         # XXX should test dtype of testvals and self.values and call
         # appropriate helper function.
 
-        return fastfinder_help.get_first_idx_double(
+        return flydra_fastfinder_help.get_first_idx_double(
             self.values.astype(np.float),
             np.asanyarray(testvals).astype(np.float),
             missing_ok=missing_ok,
@@ -202,7 +198,7 @@ def get_contig_chunk_idxs(arr):
     >>> list_of_start_stops
     [(0, 4), (4, 7), (7, 8), (8, 9), (9, 14)]
     >>> for start,stop in list_of_start_stops:
-    ...     print a[start:stop]
+    ...     print(a[start:stop])
     ...
     [1 2 3 4]
     [10 11 12]

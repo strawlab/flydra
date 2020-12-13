@@ -13,11 +13,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-16.04, ubuntu-latest, macos-latest, windows-latest]
-        python-version: [ '2.x', '3.x' ]
+        os: [ubuntu-16.04, ubuntu-20.04, macos-10.15, macos-11.0, windows-2019]
+        python-version: [ '2.x', '3.8', '3.9' ]
         exclude:
-          # excludes python 2.x on Windows
-          - os: windows-latest
+          # Exclude Python 2.x on Windows, as it requires Microsoft Visual C++ 9.0 but
+          # this is not installed on the Github runners.
+          - os: windows-2019
+            python-version: '2.x'
+          # No Python 2 on macOS 11.
+          - os: macos-11.0
             python-version: '2.x'
 
     steps:
@@ -29,37 +33,51 @@ jobs:
         architecture: x64
     - name: Upgrade pip
       run: python -m pip install --upgrade pip
+    - name: Install requirements for flydra_core
+      run: python -m pip install -r ./flydra_core/requirements.txt
     - name: Build and install flydra_core
       run: python -m pip install ./flydra_core
+    - name: Install requirements for flydra_analysis
+      run: python -m pip install -r ./flydra_analysis/requirements.txt
     - name: Build and install flydra_analysis
       run: python -m pip install ./flydra_analysis
 
-  # Test on Ubuntu only
-  test:
+  # Test on Ubuntu with system python
+  test-ubuntu-system-python:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-16.04, ubuntu-latest]
-        python-version: [ '2.x', '3.x' ]
+        os: [ubuntu-16.04, ubuntu-20.04]
 
     steps:
     - uses: actions/checkout@v2
-    - name: Setup python
-      uses: actions/setup-python@v1
-      with:
-        python-version: ${{ matrix.python-version }}
-        architecture: x64
-    - name: Upgrade pip
-      run: python -m pip install --upgrade pip
+    - name: Update Ubuntu system package index
+      run: sudo apt update
+    - name: Install system packages (Ubuntu 16.04)
+      if: matrix.os == 'ubuntu-16.04'
+      run: sudo apt install -y cython python-cairo python-numpy python-scipy python-nose python-h5py python-pandas mayavi2 python-sympy python-docopt python-cherrypy3 python-matplotlib python-progressbar python-tables python-six python-pkgconfig octave python-pil
+    - name: Install system packages (Ubuntu 20.04)
+      if: matrix.os == 'ubuntu-20.04'
+      run: sudo apt install -y cython3 python3-cairo python3-numpy python3-scipy python3-nose python3-h5py python3-pandas mayavi2 python3-sympy python3-docopt python3-cherrypy3 python3-matplotlib python3-progressbar python3-tables python3-six python3-pkgconfig python-is-python3 octave python3-pil
     - name: Build and install flydra_core
-      run: python -m pip install ./flydra_core
+      run: |
+        cd flydra_core
+        python setup.py install --user
+    - name: Install missing dependencies for flydra_core
+      run: python -m pip install -r ./flydra_core/requirements.txt
     - name: Test flydra_core
       run: |
+        # Run these tests in a different directory to ensure we are testing an installed version.
         cd docs
+        python -c "import nose; print(nose.__version__)"
         python -c "import nose; nose.run_exit()" --eval-attr="not (known_fail or slow_command)" --config ../flydra_core/setup.cfg
+    - name: Install missing dependencies for flydra_analysis
+      run: python -m pip install -r ./flydra_analysis/requirements.txt
     - name: Build and install flydra_analysis
-      run: python -m pip install ./flydra_analysis
-    # - name: Test flydra_analysis
-    #   run: |
-    #     cd docs
-    #     python -c "import nose; nose.run_exit()" --eval-attr="not (known_fail or slow_command)" --config ../flydra_analysis/setup.cfg
+      run: |
+        cd flydra_analysis
+        python setup.py install --user
+    - name: Test flydra_analysis
+      run: |
+        cd flydra_analysis
+        ./run_tests.sh -vv

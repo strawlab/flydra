@@ -3,6 +3,7 @@
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
+import sys
 import tables
 
 # pytables files stored using Numeric would by default return Numeric-based results.
@@ -297,7 +298,7 @@ def _get_initial_file_info(kresults):
     )
     if hasattr(kresults.root, "textlog"):
         textlog = kresults.root.textlog.read_coordinates([0])
-        infostr = textlog["message"].tostring().strip("\x00")
+        infostr = textlog["message"].tostring().strip(b"\x00")
         header = flydra_analysis.analysis.result_utils.read_textlog_header(
             kresults, fail_on_error=False
         )
@@ -307,9 +308,10 @@ def _get_initial_file_info(kresults):
         extra["frames"] = kresults.root.kalman_estimates.read(field="frame")
         unique_obj_ids = numpy.unique(obj_ids)
         if hasattr(kresults.root.kalman_estimates.attrs, "dynamic_model_name"):
-            extra[
-                "dynamic_model_name"
-            ] = kresults.root.kalman_estimates.attrs.dynamic_model_name
+            dynamic_model_name = kresults.root.kalman_estimates.attrs.dynamic_model_name
+            if sys.version_info.major >= 3 and isinstance(dynamic_model_name, bytes):
+                dynamic_model_name = dynamic_model_name.decode()
+            extra["dynamic_model_name"] = dynamic_model_name
     else:
         obj_ids = None
         unique_obj_ids = None
@@ -816,10 +818,12 @@ def choose_orientations(
     for i in range(len(directions) - 2, -1, -1):
         # ADS print 'i',i
         # ADS print 'stateprev[i]',stateprev[i]
-        best_enum_current = stateprev[i, best_enum_current]
+        idx = int(best_enum_current)
+        best_enum_current = stateprev[i, idx]
+        idx = int(best_enum_current)
         # ADS print 'best_enum_current'
         # ADS print best_enum_current
-        sign_current = signs[best_enum_current]
+        sign_current = signs[idx]
         # ADS print 'sign_current',sign_current
         directions[i] *= sign_current
 
@@ -2321,7 +2325,14 @@ class CachingAnalyzer:
         return full, obj_id2idx
 
     def _load_dict(self, result_h5_file):
-        if isinstance(result_h5_file, str) or isinstance(result_h5_file, unicode):
+        file_is_string = False
+        if sys.version_info.major < 3:
+            if isinstance(result_h5_file, basestring):
+                file_is_string = True
+        else:
+            if isinstance(result_h5_file, str):
+                file_is_string = True
+        if file_is_string:
             raise ValueError("should pass opened HDF5, not filename")
         kresults = result_h5_file
         self_should_close = False
@@ -2346,7 +2357,7 @@ class CachingAnalyzer:
         return preloaded_dict
 
     def close(self):
-        for key, preloaded_dict in self.loaded_h5_cache.iteritems():
+        for key, preloaded_dict in self.loaded_h5_cache.items():
             if preloaded_dict["self_should_close"]:
                 preloaded_dict["kresults"].close()
                 preloaded_dict["self_should_close"] = False

@@ -1,5 +1,7 @@
 from flydra_analysis.a2.calculate_reprojection_errors import \
      calculate_reprojection_errors, print_summarize_file
+import flydra_analysis.a2.core_analysis as core_analysis
+
 import os, tempfile, shutil
 import pkg_resources
 
@@ -22,5 +24,9 @@ def check_calculate_reprojection_errors(from_source):
         assert os.path.exists(outfile)
         print_summarize_file(outfile)
         # XXX FIXME add some test beyond just running and printing it.
+
+        # close open files
+        ca = core_analysis.get_global_CachingAnalyzer()
+        ca.close()
     finally:
         shutil.rmtree(tmpdir)

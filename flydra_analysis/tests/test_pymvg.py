@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import flydra_core.reconstruct as reconstruct
 import pkg_resources
@@ -129,8 +130,8 @@ def test_pymvg_roundtrip():
     # ------------ with distortion at different focal length ------
     mydir = os.path.dirname(__file__)
     caldir = os.path.join(mydir,'sample_calibration')
-    print mydir
-    print caldir
+    print(mydir)
+    print(caldir)
     R3 = Reconstructor(caldir)
     mvg3 = R3.convert_to_pymvg()
     #R4 = Reconstructor.from_pymvg(mvg3)

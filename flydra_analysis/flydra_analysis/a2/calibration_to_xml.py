@@ -2,8 +2,6 @@ from __future__ import print_function
 import flydra_core.reconstruct as reconstruct
 from optparse import OptionParser
 import xml.etree.ElementTree as ET
-import StringIO
-
 
 def doit(calsource, options=None):
     r = reconstruct.Reconstructor(calsource)
@@ -14,7 +12,7 @@ def doit(calsource, options=None):
     child = root[0]
     result = reconstruct.pretty_dump(child, ind="  ")
     if options.dest:
-        with open(options.dest, "wb") as the_file:
+        with open(options.dest, "w") as the_file:
             the_file.write(result)
         print("saved calibration to %s" % options.dest)
     else:

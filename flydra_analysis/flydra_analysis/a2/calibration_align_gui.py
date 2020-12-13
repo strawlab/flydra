@@ -480,16 +480,6 @@ def euler_from_matrix(matrix, axes="sxyz"):
     """Return Euler angles from rotation matrix for specified axis sequence.
     axes : One of 24 axis sequences as string or encoded tuple
     Note that many Euler angle triplets can describe one matrix.
-    >>> R0 = euler_matrix(1, 2, 3, 'syxz')
-    >>> al, be, ga = euler_from_matrix(R0, 'syxz')
-    >>> R1 = euler_matrix(al, be, ga, 'syxz')
-    >>> numpy.allclose(R0, R1)
-    True
-    >>> angles = (4.0*math.pi) * (numpy.random.random(3) - 0.5)
-    >>> for axes in _AXES2TUPLE.keys():
-    ...    R0 = euler_matrix(axes=axes, *angles)
-    ...    R1 = euler_matrix(axes=axes, *euler_from_matrix(R0, axes))
-    ...    if not numpy.allclose(R0, R1): print axes, "failed"
     """
     try:
         firstaxis, parity, repetition, frame = _AXES2TUPLE[axes.lower()]

@@ -103,7 +103,7 @@ class Tracker:
             all_bad_pts[camn].add(ptnum)
 
         output_data_dict = collections.defaultdict(list)
-        for camn, camn_list in input_data_dict.iteritems():
+        for camn, camn_list in input_data_dict.items():
             bad_pts = all_bad_pts[camn]
             for element in camn_list:
                 pt = element[0]
@@ -180,7 +180,7 @@ class Tracker:
                 fused_to_gobble[camn].add(dd_idx)
 
             # remove data to gobble
-            for camn, dd_idx_set in fused_to_gobble.iteritems():
+            for camn, dd_idx_set in fused_to_gobble.items():
                 old_list = data_dict[camn]
                 data_dict[camn] = [
                     item for (idx, item) in enumerate(old_list) if idx not in dd_idx_set
