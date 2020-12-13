@@ -66,7 +66,7 @@ ext_modules.append(
 
 setup(
     name="flydra_core",
-    version="0.7.10",  # keep in sync with flydra_core/version.py
+    version="0.7.11",  # keep in sync with flydra_core/version.py
     author="Andrew Straw",
     author_email="strawman@astraw.com",
     url="https://github.com/strawlab/flydra",
