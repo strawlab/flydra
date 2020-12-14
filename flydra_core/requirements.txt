@@ -1,8 +1,5 @@
 cgkit1
 pymvg
 adskalman
-tzlocal
-six
-nose
 
-# conda or system packages: numpy, scipy, pytables
+# conda or system packages: numpy, scipy, pytables, tzlocal, six, nose
