@@ -1,8 +1,7 @@
-aggdraw
 multicamselfcal
 progressbar
 motmot.FlyMovieFormat
 motmot.ufmf
 motmot.imops
 
-# conda or system packages: pycairo, pandas, h5py, flydra_core, traits, traitsui, pillow
+# conda or system packages: pycairo, pandas, h5py, flydra_core, traits, traitsui, pillow, aggdraw
