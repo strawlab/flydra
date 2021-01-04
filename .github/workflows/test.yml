@@ -13,15 +13,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-16.04, ubuntu-20.04, macos-10.15, macos-11.0, windows-2019]
+        os: [ubuntu-16.04, ubuntu-20.04, macos-10.15, windows-2019]
         python-version: [ '2.x', '3.8', '3.9' ]
         exclude:
           # Exclude Python 2.x on Windows, as it requires Microsoft Visual C++ 9.0 but
           # this is not installed on the Github runners.
           - os: windows-2019
-            python-version: '2.x'
-          # No Python 2 on macOS 11.
-          - os: macos-11.0
             python-version: '2.x'
 
     steps:
