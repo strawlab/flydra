@@ -4,6 +4,10 @@
 [![PyPI version](https://badge.fury.io/py/flydra-core.svg)](https://badge.fury.io/py/flydra-core)
 [![PyPI version](https://badge.fury.io/py/flydra-analysis.svg)](https://badge.fury.io/py/flydra-analysis)
 
+**⚠️⚠️Please consider our updated software, called [Braid](https://strawlab.org/braid).⚠️⚠️** Braid is a modern and maintained derivative of
+flydra. Braid performs the same tasks as flydra, only better. Flydra is not very actively maintained and substantial updates
+from the Straw Lab are not anticipated.
+
 Flydra is a markerless, multi-camera tracking system capable of tracking the
 three-dimensional position and body orientation of animals such as flies and
 birds. The system operates with less than 40 ms latency and can track multiple
