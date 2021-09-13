@@ -1,6 +1,6 @@
 # flydra - multi-camera tracking system
 
-[![build](https://github.com/strawlab/flydra/workflows/build-and-test/badge.svg?branch=master)](https://github.com/strawlab/flydra/actions?query=branch%3Amaster)
+[![build](https://github.com/strawlab/flydra/workflows/build-and-test/badge.svg?branch=main)](https://github.com/strawlab/flydra/actions?query=branch%3Amaster)
 [![PyPI version](https://badge.fury.io/py/flydra-core.svg)](https://badge.fury.io/py/flydra-core)
 [![PyPI version](https://badge.fury.io/py/flydra-analysis.svg)](https://badge.fury.io/py/flydra-analysis)
 
@@ -88,4 +88,4 @@ conditions.
 
 Anyone who interacts with flydra in any space including but not
 limited to this GitHub repository is expected to follow our [code of
-conduct](https://github.com/strawlab/flydra/blob/master/code_of_conduct.md).
+conduct](https://github.com/strawlab/flydra/blob/main/code_of_conduct.md).
