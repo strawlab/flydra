@@ -76,6 +76,7 @@ setup(
     packages=find_packages(),
     test_suite="nose.collector",
     ext_modules=cythonize(ext_modules),
+    setup_requires=["setuptools_git >= 0.3",],
     entry_points={
         "console_scripts": [
             # camera calibration
