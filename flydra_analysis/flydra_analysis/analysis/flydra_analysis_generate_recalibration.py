@@ -314,7 +314,7 @@ def do_it(
         )
 
     intrinsics_reconstructor = options.undistort_intrinsics_reconstructor
-    if intrinsics_reconstructor and os.path.exists(intrinsics_reconstructor):
+    if intrinsics_reconstructor:
         tdir = tempfile.mkdtemp()
         reconstructor = flydra_core.reconstruct.Reconstructor(
             cal_source=intrinsics_reconstructor
@@ -326,7 +326,7 @@ def do_it(
             cam_calibrations.append(fname)
 
     intrinsics_yaml = options.undistort_intrinsics_yaml
-    if intrinsics_yaml and os.path.exists(intrinsics_yaml):
+    if intrinsics_yaml:
         for cam_id in cam_ids:
             fname = os.path.join(intrinsics_yaml, "%s.yaml" % cam_id)
             cam_calibrations.append(fname)
