@@ -50,7 +50,7 @@ class TextLogDescription(PT.IsDescription):
     mainbrain_timestamp = PT.FloatCol(pos=0)
     cam_id = PT.StringCol(255, pos=1)
     host_timestamp = PT.FloatCol(pos=2)
-    message = PT.StringCol(255, pos=3)
+    message = PT.StringCol(4*1024*1024, pos=3) # 4 MB message max
 
 
 class CamSyncInfo(PT.IsDescription):
