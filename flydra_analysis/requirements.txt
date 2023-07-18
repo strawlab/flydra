@@ -1,3 +1,9 @@
+setuptools>=44.1
+numpy>=1.13,<1.17
+cython>=0.26
+wheel>=0.34.2
+twine>=1.15.0
+
 multicamselfcal
 progressbar
 motmot.FlyMovieFormat
