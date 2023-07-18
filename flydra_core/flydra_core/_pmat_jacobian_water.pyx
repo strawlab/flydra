@@ -4,7 +4,6 @@ import numpy as np
 cimport numpy as np
 
 import flydra_core.water as water
-import flydra_core.reconstruct as reconstruct
 cimport _refraction
 import _refraction
 from libc.math cimport atan2, sqrt, cos, sin
@@ -12,6 +11,23 @@ import _pmat_jacobian
 
 def make_PinholeCameraWaterModelWithJacobian(*args,**kw):
     return PinholeCameraWaterModelWithJacobian(*args,**kw)
+
+def pmat2cam_center(P):
+    """
+
+    See Hartley & Zisserman (2003) p. 163
+    """
+    assert P.shape == (3, 4)
+    determinant = np.linalg.det
+
+    # camera center
+    X = determinant([P[:, 1], P[:, 2], P[:, 3]])
+    Y = -determinant([P[:, 0], P[:, 2], P[:, 3]])
+    Z = determinant([P[:, 0], P[:, 1], P[:, 3]])
+    T = -determinant([P[:, 0], P[:, 1], P[:, 2]])
+
+    C_ = np.transpose(np.array([[X / T, Y / T, Z / T]]))
+    return C_
 
 cdef class PinholeCameraWaterModelWithJacobian(_pmat_jacobian.PinholeCameraModelWithJacobian):
     def __init__(self,P,wateri,roots3and4_eps):
@@ -22,7 +38,7 @@ cdef class PinholeCameraWaterModelWithJacobian(_pmat_jacobian.PinholeCameraModel
         self.n2 = wateri.n2
         self.roots3and4_eps = roots3and4_eps
 
-        C = reconstruct.pmat2cam_center(self.pmat)
+        C = pmat2cam_center(self.pmat)
         C = C[:,0]
         self.camx, self.camy, self.camz = C
 
