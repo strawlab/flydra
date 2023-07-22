@@ -107,7 +107,7 @@ def align_pmat(s, R, T, P):
 
 
 def align_pmat2(M, P):
-    P = np.dot(P, np.dual.inv(M))
+    P = np.dot(P, scipy.linalg.inv(M))
     return P
 
 
