@@ -48,6 +48,7 @@ def test_refraction():
 
 def find_fastest_path_fermat_numeric(n1, n2, z1, h, z2):
     def duration(h1):
+        h1 = h1[0]
         # Fermat's principle of least time
         h2 = h - h1
         return n1 * math.sqrt(h1 * h1 + z1 * z1) + n2 * math.sqrt(z2 * z2 + h2 * h2)
