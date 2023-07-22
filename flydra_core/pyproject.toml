@@ -20,7 +20,7 @@ flydra_analysis_flip_calibration = "flydra_core.reconstruct:flip_calibration"
 # following advice in https://stackoverflow.com/a/66479252
 requires = [
     "setuptools>=61",
-    "cython>=0.29,!=0.29.20",
+    "cython>=3.0",
     "numpy",
 ]
 build-backend = "setuptools.build_meta"
