@@ -122,7 +122,7 @@ cdef class PinholeCameraWaterModelWithJacobian(_pmat_jacobian.PinholeCameraModel
         t0 = r0*cos(theta)
         t1 = r0*sin(theta)
 
-        surfX_shifted = np.array((t0,t1,0),dtype=np.float)
+        surfX_shifted = np.array((t0,t1,0),dtype=np.float64)
         surfX = surfX_shifted+self.shift
         result = self.pinhole.evaluate(surfX)
         return result

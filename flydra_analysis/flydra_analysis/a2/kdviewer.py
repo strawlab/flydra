@@ -266,7 +266,7 @@ def doit(
     all_max_vel = 0.0
 
     if up_dir is not None:
-        up_dir = np.array(up_dir, dtype=np.float)
+        up_dir = np.array(up_dir, dtype=np.float64)
         assert up_dir.shape == (3,)
 
     if link_all_simultaneous_objs:
@@ -872,7 +872,7 @@ def doit(
                     highlight &= rows["frame"] >= options.highlight_start
                 if options.highlight_stop is not None:
                     highlight &= rows["frame"] <= options.highlight_stop
-                pd.point_data.scalars = highlight.astype(np.float)
+                pd.point_data.scalars = highlight.astype(np.float64)
             actors.append(a)
             actor2obj_id[a] = obj_id
 

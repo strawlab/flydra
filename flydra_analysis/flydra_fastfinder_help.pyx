@@ -21,7 +21,7 @@ def get_first_idx_long(np.ndarray[long, ndim=1] haystack, np.ndarray[long, ndim=
     cdef int needle_found
     cdef np.ndarray[long, ndim=1] found
 
-    found = np.zeros( (needles.shape[0],) , dtype=np.int)
+    found = np.zeros( (needles.shape[0],) , dtype=np.int64)
 
     for i in range(nmax):
         needle_found = 0
@@ -55,7 +55,7 @@ def get_first_idx_double(np.ndarray[double, ndim=1] haystack, np.ndarray[double,
     cdef int needle_found
     cdef np.ndarray[long, ndim=1] found
 
-    found = np.zeros( (needles.shape[0],) , dtype=np.int)
+    found = np.zeros( (needles.shape[0],) , dtype=np.int64)
 
     for i in range(nmax):
         needle_found = 0

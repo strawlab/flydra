@@ -595,7 +595,7 @@ def doit(
 
                         # Find first good datum.
                         fgnz = np.nonzero(~np.isnan(com_coords[:, 0]))
-                        com_coords_smooth = np.empty(com_coords.shape, dtype=np.float)
+                        com_coords_smooth = np.empty(com_coords.shape, dtype=np.float64)
                         com_coords_smooth.fill(np.nan)
 
                         if len(fgnz[0]):
@@ -612,17 +612,17 @@ def doit(
                                     [0, 0, 1, 0],
                                     [0, 0, 0, 1],
                                 ],
-                                dtype=np.float,
+                                dtype=np.float64,
                             )
                             C = np.array(
                                 [[1, 0, 0, 0], [0, 1, 0, 0]],  # observation matrix
-                                dtype=np.float,
+                                dtype=np.float64,
                             )
                             Q = 0.1 * np.eye(4)  # process noise
                             R = 1.0 * np.eye(2)  # observation noise
                             initx = np.array(
                                 [RTS_com_coords[0, 0], RTS_com_coords[0, 1], 0, 0],
-                                dtype=np.float,
+                                dtype=np.float64,
                             )
                             initV = 2 * np.eye(4)
                             initV[0, 0] = 0.1

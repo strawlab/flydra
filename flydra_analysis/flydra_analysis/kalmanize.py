@@ -890,7 +890,7 @@ def kalmanize(
         N_cams = len(camn_order)
         N_frames = len(accum_frame_spread_fno)
 
-        all_timestamps = np.empty((N_frames, N_cams), dtype=np.float)
+        all_timestamps = np.empty((N_frames, N_cams), dtype=np.float64)
         all_timestamps.fill(np.nan)
         for i, (timestamps, camns) in enumerate(
             zip(accum_frame_all_timestamps, accum_frame_all_camns)

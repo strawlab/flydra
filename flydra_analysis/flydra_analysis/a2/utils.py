@@ -65,8 +65,8 @@ class FastFinder(object):
         # appropriate helper function.
 
         return flydra_fastfinder_help.get_first_idx_double(
-            self.values.astype(np.float),
-            np.asanyarray(testvals).astype(np.float),
+            self.values.astype(np.float64),
+            np.asanyarray(testvals).astype(np.float64),
             missing_ok=missing_ok,
         )
 

@@ -144,7 +144,7 @@ def plot_ori(
                 used = rows["used%d" % camn]
                 dist = rows["dist%d" % camn]
 
-                frf = np.array(frame, dtype=np.float)
+                frf = np.array(frame, dtype=np.float64)
                 min_frame_range = min(np.min(frf), min_frame_range)
                 max_frame_range = max(np.max(frf), max_frame_range)
 

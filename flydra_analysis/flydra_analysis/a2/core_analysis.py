@@ -223,7 +223,7 @@ def my_decimate(x, q):
         # simple averaging
         xtrimlen = int(math.ceil(len(x) / q)) * q
         lendiff = xtrimlen - len(x)
-        xtrim = numpy.zeros((xtrimlen,), dtype=numpy.float)
+        xtrim = numpy.zeros((xtrimlen,), dtype=numpy.float64)
         xtrim[: len(x)] = x
 
         all = []
@@ -357,10 +357,10 @@ def kalman_smooth(orig_rows, dynamic_model_name=None, frames_per_second=None):
         warnings.warn("searchsorted is probably very slow because of different dtypes")
     idx = frames.searchsorted(obs_frames)
 
-    x = np.nan * numpy.ones(frames.shape, dtype=numpy.float)
-    y = np.nan * numpy.ones(frames.shape, dtype=numpy.float)
-    z = np.nan * numpy.ones(frames.shape, dtype=numpy.float)
-    R = np.nan * numpy.ones((frames.shape[0], 3, 3), dtype=numpy.float)
+    x = np.nan * numpy.ones(frames.shape, dtype=numpy.float64)
+    y = np.nan * numpy.ones(frames.shape, dtype=numpy.float64)
+    z = np.nan * numpy.ones(frames.shape, dtype=numpy.float64)
+    R = np.nan * numpy.ones((frames.shape[0], 3, 3), dtype=numpy.float64)
     obj_id_array = numpy.ma.masked_array(
         numpy.empty(frames.shape, dtype=numpy.uint32),
         mask=numpy.ones(frames.shape, dtype=numpy.bool_),
@@ -646,7 +646,7 @@ def choose_orientations(
        directions above with sign chosen to minimize cost
     """
     if (up_dir is None) and (elevation_up_bias_degrees != 0):
-        # up_dir = np.array([0,0,1],dtype=np.float)
+        # up_dir = np.array([0,0,1],dtype=np.float64)
         raise ValueError("up_dir must be specified. " "(Hint: --up-dir='0,0,1')")
     D2R = np.pi / 180
 
@@ -1832,7 +1832,7 @@ class CachingAnalyzer:
         is_mat_file = check_is_mat_file(data_file)
 
         if up_dir is not None:
-            up_dir = np.array(up_dir, dtype=np.float)
+            up_dir = np.array(up_dir, dtype=np.float64)
 
         if is_mat_file:
             # We ignore use_kalman_smoothing -- always smoothed
@@ -2770,7 +2770,7 @@ if 1:
         y = numpy.ones_like(x)
         z = numpy.ones_like(x)
         rows = np.recarray(
-            x.shape, dtype=[("x", np.float), ("y", np.float), ("z", np.float)]
+            x.shape, dtype=[("x", np.float64), ("y", np.float64), ("z", np.float64)]
         )
         rows["x"] = x
         rows["y"] = y

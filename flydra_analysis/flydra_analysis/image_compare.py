@@ -22,7 +22,7 @@ def get_fraction_similar(im1_filename, im2_filename, pix_diff_threshold=0.1):
         return True
 
     # maybe-3D absolute difference image
-    di = abs(im1.astype(np.float) - im2.astype(np.float))
+    di = abs(im1.astype(np.float64) - im2.astype(np.float64))
 
     # ensure 2D
     if di.ndim == 3:

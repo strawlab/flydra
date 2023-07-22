@@ -568,9 +568,9 @@ def doit(
                         save_cols["theta%d" % camn] = []
 
                     # NxM array with rows being frames and cols being cameras
-                    slopes = np.ones((n_frames, n_cams), dtype=np.float)
-                    x0ds = np.ones((n_frames, n_cams), dtype=np.float)
-                    y0ds = np.ones((n_frames, n_cams), dtype=np.float)
+                    slopes = np.ones((n_frames, n_cams), dtype=np.float64)
+                    x0ds = np.ones((n_frames, n_cams), dtype=np.float64)
+                    y0ds = np.ones((n_frames, n_cams), dtype=np.float64)
                     for j, camn in enumerate(camn_list):
 
                         slopes_by_frame = slopes_by_camn_by_frame[camn]
@@ -590,7 +590,7 @@ def doit(
                             )
 
                         if options.show:
-                            frf = np.array(frame_range, dtype=np.float)
+                            frf = np.array(frame_range, dtype=np.float64)
                             min_frame_range = min(np.min(frf), min_frame_range)
                             max_frame_range = max(np.max(frf), max_frame_range)
 

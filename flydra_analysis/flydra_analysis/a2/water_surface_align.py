@@ -54,7 +54,7 @@ def test_cgmat2np():
 class PlaneModelHelper:
     def fit(self, data):
         # http://stackoverflow.com/a/10904220/1633026
-        data = np.array(data, dtype=np.float)
+        data = np.array(data, dtype=np.float64)
         assert data.ndim == 2
         assert data.shape[1] == 3
         nrows = len(data)
@@ -115,7 +115,7 @@ def doit(
     recon = Reconstructor(cal_source=data_file)
     extra["kresults"].close()  # close file
 
-    data = np.empty((len(x), 3), dtype=np.float)
+    data = np.empty((len(x), 3), dtype=np.float64)
     data[:, 0] = x
     data[:, 1] = y
     data[:, 2] = z
@@ -142,7 +142,7 @@ def doit(
 
     # Calculate rotation matrix from plane-of-best-fit to z==0 --------
     orig_normal = norm(plane_params[:3])
-    new_normal = np.array([0, 0, 1], dtype=np.float)
+    new_normal = np.array([0, 0, 1], dtype=np.float64)
     rot_axis = norm(np.cross(orig_normal, new_normal))
     cos_angle = np.dot(orig_normal, new_normal)
     angle = np.arccos(cos_angle)
@@ -152,7 +152,7 @@ def doit(
 
     # Calculate aligned data without translation -----------------
     s = 1.0
-    t = np.array([0, 0, 0], dtype=np.float)
+    t = np.array([0, 0, 0], dtype=np.float64)
 
     aligned_data = align.align_points(s, R, t, data.T).T
 
