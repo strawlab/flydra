@@ -24,3 +24,9 @@ requires = [
     "numpy",
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+addopts = ["--doctest-modules", "--doctest-ignore-import-errors"]
+python_files = ["flydra_core/align.py", "flydra_core/test_refraction.py",
+    "flydra_core/geom.py", "flydra_core/reconstruct.py",
+    "flydra_core/kalman.py", "flydra_core/kalman/flydra_tracker.py"]

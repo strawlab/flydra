@@ -6,6 +6,5 @@ tables
 cgkit1
 pymvg
 adskalman
-nose
 scipy
 six

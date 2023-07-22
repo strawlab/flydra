@@ -57,7 +57,6 @@ ext_modules.append(
 
 setup(
     packages=find_packages(),
-    test_suite="nose.collector",
     ext_modules=cythonize(ext_modules),
     package_data={"flydra_core": ["flydra_server_art.png", "sample_calibration/*",],},
 )
