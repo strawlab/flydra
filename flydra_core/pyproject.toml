@@ -10,6 +10,12 @@ maintainers = [{ name = "Andrew Straw", email = "strawman@astraw.com" }]
 
 urls.homepage = "https://github.com/strawlab/flydra"
 
+[project.scripts]
+# camera calibration
+flydra_analysis_align_calibration = "flydra_core.reconstruct:align_calibration"
+flydra_analysis_print_cam_centers = "flydra_core.reconstruct:print_cam_centers"
+flydra_analysis_flip_calibration = "flydra_core.reconstruct:flip_calibration"
+
 [build-system]
 # following advice in https://stackoverflow.com/a/66479252
 requires = [

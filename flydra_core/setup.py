@@ -59,13 +59,5 @@ setup(
     packages=find_packages(),
     test_suite="nose.collector",
     ext_modules=cythonize(ext_modules),
-    entry_points={
-        "console_scripts": [
-            # camera calibration
-            "flydra_analysis_align_calibration = flydra_core.reconstruct:align_calibration",
-            "flydra_analysis_print_cam_centers = flydra_core.reconstruct:print_cam_centers",
-            "flydra_analysis_flip_calibration = flydra_core.reconstruct:flip_calibration",
-        ],
-    },
     package_data={"flydra_core": ["flydra_server_art.png", "sample_calibration/*",],},
 )
