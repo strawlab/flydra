@@ -49,24 +49,22 @@ jobs:
       run: sudo apt-get update
     - name: Install system packages
       run: sudo apt-get install -y libcairo2-dev # mayavi2 python3-sympy python3-docopt python3-cherrypy3 python3-pkgconfig python-is-python3 octave
-    - name: Build and install flydra_core
-      run: |
-        cd flydra_core
-        python setup.py install --user
-    - name: Install missing dependencies for flydra_core
+    - name: Upgrade pip
+      run: python -m pip install --upgrade pip
+    - name: Install requirements for flydra_core
       run: python -m pip install -r ./flydra_core/requirements.txt
+    - name: Build and install flydra_core
+      run: python -m pip install ./flydra_core
     - name: Test flydra_core
       run: |
         # Run these tests in a different directory to ensure we are testing an installed version.
         cd docs
         python -c "import nose; print(nose.__version__)"
         python -c "import nose; nose.run_exit()" --eval-attr="not (known_fail or slow_command)" --config ../flydra_core/setup.cfg
-    - name: Install missing dependencies for flydra_analysis
+    - name: Install requirements for flydra_analysis
       run: python -m pip install -r ./flydra_analysis/requirements.txt
     - name: Build and install flydra_analysis
-      run: |
-        cd flydra_analysis
-        python setup.py install --user
+      run: python -m pip install ./flydra_analysis
     - name: Test flydra_analysis
       run: |
         cd flydra_analysis
