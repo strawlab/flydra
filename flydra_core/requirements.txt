@@ -2,8 +2,10 @@ setuptools>=44.1
 numpy>=1.13
 cython>=0.26
 
+tables
 cgkit1
 pymvg
 adskalman
-
-# conda or system packages: numpy, scipy, pytables, tzlocal, six, nose
+nose
+scipy
+six

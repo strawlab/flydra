@@ -42,14 +42,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04]
-
+        os: [ubuntu-20.04, ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
-    - name: Update Ubuntu system package index
+    - name: Update package index
       run: sudo apt-get update
-    - name: Install system packages (Ubuntu 20.04)
-      run: sudo apt-get install -y cython3 python3-cairo python3-numpy python3-scipy python3-nose python3-h5py python3-pandas mayavi2 python3-sympy python3-docopt python3-cherrypy3 python3-matplotlib python3-progressbar python3-tables python3-six python3-pkgconfig python-is-python3 octave python3-pil python3-tzlocal python3-aggdraw
+    - name: Install system packages
+      run: sudo apt-get install -y libcairo2-dev # mayavi2 python3-sympy python3-docopt python3-cherrypy3 python3-pkgconfig python-is-python3 octave
     - name: Build and install flydra_core
       run: |
         cd flydra_core

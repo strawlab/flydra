@@ -2,10 +2,18 @@ setuptools>=44.1
 numpy>=1.13
 cython>=0.26
 
+flydra_core
+pycairo
+matplotlib
 multicamselfcal
 progressbar
 motmot.FlyMovieFormat
 motmot.ufmf
 motmot.imops
-
-# conda or system packages: pycairo, pandas, h5py, flydra_core, traits, traitsui, pillow, aggdraw
+nose
+h5py
+pandas
+traits
+traitsui
+pillow
+aggdraw
