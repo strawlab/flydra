@@ -1,2 +1,3 @@
+include flydra_core/*.pxd
 include flydra_core/*.pyx
 include flydra_core/*.h
