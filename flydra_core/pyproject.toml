@@ -1,0 +1,20 @@
+[project]
+name = "flydra_core"
+version = "0.7.14"  # keep in sync with flydra_core/version.py
+description = "flydra mainbrain and core lib"
+readme = "README.md"
+requires-python = ">= 3.7"
+#license.file = "LICENSE-MIT" and "LICENSE-APACHE"
+authors = [{ name = "Andrew Straw", email = "strawman@astraw.com" }]
+maintainers = [{ name = "Andrew Straw", email = "strawman@astraw.com" }]
+
+urls.homepage = "https://github.com/strawlab/flydra"
+
+[build-system]
+# following advice in https://stackoverflow.com/a/66479252
+requires = [
+    "setuptools>=61",
+    "cython>=0.29,!=0.29.20",
+    "numpy",
+]
+build-backend = "setuptools.build_meta"

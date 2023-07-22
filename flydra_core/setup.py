@@ -1,16 +1,6 @@
-from setuptools import setup, find_packages
-from distutils.core import Extension  # actually monkey-patched by setuptools
+from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
-
 import numpy as np
-
-from io import open
-from os import path
-
-# read the contents of your README file
-this_directory = path.abspath(path.dirname(__file__))
-with open(path.join(this_directory, "README.md"), encoding="utf-8") as f:
-    long_description = f.read()
 
 ext_modules = []
 
@@ -66,18 +56,9 @@ ext_modules.append(
 )
 
 setup(
-    name="flydra_core",
-    version="0.7.14",  # keep in sync with flydra_core/version.py
-    author="Andrew Straw",
-    author_email="strawman@astraw.com",
-    url="https://github.com/strawlab/flydra",
-    description="flydra mainbrain and core lib",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
     packages=find_packages(),
     test_suite="nose.collector",
     ext_modules=cythonize(ext_modules),
-    setup_requires=["setuptools_git >= 0.3",],
     entry_points={
         "console_scripts": [
             # camera calibration
