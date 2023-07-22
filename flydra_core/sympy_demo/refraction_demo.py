@@ -48,4 +48,4 @@ duration = n1*sqrt( h1*h1 + z1*z1 ) + n2*sqrt(z2*z2 + h2*h2)
 ddur_dh1 = diff(duration,h1)
 eq, cov, dens = unrad(ddur_dh1)
 poly = Poly(eq,h1)
-print poly
+print(poly)

@@ -25,12 +25,12 @@ pv_y = sympy.diff(v,y)
 pv_z = sympy.diff(v,z)
 pv_w = sympy.diff(v,w)
 
-print 'pu_x=',pu_x
-print 'pu_y=',pu_y
-print 'pu_z=',pu_z
-print 'pu_w=',pu_w
-print
-print 'pv_x=',pv_x
-print 'pv_y=',pv_y
-print 'pv_z=',pv_z
-print 'pv_w=',pv_w
+print('pu_x=',pu_x)
+print('pu_y=',pu_y)
+print('pu_z=',pu_z)
+print('pu_w=',pu_w)
+print()
+print('pv_x=',pv_x)
+print('pv_y=',pv_y)
+print('pv_z=',pv_z)
+print('pv_w=',pv_w)
