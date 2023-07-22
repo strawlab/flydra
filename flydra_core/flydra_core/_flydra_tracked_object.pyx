@@ -508,11 +508,18 @@ cdef class TrackedObject:
         """
         # For each camera, predict 2D image location and error distance
         cdef double least_nll, nll_this_point
+        nll_this_point = 0.0
         cdef double dist2, dist, p_y_x
+        dist2 = 0.0
+        dist = 0.0
         cdef int gated_in, pixel_dist_criterion_passed
 
         cdef double pt_area, mean_val, sumsqf_val, area
+        pt_area = 0.0
+        mean_val = 0.0
+        sumsqf_val = 0.0
         cdef int cur_val
+        cur_val = 0
         cdef int camn, frame_pt_idx
         cdef _fastgeom.PlueckerLine projected_line
         cdef _fastgeom.ThreeTuple best_3d_location
