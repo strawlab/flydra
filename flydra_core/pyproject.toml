@@ -10,6 +10,19 @@ maintainers = [{ name = "Andrew Straw", email = "strawman@astraw.com" }]
 
 urls.homepage = "https://github.com/strawlab/flydra"
 
+dependencies = [
+    "setuptools >= 44.1",
+    "numpy >= 1.13",
+    "cython >= 0.26",
+
+    "tables",
+    "cgkit1",
+    "pymvg >= 2.1.0",
+    "adskalman",
+    "scipy",
+    "six",
+]
+
 [project.scripts]
 # camera calibration
 flydra_analysis_align_calibration = "flydra_core.reconstruct:align_calibration"
