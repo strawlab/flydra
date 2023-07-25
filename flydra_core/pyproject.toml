@@ -12,7 +12,7 @@ urls.homepage = "https://github.com/strawlab/flydra"
 
 dependencies = [
     "setuptools >= 44.1",
-    "numpy >= 1.13",
+    "numpy >= 1.19",
     "cython >= 0.26",
 
     "tables",
