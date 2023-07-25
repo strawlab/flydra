@@ -10,7 +10,6 @@ from .PQmath import (
     CachingObjectiveFunctionQuats,
     QuatSmoother,
 )
-import nose
 
 
 class TestPQmath:
@@ -128,6 +127,3 @@ class TestPQmath:
         for i, (qs, qc) in enumerate(zip(Qsmooth_slow, Qsmooth_cache)):
             assert qs == qc
 
-
-if __name__ == "__main__":
-    nose.main()

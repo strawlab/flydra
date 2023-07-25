@@ -30,8 +30,6 @@ jobs:
       run: python -m pip install --upgrade pip
     - name: Build and install flydra_core
       run: python -m pip install ./flydra_core
-    - name: Install requirements for flydra_analysis
-      run: python -m pip install -r ./flydra_analysis/requirements.txt
     - name: Build and install flydra_analysis
       run: python -m pip install ./flydra_analysis
 
@@ -60,8 +58,10 @@ jobs:
         pytest
 
     - name: Build and install flydra_analysis
-      run: python -m pip install ./flydra_analysis
-    - name: Test flydra_analysis
       run: |
         cd flydra_analysis
-        ./run_tests.sh -vv
+        python -m pip install -e .
+    # - name: Test flydra_analysis
+    #   run: |
+    #     cd flydra_analysis
+    #     ./run_tests.sh

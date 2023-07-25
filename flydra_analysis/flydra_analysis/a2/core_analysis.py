@@ -39,8 +39,7 @@ import warnings, tempfile
 import unittest
 from distutils.version import StrictVersion
 import pkg_resources
-from nose.plugins.attrib import attr as nose_attr  # ubuntu: apt-get install python-nose
-
+import pytest
 
 def add_arguments_to_parser(parser):
     return add_options_to_parser(parser, is_argparse=True)
@@ -2371,7 +2370,7 @@ class CachingAnalyzer:
         self.close()
 
 
-@nose_attr("known_fail")
+@pytest.mark.xfail
 def test_choose_orientations():
     #                             8     9     10   11  12 13   14   15     16     17     18  19 20
     x = np.array(
@@ -2507,7 +2506,7 @@ class TestCoreAnalysis:
     def failUnless(self, value):
         assert not value, "test failed"
 
-    @nose_attr("known_fail")
+    @pytest.mark.xfail
     def test_fast_startstopidx_on_sorted_array_scalar(self):
         sorted_array = numpy.arange(10)
         for value in [-1, 0, 2, 5, 6, 11]:
@@ -2519,7 +2518,7 @@ class TestCoreAnalysis:
             self.failUnless(idx_fast.shape == idx_slow.shape)
             self.failUnless(numpy.allclose(idx_fast, idx_slow))
 
-    @nose_attr("known_fail")
+    @pytest.mark.xfail
     def test_fast_startstopidx_on_sorted_array_1d(self):
         sorted_array = numpy.arange(10)
         values = [-1, 0, 2, 5, 6, 11]
@@ -2561,7 +2560,7 @@ class TestCoreAnalysis:
                         "We should not get here - a " "NoObjectIDError should be raised"
                     )
 
-    @nose_attr("known_fail")
+    @pytest.mark.xfail
     def test_smooth(self):
         if not hasattr(self, "data_files"):
             # XXX why do I have to do this? Shouldn't nose do this?
@@ -2636,7 +2635,7 @@ class TestCoreAnalysis:
                 # print 'mean_dist',mean_dist
                 assert mean_dist < 1.0  # should certainly be less than 1 meter!
 
-    @nose_attr("known_fail")
+    @pytest.mark.xfail
     def test_CachingAnalyzer_load_data1(self):
         if not hasattr(self, "data_files"):
             # XXX why do I have to do this? Shouldn't nose do this?
@@ -2693,7 +2692,7 @@ class TestCoreAnalysis:
                 mean_dist = numpy.mean(dist)
                 assert mean_dist < 0.1
 
-    @nose_attr("known_fail")
+    @pytest.mark.xfail
     def test_CachingAnalyzer_calculate_trajectory_metrics(self):
         for data_file, test_obj_ids, is_mat_file, fps, model in zip(
             self.data_files,
@@ -2729,7 +2728,7 @@ class TestCoreAnalysis:
                     ##        len(results['X_kalmanized']),len(rows),obj_id)
                     assert len(results["X_kalmanized"]) == len(rows)
 
-    @nose_attr("known_fail")
+    @pytest.mark.xfail
     def test_CachingAnalyzer_load_data2(self):
         if not hasattr(self, "data_files"):
             # XXX why do I have to do this? Shouldn't nose do this?
@@ -2764,7 +2763,7 @@ class TestCoreAnalysis:
 
 if 1:
 
-    @nose_attr("known_fail")
+    @pytest.mark.xfail
     def test_choose_orientations2():
         x = numpy.linspace(0, 1000, 10)
         y = numpy.ones_like(x)

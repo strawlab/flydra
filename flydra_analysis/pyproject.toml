@@ -10,6 +10,31 @@ maintainers = [{ name = "Andrew Straw", email = "strawman@astraw.com" }]
 
 urls.homepage = "https://github.com/strawlab/flydra"
 
+dependencies = [
+    "setuptools >= 44.1",
+    "numpy>=1.13",
+    "cython>=0.26",
+
+    "flydra_core",
+    "pytest",
+    "pycairo",
+    "matplotlib",
+    "multicamselfcal",
+    "progressbar",
+    "motmot.FlyMovieFormat",
+    "motmot.ufmf",
+    "motmot.imops",
+    "h5py",
+    "pandas",
+    "traits",
+    "traitsui",
+    "pillow",
+    "aggdraw",
+    #"PyYAML",
+    #"sympy",
+    #"cherrypy",
+]
+
 [project.scripts]
 # analysis - re-kalmanize
 flydra_kalmanize = "flydra_analysis.kalmanize:main"
@@ -96,3 +121,10 @@ include-package-data = false
     "sample_calibration.xml",
     "Makefile.kalmanize",
     ]
+
+[tool.pytest.ini_options]
+addopts = ["--doctest-modules", "--doctest-ignore-import-errors"]
+python_files = ["flydra_analysis/talign.py", "flydra_analysis/test_geom.py",
+  "flydra_analysis/a2/core_analysis.py", "flydra_analysis/a2/utils.py", "flydra_analysis/a2/benu.py",
+  "flydra_analysis/a2/pos_ori2fu.py", "flydra_analysis/analysis/circstats.py", "flydra_analysis/analysis/result_utils.py",
+  "flydra_analysis/analysis/PQmath.py", "flydra_analysis/analysis/calc_forces.py",]

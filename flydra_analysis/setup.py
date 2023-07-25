@@ -14,6 +14,5 @@ ext_modules.append(
 
 setup(
     packages=find_packages(),
-    test_suite="nose.collector",
     ext_modules=cythonize(ext_modules),
 )
