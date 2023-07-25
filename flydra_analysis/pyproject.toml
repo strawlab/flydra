@@ -3,7 +3,7 @@ name = "flydra_analysis"
 version="0.7.14"  # keep in sync with flydra_analysis/version.py
 description = "fflydra analysis tools"
 readme = "README.md"
-requires-python = ">= 3.7"
+requires-python = ">= 3.8"
 #license.file = "LICENSE-MIT" and "LICENSE-APACHE"
 authors = [{ name = "Andrew Straw", email = "strawman@astraw.com" }]
 maintainers = [{ name = "Andrew Straw", email = "strawman@astraw.com" }]
