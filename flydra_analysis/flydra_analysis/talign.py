@@ -77,10 +77,10 @@ class Alignment(traits.HasTraits):
         Rz = cgmat2np(qz.toMat3())
         R = np.dot(Rx, np.dot(Ry, Rz))
 
-        t = np.array([self.tx, self.ty, self.tz], np.float)
+        t = np.array([self.tx, self.ty, self.tz], np.float64)
         s = self.s
 
-        T = np.zeros((4, 4), dtype=np.float)
+        T = np.zeros((4, 4), dtype=np.float64)
         T[:3, :3] = s * R
         T[:3, 3] = t
         T[3, 3] = 1.0
@@ -95,7 +95,7 @@ class Alignment(traits.HasTraits):
             fz = -1
 
         flip = np.array(
-            [[fx, 0, 0, 0], [0, fy, 0, 0], [0, 0, fz, 0], [0, 0, 0, 1]], dtype=np.float
+            [[fx, 0, 0, 0], [0, fy, 0, 0], [0, 0, fz, 0], [0, 0, 0, 1]], dtype=np.float64
         )
         T = np.dot(flip, T)
         # T = np.dot(T,flip)
@@ -119,7 +119,7 @@ class Alignment(traits.HasTraits):
         if self.flip_z:
             fz = -1
 
-        flip = np.array([[fx, 0, 0], [0, fy, 0], [0, 0, fz]], dtype=np.float)
+        flip = np.array([[fx, 0, 0], [0, fy, 0], [0, 0, fz]], dtype=np.float64)
         _R = np.dot(flip, _R)
 
         s = float(self.s)

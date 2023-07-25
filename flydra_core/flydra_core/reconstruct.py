@@ -337,7 +337,7 @@ def do_3d_operations_on_2d_point(
     """this function is a hack"""
 
     matrixmultiply = numpy.dot
-    svd = numpy.dual.svd  # use fastest ATLAS/fortran libraries
+    svd = numpy.linalg.svd  # use fastest ATLAS/fortran libraries
 
     found_point_image_plane = [x0u, y0u, 1.0]
 

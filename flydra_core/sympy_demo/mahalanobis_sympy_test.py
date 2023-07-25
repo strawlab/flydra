@@ -27,6 +27,6 @@ tmp = maha3
 tmp = tmp.subs(y0,'a+s*d')
 tmp = tmp.subs(y1,'b+s*e')
 tmp = tmp.subs(y2,'c+s*f')
-print 'solving with sympy',sympy.__version__
+print('solving with sympy',sympy.__version__)
 result = sympy.solve(sympy.diff(tmp,s),s)
-print result
+print(result)

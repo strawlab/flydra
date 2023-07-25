@@ -183,7 +183,7 @@ def reconstruct_line_3ds(kresults, recon2, use_obj_id, return_fXl=False):
                 L = (nan, nan, nan, nan, nan, nan)
 
             fXl.append([frame] + list(X_by_frame[frame]) + list(L))
-        fXl = numpy.array(fXl, dtype=numpy.float)
+        fXl = numpy.array(fXl, dtype=numpy.float64)
         return fXl
     else:
         return line3d_by_frame

@@ -3,7 +3,6 @@ import math
 import numpy
 import numpy as np
 import scipy.optimize
-import numpy.dual
 import warnings
 
 __all__ = ["ThreeTuple", "PlueckerLine", "line_from_points", "LineSegment", "Plane"]
@@ -436,7 +435,7 @@ def points_to_plane(*args, **kwds):
     # eqn 3.3 of Hartley Zisserman
     X = np.array(X)
 
-    u, d, vt = numpy.dual.svd(X)  # ,full_matrices=True)
+    u, d, vt = np.linalg.svd(X)  # ,full_matrices=True)
 
     if np.any(d[:3] < eps):
         raise ColinearError("points not in general position")

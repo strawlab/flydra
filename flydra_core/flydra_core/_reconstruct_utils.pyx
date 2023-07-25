@@ -2,7 +2,6 @@
 #cython: language_level=2
 
 import numpy
-import numpy.dual
 inf = numpy.inf
 
 cdef double cinf
@@ -318,7 +317,7 @@ def hypothesis_testing_algorithm__find_best_3d( object recon, object found_data_
 
     #cdef double *least_err_by_n_cameras # fake dict (index = key)
 
-    svd = numpy.dual.svd # eliminate global name lookup
+    svd = numpy.linalg.svd # eliminate global name lookup
 
     cam_ids = recon.cam_ids # shorthand
     max_n_cams = min(len(cam_ids), max_n_cams)
