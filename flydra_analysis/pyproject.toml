@@ -1,6 +1,6 @@
 [project]
 name = "flydra_analysis"
-version="0.7.14"  # keep in sync with flydra_analysis/version.py
+version = "0.7.14"                     # keep in sync with flydra_analysis/version.py
 description = "fflydra analysis tools"
 readme = "README.md"
 requires-python = ">= 3.8"
@@ -107,11 +107,7 @@ wt0803 = "flydra_analysis.a2.conditions_draw:wt0803"
 
 [build-system]
 # following advice in https://stackoverflow.com/a/66479252
-requires = [
-    "setuptools>=61",
-    "cython>=0.29,!=0.29.20",
-    "numpy",
-]
+requires = ["setuptools >= 61", "cython >= 0.29", "numpy"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -123,11 +119,19 @@ include-package-data = false
     "sample_*.h5",
     "sample_calibration.xml",
     "Makefile.kalmanize",
-    ]
+]
 
 [tool.pytest.ini_options]
 addopts = ["--doctest-modules", "--doctest-ignore-import-errors"]
-python_files = ["flydra_analysis/talign.py", "flydra_analysis/test_geom.py",
-  "flydra_analysis/a2/core_analysis.py", "flydra_analysis/a2/utils.py", "flydra_analysis/a2/benu.py",
-  "flydra_analysis/a2/pos_ori2fu.py", "flydra_analysis/analysis/circstats.py", "flydra_analysis/analysis/result_utils.py",
-  "flydra_analysis/analysis/PQmath.py", "flydra_analysis/analysis/calc_forces.py",]
+python_files = [
+    "flydra_analysis/talign.py",
+    "flydra_analysis/test_geom.py",
+    "flydra_analysis/a2/core_analysis.py",
+    "flydra_analysis/a2/utils.py",
+    "flydra_analysis/a2/benu.py",
+    "flydra_analysis/a2/pos_ori2fu.py",
+    "flydra_analysis/analysis/circstats.py",
+    "flydra_analysis/analysis/result_utils.py",
+    "flydra_analysis/analysis/PQmath.py",
+    "flydra_analysis/analysis/calc_forces.py",
+]
