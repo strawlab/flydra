@@ -20,12 +20,11 @@ jobs:
         python-version: [ '3.8', '3.x' ]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup python
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-        architecture: x64
     - name: Upgrade pip
       run: python -m pip install --upgrade pip
     - name: Build and install flydra_core
@@ -40,7 +39,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04, ubuntu-latest]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Update package index
       run: sudo apt-get update
     - name: Install system packages
