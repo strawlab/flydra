@@ -47,7 +47,7 @@ D. Straw.
 
  * `docs` - documentation
  * `flydra_analysis` - calibration and analysis routines
- * `flydra_camnode` - camera node program
+ * `flydra_camnode` - camera node program (**not maintained, unsupported**)
  * `flydra_core` - realtime 3D tracking
  * `packaging` - making Debian/Ubuntu packages
 
