@@ -4,4 +4,4 @@
 
 This directory houses the source code for the `flydra_camnode` Python package.
 
-For more information about flydra, see the project [README](../README.md).
+For more information about flydra, see [here](https://github.com/strawlab/flydra).
