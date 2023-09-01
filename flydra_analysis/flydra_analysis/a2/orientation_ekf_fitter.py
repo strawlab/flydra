@@ -772,8 +772,8 @@ def doit(
                             possible_cam_idxs = np.nonzero(cams_with_data)[0]
                             if debug_level >= 6:
                                 print("possible_cam_idxs", possible_cam_idxs)
-                            gate_vector = np.zeros((n_cams,), dtype=np.bool)
-                            ## flip_vector = np.zeros( (n_cams,), dtype=np.bool)
+                            gate_vector = np.zeros((n_cams,), dtype=np.bool_)
+                            ## flip_vector = np.zeros( (n_cams,), dtype=np.bool_)
                             for camn_idx in possible_cam_idxs:
                                 cam_id = cam_id_list[camn_idx]
                                 camn = camn_list[camn_idx]

@@ -568,7 +568,7 @@ class QuatSeq(list):
 def _calc_idxs_and_fixup_q(no_distance_penalty_idxs, q):
     valid_cond = None
     if no_distance_penalty_idxs is not None:
-        valid_cond = np.ones(len(q), dtype=np.bool)
+        valid_cond = np.ones(len(q), dtype=np.bool_)
         for i in no_distance_penalty_idxs:
             valid_cond[i] = 0
 

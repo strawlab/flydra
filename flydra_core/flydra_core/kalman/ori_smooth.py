@@ -21,7 +21,7 @@ def test_running_average():
     bex = running_average(a, 5)
     assert np.allclose(bex, b)
 
-    a = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=np.bool)
+    a = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=np.bool_)
     b = [0, 0.2, 0.4, 0.6, 0.8, 1.0]
     bex = running_average(a, 5)
     assert np.allclose(bex, b)

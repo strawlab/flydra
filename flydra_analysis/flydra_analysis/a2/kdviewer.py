@@ -867,7 +867,7 @@ def doit(
                 options.highlight_start is not None
                 or options.highlight_stop is not None
             ):
-                highlight = np.ones(rows["frame"].shape, dtype=np.bool)
+                highlight = np.ones(rows["frame"].shape, dtype=np.bool_)
                 if options.highlight_start is not None:
                     highlight &= rows["frame"] >= options.highlight_start
                 if options.highlight_stop is not None:

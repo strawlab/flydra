@@ -102,7 +102,7 @@ def load_3d_raw_data(kalman_filename, require_qual=True, **kwargs):
 
 
 def is_obj_in_frame_range(obj_id, all_obj_ids, frames, start=None, stop=None):
-    valid_cond = np.ones(frames.shape, dtype=np.bool)
+    valid_cond = np.ones(frames.shape, dtype=np.bool_)
     if start is not None:
         valid_cond = valid_cond & (frames >= start)
     if stop is not None:

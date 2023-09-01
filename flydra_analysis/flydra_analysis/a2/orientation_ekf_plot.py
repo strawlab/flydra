@@ -199,7 +199,7 @@ def plot_ori(
                 min_ori_quality_required=options.ori_qual,
             )
             frame = kalman_rows["frame"]
-            cond = np.ones(frame.shape, dtype=np.bool)
+            cond = np.ones(frame.shape, dtype=np.bool_)
             if options.start is not None:
                 cond &= options.start <= frame
             if options.stop is not None:

@@ -28,7 +28,7 @@ def iterate_over_subtrajectories(
         raise ValueError("stimulus must be instance of xml_stimulus.Stimulus")
     if 1:
         warnings.warn("ignoring stimulus file, using sample_stim_cubic_arena")
-        good_cond = np.ones((len(data),), dtype=np.bool)
+        good_cond = np.ones((len(data),), dtype=np.bool_)
         if 0:
             print()
             print("obj %d" % data["obj_id"][0])

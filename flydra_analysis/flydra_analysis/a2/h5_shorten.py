@@ -15,7 +15,7 @@ def get_start_stop(src_h5, name, start, stop):
     if start is not None:
         valid_cond = frames >= start
     else:
-        valid_cond = np.ones(frames.shape, dtype=np.bool)
+        valid_cond = np.ones(frames.shape, dtype=np.bool_)
     if stop is not None:
         valid_cond &= frames <= stop
     valid_idx = np.nonzero(valid_cond)[0]

@@ -135,7 +135,7 @@ def plot_timeseries(subplot=None, options=None):
 
     if "frames" in extra:
         if (start is not None) or (stop is not None):
-            valid_frames = np.ones((len(extra["frames"]),), dtype=np.bool)
+            valid_frames = np.ones((len(extra["frames"]),), dtype=np.bool_)
             if start is not None:
                 valid_frames &= extra["frames"] >= start
             if stop is not None:

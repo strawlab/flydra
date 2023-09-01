@@ -596,11 +596,11 @@ current list of 2D points
                 if frame_start is not None:
                     c1 = rows["frame"] >= frame_start
                 else:
-                    c1 = np.ones((len(rows),), dtype=np.bool)
+                    c1 = np.ones((len(rows),), dtype=np.bool_)
                 if frame_stop is not None:
                     c2 = rows["frame"] <= frame_stop
                 else:
-                    c2 = np.ones((len(rows),), dtype=np.bool)
+                    c2 = np.ones((len(rows),), dtype=np.bool_)
                 valid = c1 & c2
                 rows = rows[valid]
                 if len(rows) > 1:

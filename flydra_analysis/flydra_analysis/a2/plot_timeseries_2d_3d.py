@@ -278,7 +278,7 @@ def doit(
             time_model = result_utils.get_time_model_from_data(data_file)
         if "frames" in extra:
             frames = extra["frames"]
-            valid_cond = np.ones((len(frames,)), dtype=np.bool)
+            valid_cond = np.ones((len(frames,)), dtype=np.bool_)
             if start is not None:
                 valid_cond &= frames >= start
             if stop is not None:
