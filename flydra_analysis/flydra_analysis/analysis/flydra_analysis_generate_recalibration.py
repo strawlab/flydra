@@ -90,7 +90,6 @@ def do_it(
     stop=None,
     options=None,
 ):
-
     if h5_2d_data_filename is None:
         h5_2d_data_filename = filename
 
@@ -356,7 +355,7 @@ def do_it(
         )
 
     if options.run_mcsc:
-        caldir = mcsc.execute(silent=False)
+        caldir = mcsc.execute()
         print("\nfinished: result in ", caldir)
         if options.output_xml:
             fname = os.path.join(caldir, "reconstructor.xml")
