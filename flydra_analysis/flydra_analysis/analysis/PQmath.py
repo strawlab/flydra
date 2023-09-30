@@ -224,7 +224,7 @@ results are yaw, pitch (no roll is provided)
 >>> print(orientation_to_euler( (0, 0, -1) ))
 (0.0, -1.5707963267948966)
 
->>> print(orientation_to_euler( (0,0,0) )) # This is not a unit vector.
+>>> print(orientation_to_euler( (0,0,0) )) # This is not a unit vector. # doctest: +IGNORE_EXCEPTION_DETAIL
 Traceback (most recent call last):
     ...
 AssertionError
