@@ -1,7 +1,7 @@
 [project]
 name = "flydra_analysis"
 version = "0.7.16"                     # keep in sync with flydra_analysis/version.py
-description = "fflydra analysis tools"
+description = "flydra analysis tools"
 readme = "README.md"
 requires-python = ">= 3.8"
 #license.file = "LICENSE-MIT" and "LICENSE-APACHE"

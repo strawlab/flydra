@@ -42,7 +42,7 @@ class FastFinder(object):
         >>> af = FastFinder(a)
         >>> bs = [ 0, 1, 2, 1.1 ]
         >>> for b in bs:
-        ...     af.get_idxs_of_equal(b).tolist()
+        ...     sorted(af.get_idxs_of_equal(b))
         ...
         []
         [0, 5]
@@ -260,9 +260,9 @@ def test_fast_finder():
     bs = [0, 1, 2, 1.1]
     af = FastFinder(a)
     for b in bs:
-        idxs1 = af.get_idxs_of_equal(b)
-        idxs2 = np.nonzero(a == b)[0]
-        assert idxs1.shape == idxs2.shape
+        idxs1 = sorted(af.get_idxs_of_equal(b))
+        idxs2 = sorted(np.nonzero(a == b)[0])
+        assert len(idxs1) == len(idxs2)
         assert np.allclose(idxs1, idxs2)
 
 
