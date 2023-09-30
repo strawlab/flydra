@@ -180,9 +180,9 @@ class Stimulus(object):
         info = {}
         for v in child:
             if v.tag == "origin":
-                info["origin"] = numpy.array(map(float, v.text.split()))
+                info["origin"] = numpy.fromstring(v.text, sep=" ")
             elif v.tag == "axis":
-                info["axis"] = numpy.array(map(float, v.text.split()))
+                info["axis"] = numpy.fromstring(v.text, sep=" ")
             elif v.tag == "diameter":
                 info["diameter"] = float(v.text)
             elif v.tag == "height":
@@ -196,7 +196,7 @@ class Stimulus(object):
         info = {}
         for v in child:
             if v.tag == "origin":
-                info["origin"] = numpy.array(map(float, v.text.split()))
+                info["origin"] = numpy.fromstring(v.text, sep=" ")
             elif v.tag == "radius":
                 info["radius"] = float(v.text)
             else:
@@ -218,7 +218,7 @@ class Stimulus(object):
                 for v in child1:
                     if v.tag == "vert":
                         vtext = v.text.replace(",", " ")
-                        verts.append(numpy.array(map(float, vtext.split())))
+                        verts.append(numpy.fromstring(vtext, sep=" "))
                         assert len(verts[-1]) == 3
                 assert len(verts) == 8
                 info["verts4x4"] = verts
@@ -234,7 +234,7 @@ class Stimulus(object):
         for v in child:
             if v.tag == "vert":
                 vtext = v.text.replace(",", " ")
-                verts.append(numpy.array(map(float, vtext.split())))
+                verts.append(numpy.fromstring(vtext, sep=" "))
             elif v.tag == "diameter":
                 diameter = float(v.text)
             else:
@@ -342,7 +342,7 @@ class Stimulus(object):
                 )
                 for z in z_levels:
                     this_lineseg = []
-                    for (x, y) in zip(xs, ys):
+                    for x, y in zip(xs, ys):
                         X = x, y, z
                         result = projection(X)
                         if result is None:
@@ -467,7 +467,7 @@ class Stimulus(object):
                 )
                 for z in z_levels:
                     plotx, ploty = [], []
-                    for (x, y) in zip(xs, ys):
+                    for x, y in zip(xs, ys):
                         X = x, y, z
                         result = projection(X)
                         if result is None:
