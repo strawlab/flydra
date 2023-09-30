@@ -93,6 +93,9 @@ def do_it(
     if h5_2d_data_filename is None:
         h5_2d_data_filename = filename
 
+    if use_nth_observation is None:
+        use_nth_observation = 1
+
     calib_dir = filename + ".recal"
     if not os.path.exists(calib_dir):
         os.makedirs(calib_dir)
@@ -102,7 +105,7 @@ def do_it(
     if use_kalman_data:
         mylocals = {}
         myglobals = {}
-        execfile(efilename, myglobals, mylocals)
+        exec(open(efilename).read(), myglobals, mylocals)
 
         use_obj_ids = mylocals["long_ids"]
         if "bad" in mylocals:
@@ -363,8 +366,7 @@ def do_it(
             recon.save_to_xml_filename(fname)
             print("\nfinished: new reconstructor in", fname)
 
-
-def main():
+def build_parser():
     usage = "%prog FILE EFILE [options]"
 
     usage += """
@@ -463,8 +465,11 @@ To ignore 3D trajectories and simply use all data::
         default=False,
         help="save the new reconstructor in xml format",
     )
+    return parser
 
-    (options, args) = parser.parse_args()
+def main():
+    parser = build_parser()
+    (options, args) = parser.parse_args(args=[])
 
     if len(args) > 2:
         print(
@@ -488,8 +493,16 @@ To ignore 3D trajectories and simply use all data::
                 "Kalman objects have not been disabled, but you did not specify an EFILE (hint: specify an EFILE or use --disable-kalman-objs"
             )
 
-    do_it(
-        h5_filename,
+    call_with_options(h5_filename,
+        efilename,options)
+
+def call_with_options(
+        filename,
+        efilename,
+        options):
+
+    return do_it(
+        filename,
         efilename,
         use_nth_observation=options.use_nth_observation,
         h5_2d_data_filename=options.h5_2d_data_filename,
@@ -502,3 +515,12 @@ To ignore 3D trajectories and simply use all data::
 
 if __name__ == "__main__":
     main()
+
+def test_generate_recalibration():
+    parser = build_parser()
+    (options, args) = parser.parse_args()
+
+    options.run_mcsc = True
+    options.use_kalman_data = False
+    call_with_options(filename="flydra_analysis/a2/sample_datafile-v0.4.28.h5",
+        efilename=None, options=options)

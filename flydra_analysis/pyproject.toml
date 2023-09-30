@@ -130,6 +130,7 @@ python_files = [
     "flydra_analysis/a2/benu.py",
     "flydra_analysis/a2/pos_ori2fu.py",
     "flydra_analysis/analysis/circstats.py",
+    "flydra_analysis/analysis/flydra_analysis_generate_recalibration.py",
     "flydra_analysis/analysis/result_utils.py",
     "flydra_analysis/analysis/PQmath.py",
     "flydra_analysis/analysis/calc_forces.py",
