@@ -2536,6 +2536,9 @@ class TestCoreAnalysis:
                 self.failUnless(idx_fast_stop[i] == (idx_slow[-1] + 1))
 
     def test_CachingAnalyzer_nonexistant_object(self):
+        if not hasattr(self, "data_files"):
+            # XXX why do I have to do this?
+            self.setUp()
         for (data_file, is_mat_file) in zip(self.data_files, self.is_mat_files,):
             for use_kalman_smoothing in [True, False]:
                 if is_mat_file and not use_kalman_smoothing:
