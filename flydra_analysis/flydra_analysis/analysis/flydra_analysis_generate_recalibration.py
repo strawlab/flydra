@@ -13,7 +13,7 @@ import progressbar
 import tempfile
 from optparse import OptionParser
 
-from multicamselfcal.execute import MultiCamSelfCal
+from pymulticamselfcal.execute import MultiCamSelfCal
 
 import warnings
 

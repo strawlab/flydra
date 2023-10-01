@@ -20,7 +20,7 @@ dependencies = [
     "pytest",
     "pycairo",
     "matplotlib",
-    "multicamselfcal >= 0.2.1",
+    "multicamselfcal >= 0.3.0",
     "pymvg >= 2.1.0",
     "progressbar",
     "motmot.FlyMovieFormat",
