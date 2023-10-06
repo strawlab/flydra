@@ -13,7 +13,7 @@ urls.homepage = "https://github.com/strawlab/flydra"
 dependencies = [
     "numpy >= 1.19",
 
-    "tables",
+    "tables < 3.9",
     "cgkit1 >= 1.3.0",
     "pymvg >= 2.1.0",
     "adskalman",
