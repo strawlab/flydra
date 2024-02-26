@@ -662,11 +662,11 @@ class MainBrain(object):
             use_unix_domain_sockets=self.config["use_unix_domain_sockets"],
             posix_scheduler=self.config["posix_scheduler"],
         )
-        # self.coord_processor.setDaemon(True)
+        # self.coord_processor.daemon = True
         self.coord_processor.start()
 
         self.timestamp_echo_receiver = TimestampEchoReceiver(self)
-        self.timestamp_echo_receiver.setDaemon(True)
+        self.timestamp_echo_receiver.daemon = True
         self.timestamp_echo_receiver.start()
 
         # setup ROS
