@@ -469,7 +469,7 @@ To ignore 3D trajectories and simply use all data::
 
 def main():
     parser = build_parser()
-    (options, args) = parser.parse_args(args=[])
+    (options, args) = parser.parse_args()
 
     if len(args) > 2:
         print(
