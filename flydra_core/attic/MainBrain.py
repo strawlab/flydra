@@ -257,7 +257,6 @@ class MainBrain(object):
     )
 
     class RemoteAPI:
-
         # ================================================================
         #
         # Methods called locally
@@ -492,7 +491,6 @@ class MainBrain(object):
                 camn_received_time,
                 points_distorted,
             ) in missing_data:
-
                 corrected_framenumber = framenumber - framenumber_offset
                 if len(points_distorted) == 0:
                     # No point was tracked that frame, send nan values.
@@ -915,8 +913,8 @@ class MainBrain(object):
         return all
 
     def start_listening(self):
-        """ the last thing called before we work - give the config callback watchers a callback
-        to check on the state of the mainbrain post __init__ """
+        """the last thing called before we work - give the config callback watchers a callback
+        to check on the state of the mainbrain post __init__"""
         self.save_config()
 
     def set_config_change_callback(self, handler):
@@ -1039,10 +1037,14 @@ class MainBrain(object):
         if not raw_file_basename:
             if self.experiment_uuid is not None:
                 raw_file_basename = os.path.join(
-                    self.config["save_movie_dir"], self.experiment_uuid,
+                    self.config["save_movie_dir"],
+                    self.experiment_uuid,
                 )
             else:
-                raw_file_basename = os.path.join(self.config["save_movie_dir"], nowstr,)
+                raw_file_basename = os.path.join(
+                    self.config["save_movie_dir"],
+                    nowstr,
+                )
 
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
@@ -1106,10 +1108,14 @@ class MainBrain(object):
         if not raw_file_basename:
             if self.experiment_uuid is not None:
                 raw_file_basename = os.path.join(
-                    self.config["save_movie_dir"], self.experiment_uuid,
+                    self.config["save_movie_dir"],
+                    self.experiment_uuid,
                 )
             else:
-                raw_file_basename = os.path.join(self.config["save_movie_dir"], nowstr,)
+                raw_file_basename = os.path.join(
+                    self.config["save_movie_dir"],
+                    nowstr,
+                )
 
         if len(cam_ids) == 0:
             cam_ids = self.remote_api.external_get_cam_ids()
@@ -1224,7 +1230,7 @@ class MainBrain(object):
         self.quit()
 
     def _safe_makedir(self, path):
-        """ raises OSError if path cannot be made """
+        """raises OSError if path cannot be made"""
         if not os.path.exists(path):
             os.makedirs(path)
             return path
@@ -1551,7 +1557,6 @@ class MainBrain(object):
                     observations_2d,
                     obs_Lcoords,
                 ) in list_of_3d_data:
-
                     if len(obs_frames) < MIN_KALMAN_OBSERVATIONS_TO_SAVE:
                         # only save data with at least N observations
                         continue
