@@ -921,8 +921,8 @@ def SingleCameraCalibration_from_xml(elem, helper=None):
     assert ET.iselement(elem)
     assert elem.tag == "single_camera_calibration"
     cam_id = elem.find("cam_id").text
-    pmat = numpy.array(numpy.mat(elem.find("calibration_matrix").text))
-    res = numpy.array(numpy.mat(elem.find("resolution").text))[0, :]
+    pmat = numpy.array(np.asmatrix(elem.find("calibration_matrix").text))
+    res = numpy.array(np.asmatrix(elem.find("resolution").text))[0, :]
     scale_elem = elem.find("scale_factor")
     if NO_BACKWARDS_COMPAT:
         assert scale_elem is None, "XML file has outdated <scale_factor>"
@@ -2102,12 +2102,13 @@ class Reconstructor:
         for cam_id in self.cam_ids:
             scc = self.get_SingleCameraCalibration(cam_id)
             scc.add_element(elem)
-        if 1:
-            me_elem = ET.SubElement(elem, "minimum_eccentricity")
-            me_elem.text = repr(self.minimum_eccentricity)
-        if self.wateri is not None:
-            water_elem = ET.SubElement(elem, "water")
-            water_elem.text = repr(self.wateri.n2)
+        with np.printoptions(legacy='1.25'):
+            if 1:
+                me_elem = ET.SubElement(elem, "minimum_eccentricity")
+                me_elem.text = repr(self.minimum_eccentricity)
+            if self.wateri is not None:
+                water_elem = ET.SubElement(elem, "water")
+                water_elem.text = repr(self.wateri.n2)
 
 
 def align_calibration():
