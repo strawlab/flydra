@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, ubuntu-latest]
+        os: [ubuntu-24.04, ubuntu-latest]
     steps:
     - uses: actions/checkout@v3
     - name: Update package index
