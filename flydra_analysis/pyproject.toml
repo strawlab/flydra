@@ -106,7 +106,7 @@ wt0803 = "flydra_analysis.a2.conditions_draw:wt0803"
 
 [build-system]
 # following advice in https://stackoverflow.com/a/66479252
-requires = ["setuptools >= 61", "cython >= 0.29", "numpy"]
+requires = ["setuptools >= 61", "cython >= 0.29.32", "numpy"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
