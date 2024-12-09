@@ -1,6 +1,6 @@
 [project]
 name = "flydra_analysis"
-version = "0.7.19"                     # keep in sync with flydra_analysis/version.py
+version = "0.7.20"                     # keep in sync with flydra_analysis/version.py
 description = "flydra analysis tools"
 readme = "README.md"
 requires-python = ">= 3.8"
