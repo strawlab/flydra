@@ -16,9 +16,10 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-20.04, ubuntu-latest, macos-11, macos-latest, windows-2019, windows-latest]
-        python-version: [ '3.8', '3.x' ]
+        os: [ubuntu-20.04, ubuntu-latest, macos-13, macos-latest, windows-2019, windows-latest]
+        python-version: [ '3.9', '3.x' ]
 
     steps:
     - uses: actions/checkout@v3
@@ -26,6 +27,15 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Install libhdf5 (macOS)
+      # See https://stackoverflow.com/questions/73029883
+      if: runner.os == 'macOS'
+      run: |
+        brew install hdf5
+        brew install c-blosc
+        export HDF5_DIR=/opt/homebrew/opt/hdf5
+        export BLOSC_DIR=/opt/homebrew/opt/c-blosc
+        export LZO_DIR=/opt/homebrew/opt/lzo
     - name: Upgrade pip
       run: python -m pip install --upgrade pip
     - name: Build and install flydra_core
@@ -37,8 +47,9 @@ jobs:
   test-ubuntu-system-python:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-20.04, ubuntu-latest]
+        os: [ubuntu-24.04, ubuntu-latest]
     steps:
     - uses: actions/checkout@v3
     - name: Update package index
