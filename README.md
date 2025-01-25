@@ -1,6 +1,6 @@
 # flydra - multi-camera tracking system
 
-[![build](https://github.com/strawlab/flydra/workflows/build-and-test/badge.svg?branch=main)](https://github.com/strawlab/flydra/actions?query=branch%3Amaster)
+[![build-and-test](https://github.com/strawlab/flydra/actions/workflows/test.yml/badge.svg)](https://github.com/strawlab/flydra/actions/workflows/test.yml)
 [![PyPI version](https://badge.fury.io/py/flydra-core.svg)](https://badge.fury.io/py/flydra-core)
 [![PyPI version](https://badge.fury.io/py/flydra-analysis.svg)](https://badge.fury.io/py/flydra-analysis)
 
