@@ -66,7 +66,6 @@ class Tracker:
         _ = [tro.debug_info(level=level) for tro in self.live_tracked_objects]
 
     def is_believably_new(self, Xmm, debug=0):
-
         """Sometimes the Kalman tracker will not gobble all the points
         it should. This still prevents spawning a new Kalman
         tracker."""
@@ -80,7 +79,7 @@ class Tracker:
             "min_dist_to_believe_new_sigma"
         ]
         results = [tro.get_distance_and_nsigma(X) for tro in self.live_tracked_objects]
-        for (dist_meters, dist_nsigma) in results:
+        for dist_meters, dist_nsigma in results:
             if debug > 5:
                 print("distance in meters, nsigma:", dist_meters, dist_nsigma)
             if (dist_nsigma < min_dist_to_believe_new_nsigma) or (
@@ -170,13 +169,12 @@ class Tracker:
         # End  ================================================================
 
         if len(all_to_gobble):
-
             # We deferred gobbling until now - fuse all points to be
             # gobbled and remove them from further consideration.
 
             # fuse dictionaries
             fused_to_gobble = collections.defaultdict(set)
-            for (camn, frame_pt_idx, dd_idx) in all_to_gobble:
+            for camn, frame_pt_idx, dd_idx in all_to_gobble:
                 fused_to_gobble[camn].add(dd_idx)
 
             # remove data to gobble
@@ -258,3 +256,14 @@ class Tracker:
                 callback(tro)
         for callback in self.flushed_callbacks:
             callback()
+
+
+def test_cython():
+    """Test that cython is working."""
+    import flydra_core._flydra_tracked_object as fto
+    import numpy as np
+
+    print("Cython module loaded successfully.")
+    arr = np.zeros((10,), dtype=np.uint16)
+    hashable = fto.obs2d_hashable(arr)
+    hash(hashable)  # should not raise an error

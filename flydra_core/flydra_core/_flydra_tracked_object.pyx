@@ -130,7 +130,7 @@ def obs2d_hashable( arr ):
     newarr[ camn_order*2 ] = camns
     newarr[ camn_order*2+1 ] = pt_idx
 
-    val = newarr.tostring()
+    val = newarr.tobytes()
     return val
 
 cdef class TrackedObject:
