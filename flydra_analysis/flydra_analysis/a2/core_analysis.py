@@ -2563,14 +2563,6 @@ class TestCoreAnalysis:
                         "We should not get here - a " "NoObjectIDError should be raised"
                     )
 
-    @pytest.mark.xfail
-    def test_smooth(self):
-        if not hasattr(self, "data_files"):
-            # XXX why do I have to do this? Shouldn't nose do this?
-            self.setUp()
-        for i in range(len(self.data_files)):
-            yield self.check_smooth, i
-
     def check_smooth(self, itest):
         for i, (data_file, test_obj_ids, is_mat_file, fps, model) in enumerate(
             zip(
@@ -2637,14 +2629,6 @@ class TestCoreAnalysis:
                 mean_dist = numpy.mean(dist)
                 # print 'mean_dist',mean_dist
                 assert mean_dist < 1.0  # should certainly be less than 1 meter!
-
-    @pytest.mark.xfail
-    def test_CachingAnalyzer_load_data1(self):
-        if not hasattr(self, "data_files"):
-            # XXX why do I have to do this? Shouldn't nose do this?
-            self.setUp()
-        for i in range(len(self.data_files)):
-            yield self.check_load_data1, i
 
     def check_load_data1(self, itest):
         for i, (data_file, test_obj_ids, is_mat_file, fps, model) in enumerate(
@@ -2730,17 +2714,6 @@ class TestCoreAnalysis:
                     ## print ("len(results['X_kalmanized']),len(rows),obj_id",
                     ##        len(results['X_kalmanized']),len(rows),obj_id)
                     assert len(results["X_kalmanized"]) == len(rows)
-
-    @pytest.mark.xfail
-    def test_CachingAnalyzer_load_data2(self):
-        if not hasattr(self, "data_files"):
-            # XXX why do I have to do this? Shouldn't nose do this?
-            self.setUp()
-        for i in range(len(self.data_files)):
-            # for smooth in [True,False]:
-            for smooth in [False, True]:
-                for obj_id in test_obj_ids:
-                    yield self.check_load_data2, (i, smooth, obj_id)
 
     def check_load_data2(self, i, smooth, obj_id):
         data_file = self.data_files[i]
