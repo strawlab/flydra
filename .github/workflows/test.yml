@@ -40,6 +40,9 @@ jobs:
       run: python -m pip install --upgrade pip
     - name: Build and install flydra_core
       run: python -m pip install ./flydra_core
+    - name: Update package index
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update
     - name: Install libcairo2-dev (Ubuntu)
       if: matrix.os == 'ubuntu-latest'
       run: sudo apt-get install -y libcairo2-dev
