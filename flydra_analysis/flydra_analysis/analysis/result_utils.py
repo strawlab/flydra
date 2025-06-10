@@ -19,6 +19,7 @@ from distutils.version import StrictVersion
 
 import datetime
 import pytz  # from http://pytz.sourceforge.net/
+import pytest
 
 DEFAULT_TZ = "US/Pacific"
 
@@ -801,12 +802,8 @@ class QuickFrameIndexer(Quick1DIndexer):
         return self.get_idxs(frameno)
 
 
-def test_qi():
-    yield check_qi, "int"
-    yield check_qi, "float"
-
-
-def check_qi(dtype):
+@pytest.mark.parametrize("dtype", ["int", "float"])
+def test_qi(dtype):
     frameso = [0, 0, 1, 2, 3, 4, 5, 5, 5, 5, 5, 6, 7, 8]
     if dtype == "int":
         frames = frameso
