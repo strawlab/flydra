@@ -436,7 +436,7 @@ def read_textlog_header(results, fail_on_error=True):
             raise
         else:
             return None
-    infostr = textlog1["message"].tostring().strip(b"\x00").decode("utf-8")
+    infostr = textlog1["message"].tobytes().strip(b"\x00").decode("utf-8")
     if not (
         infostr.startswith("MainBrain running at")
         or infostr.startswith("kalmanize running at")
@@ -468,7 +468,7 @@ def read_textlog_header(results, fail_on_error=True):
         else:
             if textlog2["mainbrain_timestamp"] == textlog1["mainbrain_timestamp"]:
                 assert textlog2["cam_id"] == b"mainbrain"
-                message2 = textlog2["message"].tostring().strip(b"\x00").decode("utf-8")
+                message2 = textlog2["message"].tobytes().strip(b"\x00").decode("utf-8")
                 version_start_string = "using flydra version "
                 if message2.startswith(version_start_string):
                     test_version = message2[len(version_start_string) :]

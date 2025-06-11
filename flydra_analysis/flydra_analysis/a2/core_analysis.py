@@ -297,7 +297,7 @@ def _get_initial_file_info(kresults):
     )
     if hasattr(kresults.root, "textlog"):
         textlog = kresults.root.textlog.read_coordinates([0])
-        infostr = textlog["message"].tostring().strip(b"\x00")
+        infostr = textlog["message"].tobytes().strip(b"\x00")
         header = flydra_analysis.analysis.result_utils.read_textlog_header(
             kresults, fail_on_error=False
         )
