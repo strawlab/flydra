@@ -479,7 +479,7 @@ def get_kalman_model(name=None, dt=None):
             # specify fixed_vel_model parameters as string
 
             # This is modified from Python Library ref 4.2.5:
-            floatre = "([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)"
+            floatre = r"([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)"
 
             rexp = (
                 r"fixed_vel_model\(posQ=%s,velQ=%s,scalarR=%s,init_posV=%s,init_velV=%s\)"
