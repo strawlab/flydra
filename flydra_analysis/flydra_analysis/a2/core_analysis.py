@@ -41,6 +41,7 @@ from distutils.version import StrictVersion
 import pkg_resources
 import pytest
 
+
 def add_arguments_to_parser(parser):
     return add_options_to_parser(parser, is_argparse=True)
 
@@ -438,7 +439,7 @@ def observations2smoothed(
 
     if not len(kalman_rows):
         raise NotEnoughDataToSmoothError(
-            "observations2smoothed() called with " "no input data"
+            "observations2smoothed() called with no input data"
         )
 
     # print "kalman_rows['frame'][-1]",kalman_rows['frame'][-1]
@@ -484,7 +485,6 @@ def observations2smoothed(
         raise ValueError("unknown value for obj_id_fill_value")
     list_of_cols = [obj_id_array2, frames, timestamps] + list_of_xhats + list_of_Ps
     if allocate_space_for_direction:
-
         rawdir_x = np.nan * np.ones((len(frames),), dtype=np.float32)
         rawdir_y = np.nan * np.ones((len(frames),), dtype=np.float32)
         rawdir_z = np.nan * np.ones((len(frames),), dtype=np.float32)
@@ -646,7 +646,7 @@ def choose_orientations(
     """
     if (up_dir is None) and (elevation_up_bias_degrees != 0):
         # up_dir = np.array([0,0,1],dtype=np.float64)
-        raise ValueError("up_dir must be specified. " "(Hint: --up-dir='0,0,1')")
+        raise ValueError("up_dir must be specified. (Hint: --up-dir='0,0,1')")
     D2R = np.pi / 180
 
     if DEBUG:
@@ -666,7 +666,7 @@ def choose_orientations(
     assert len(X.shape) == 2
     velocity = (X[1:] - X[:-1]) * frames_per_second
     # ADS print 'velocity.shape',velocity.shape
-    speed = np.sqrt(np.sum(velocity ** 2, axis=1))
+    speed = np.sqrt(np.sum(velocity**2, axis=1))
     # ADS print 'speed.shape',speed.shape
     w = velocity_weight_gain * speed
     w = np.min([max_velocity_weight * np.ones_like(speed), w], axis=0)
@@ -676,7 +676,6 @@ def choose_orientations(
 
     velocity_direction = velocity / speed[:, np.newaxis]
     if elevation_up_bias_degrees != 0:
-
         # bias the velocity direction
 
         rot1_axis = np.cross(velocity_direction, up_dir)
@@ -1223,7 +1222,10 @@ class PreSmoothedDataCache(object):
 
 
 def detect_saccades(
-    rows, frames_per_second=None, method="position based", method_params=None,
+    rows,
+    frames_per_second=None,
+    method="position based",
+    method_params=None,
 ):
     """detect saccades defined as exceeding a threshold in heading angular velocity
 
@@ -1374,10 +1376,9 @@ def detect_saccades(
                 pylab.ylabel("deg/s")
 
         else:  # not horizontal only
-
             # central diff
             velsF = numpy.vstack((xvelsF, yvelsF, zvelsF)).T
-            speedsF = numpy.sqrt(numpy.sum(velsF ** 2, axis=1))
+            speedsF = numpy.sqrt(numpy.sum(velsF**2, axis=1))
             norm_velsF = (
                 velsF / speedsF[:, numpy.newaxis]
             )  # make norm vectors ( mag(x)=1 )
@@ -1575,7 +1576,6 @@ class FileContextManager:
 
 
 class CachingAnalyzer:
-
     """
     Usage:
 
@@ -1887,7 +1887,7 @@ class CachingAnalyzer:
                             tmp_idx = tmp_idxes[0]
                         except IndexError:
                             raise ValueError(
-                                "obj_id %s does not exist in " "observations" % oi
+                                "obj_id %s does not exist in observations" % oi
                             )
                         obs_idxs.append(tmp_idx)
                         del tmp_idxes, tmp_idx
@@ -1994,7 +1994,10 @@ class CachingAnalyzer:
         return rows
 
     def get_raw_positions(
-        self, obj_id, data_file, use_kalman_smoothing=True,
+        self,
+        obj_id,
+        data_file,
+        use_kalman_smoothing=True,
     ):
         """get raw data (Kalman smoothed if data has been pre-smoothed)"""
         rows = self.load_data(
@@ -2136,7 +2139,7 @@ class CachingAnalyzer:
                 zvelsF = zdiffsF / delta_tF
 
                 velsF = numpy.vstack((xvelsF, yvelsF, zvelsF)).T
-                speedsF = numpy.sqrt(numpy.sum(velsF ** 2, axis=1))
+                speedsF = numpy.sqrt(numpy.sum(velsF**2, axis=1))
 
                 h_speedsF = numpy.sqrt(numpy.sum(velsF[:, :2] ** 2, axis=1))
                 v_speedsF = velsF[:, 2]
@@ -2273,8 +2276,7 @@ class CachingAnalyzer:
         self.loaded_cond_cache = weakref.WeakKeyDictionary()
 
     def _get_recarray(self, data_file, obj_id, which_data="kalman"):
-        """returns a recarray of the data
-        """
+        """returns a recarray of the data"""
         full, obj_id2idx = self._load_full_recarray(data_file, which_data=which_data)
         try:
             start, stop = obj_id2idx[obj_id]
@@ -2539,7 +2541,10 @@ class TestCoreAnalysis:
         if not hasattr(self, "data_files"):
             # XXX why do I have to do this?
             self.setUp()
-        for (data_file, is_mat_file) in zip(self.data_files, self.is_mat_files,):
+        for data_file, is_mat_file in zip(
+            self.data_files,
+            self.is_mat_files,
+        ):
             for use_kalman_smoothing in [True, False]:
                 if is_mat_file and not use_kalman_smoothing:
                     # all data is kalman smoothed in matfile
@@ -2553,14 +2558,16 @@ class TestCoreAnalysis:
                         use_kalman_smoothing=use_kalman_smoothing,
                         frames_per_second=100.0,
                         method="position based",
-                        method_params={"downsample": 1,},
+                        method_params={
+                            "downsample": 1,
+                        },
                         dynamic_model_name=flydra_core.kalman.dynamic_models.DEFAULT_MODEL,
                     )
                 except NoObjectIDError:
                     pass
                 else:
                     raise RuntimeError(
-                        "We should not get here - a " "NoObjectIDError should be raised"
+                        "We should not get here - a NoObjectIDError should be raised"
                     )
 
     def check_smooth(self, itest):
@@ -2599,7 +2606,10 @@ class TestCoreAnalysis:
 
                 ######## 2. perform Kalman smoothing
                 rows = observations2smoothed(
-                    obj_id, orig_rows, frames_per_second=fps, dynamic_model_name=model,
+                    obj_id,
+                    orig_rows,
+                    frames_per_second=fps,
+                    dynamic_model_name=model,
                 )  # do Kalman smoothing
 
                 ######## 3. compare observations with smoothed
@@ -2643,7 +2653,6 @@ class TestCoreAnalysis:
             if i != itest:
                 continue
             for obj_id in test_obj_ids:
-
                 # Test that load_data() loads similar values for (presumably)
                 # forward-only filter and smoother.
 
@@ -2698,7 +2707,9 @@ class TestCoreAnalysis:
                         dynamic_model_name=model,
                         hide_first_point=False,
                         method="position based",
-                        method_params={"downsample": 1,},
+                        method_params={
+                            "downsample": 1,
+                        },
                     )
                     rows = self.ca.load_data(
                         obj_id,
@@ -2753,7 +2764,7 @@ if 1:
         directions = np.zeros((len(x), 3))
         directions[:, 0] = np.random.randn(len(x))
 
-        mag = np.sqrt(np.sum(directions ** 2, axis=1))
+        mag = np.sqrt(np.sum(directions**2, axis=1))
         directions = directions / mag[:, np.newaxis]
         # print directions
         new_dir = choose_orientations(

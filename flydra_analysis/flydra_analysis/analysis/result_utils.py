@@ -453,7 +453,7 @@ def read_textlog_header(results, fail_on_error=True):
     for pc in paren_contents:
         elements = pc.strip().split()
         name = elements.pop(0)
-        strvalue = ' '.join(elements)
+        strvalue = " ".join(elements)
         if strvalue == "unknown":
             continue
         parsed[name] = strvalue
