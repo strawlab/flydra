@@ -1,6 +1,6 @@
 [project]
 name = "flydra_core"
-version = "0.7.20"                            # keep in sync with flydra_core/version.py
+version = "0.7.21"                            # keep in sync with flydra_core/version.py
 description = "flydra mainbrain and core lib"
 readme = "README.md"
 requires-python = ">= 3.8"
