@@ -35,6 +35,7 @@ dependencies = [
     "PyYAML",
     "sympy",
     "cherrypy",
+    "pytz",
 ]
 
 [project.scripts]
