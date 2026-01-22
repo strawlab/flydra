@@ -30,9 +30,9 @@ jobs:
     - name: Update package index (Ubuntu)
       if: matrix.os == 'ubuntu-latest'
       run: sudo apt-get update
-    - name: Install hdf5, blosc, lzo, bz c libs (Ubuntu)
+    - name: Install hdf5, blosc, blosc2, lzo, bz c libs (Ubuntu)
       if: matrix.os == 'ubuntu-latest'
-      run: sudo apt-get install -y libhdf5-dev libblosc-dev liblzo2-dev libbz2-dev
+      run: sudo apt-get install -y libhdf5-dev libblosc-dev libblosc2-dev liblzo2-dev libbz2-dev
     - name: Install libhdf5 (macOS)
       # See https://stackoverflow.com/questions/73029883
       if: runner.os == 'macOS'
