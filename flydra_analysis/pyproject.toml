@@ -11,7 +11,7 @@ maintainers = [{ name = "Andrew Straw", email = "strawman@astraw.com" }]
 urls.homepage = "https://github.com/strawlab/flydra"
 
 dependencies = [
-    "setuptools >= 44.1",
+    "setuptools >= 44.1, < 81", # pkg_resources was dropped in setuptools 81
     "numpy >= 1.19",
     "cython>=0.26",
 
